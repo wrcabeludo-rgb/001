@@ -1,0 +1,37 @@
+# Unity сгенерированные папки
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+/.vs/
+/Assets/AssetStoreTools*
+
+# Файлы, генерируемые IDE
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Автосгенерированные ассеты
+/[Aa]ssets/[Aa]ssetStoreTools*
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+crashlytics-build.properties

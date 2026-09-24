@@ -1,0 +1,24 @@
+{
+  "id": 11,
+  "gridWidth": 6,
+  "gridHeight": 6,
+  "colorCount": 5,
+  "moveLimit": 17,
+  "star1Score": 2150,
+  "star2Score": 3225,
+  "star3Score": 4730,
+  "coinReward": 75,
+  "crystalReward": 0,
+  "objectives": [
+    {
+      "type": 0,
+      "targetColor": 1,
+      "targetAmount": 51
+    },
+    {
+      "type": 0,
+      "targetColor": 3,
+      "targetAmount": 36
+    }
+  ]
+}
