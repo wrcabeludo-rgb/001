@@ -120,7 +120,11 @@ namespace PuzzleGame.Level
             }
 
             UIManager.Instance.ShowEndLevel(won, stars, coinsEarned, crystalsEarned,
-                onNext: () => GameManager.Instance.StartLevel(data.id + 1),
+                onNext: () =>
+                {
+                    if (data.id < LevelDatabase.LevelCount) GameManager.Instance.StartLevel(data.id + 1);
+                    else GameManager.Instance.GoToLevelMap();
+                },
                 onRetry: () => GameManager.Instance.StartLevel(data.id),
                 onMenu: () => GameManager.Instance.GoToLevelMap());
         }
