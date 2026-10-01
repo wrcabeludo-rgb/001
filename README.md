@@ -15,3 +15,12 @@
 
 Папка: [`fitnes-diagnostika-web/`](fitnes-diagnostika-web/)
 Сайт: https://wrcabeludo-rgb.github.io/001/fitnes-diagnostika-web/
+
+## Экзамен фитнес-тренера — тренажёр
+
+Вопросы по билетам (118 штук, по 3 варианта ответа) с объяснением, почему ответ верный или неверный. Есть тренировка по темам, работа над ошибками и сохранение прогресса.
+
+Папка: [`fitness-quiz/`](fitness-quiz/)
+Сайт: https://wrcabeludo-rgb.github.io/001/fitness-quiz/
+
+Устанавливается на телефон как приложение (PWA) и работает без интернета. При изменении файлов приложения увеличивайте `CACHE` в `fitness-quiz/sw.js`.
