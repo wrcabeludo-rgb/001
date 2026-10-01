@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Фитнес-диагностика</title>
+<style>
+:root{
+  --bg:#E6EAEE; --surface:#FFFFFF; --ink:#15202B; --muted:#5A6774; --line:#D3DAE1;
+  --accent:#2450D8; --accent-soft:#E3EAFB;
+  --good:#1B8A5A; --good-soft:#E2F3EA; --warn:#A86F06; --warn-soft:#FBF0D9; --bad:#C23B2E; --bad-soft:#F8E3E0;
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink); background:var(--bg);
+}
+*{box-sizing:border-box}
+body{margin:0;font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* top bar */
+.top{background:var(--ink);color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.top h1{font-size:18px;font-weight:650;margin:0;letter-spacing:.2px;margin-right:auto}
+.top input{background:#24313E;border:1px solid #33424F;border-radius:6px;padding:7px 10px;color:#fff;min-width:0}
+.top input::placeholder{color:#93A1AE}
+.client{display:flex;gap:8px;flex-wrap:wrap}
+.client input[type=text]{width:220px}
+.seg{display:inline-flex;border:1px solid #33424F;border-radius:6px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:7px 14px;color:#C3CDD6}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);font-weight:600}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn{border:1px solid #33424F;background:#24313E;color:#fff;border-radius:6px;padding:7px 12px}
+.btn:hover{background:#2E3D4B}
+.btn.primary{background:var(--accent);border-color:var(--accent)}
+.btn.primary:hover{background:#1C42B8}
+
+/* steps */
+.steps{display:flex;gap:0;overflow-x:auto;background:var(--surface);border-bottom:1px solid var(--line);padding:0 12px}
+.steps button{background:none;border:0;border-bottom:3px solid transparent;padding:14px 14px 11px;white-space:nowrap;color:var(--muted);display:flex;gap:8px;align-items:center}
+.steps button .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;font-size:12px;font-weight:700}
+.steps button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.steps button[aria-selected=true] .n{background:var(--accent);border-color:var(--accent);color:#fff}
+.steps button.done .n{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* layout */
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;padding:20px;max-width:1320px;margin:0 auto}
+@media (max-width:960px){.wrap{grid-template-columns:1fr}}
+section.panel{display:none}
+section.panel.active{display:block}
+.card{background:var(--surface);border-radius:8px;padding:20px 22px;margin-bottom:16px;border:1px solid var(--line)}
+.card h2{font-size:17px;margin:0 0 4px}
+.card h3{font-size:15px;margin:18px 0 8px}
+.card p.hint{color:var(--muted);margin:0 0 14px;font-size:14px;max-width:70ch}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px 14px}
+.f label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.f .in{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:#fff}
+.f .in:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.f input{border:0;background:none;padding:8px 10px;width:100%;min-width:0;outline:none;font-variant-numeric:tabular-nums}
+.f .u{padding:0 10px 0 0;color:var(--muted);font-size:13px;white-space:nowrap}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+select,textarea{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:#fff;width:100%}
+textarea{min-height:80px;resize:vertical}
+
+/* outputs */
+.outs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:16px}
+.o{border-left:3px solid var(--line);padding:6px 0 6px 12px}
+.o .k{font-size:13px;color:var(--muted)}
+.o .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.2}
+.o .s{font-size:13px;font-weight:600}
+.o[data-t=good]{border-color:var(--good)} .o[data-t=good] .s{color:var(--good)}
+.o[data-t=warn]{border-color:var(--warn)} .o[data-t=warn] .s{color:var(--warn)}
+.o[data-t=bad]{border-color:var(--bad)} .o[data-t=bad] .s{color:var(--bad)}
+.o[data-t=info]{border-color:var(--accent)}
+
+/* stress */
+.sgroup{margin-bottom:18px}
+.sgroup-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:10px}
+.sgroup-h h3{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:14px;text-align:left}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap}
+.badge.good{background:var(--good-soft);color:var(--good)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.bad{background:var(--bad-soft);color:var(--bad)}
+.badge.none{background:#EEF1F4;color:var(--muted)}
+
+/* PWC steps */
+.loadbox{border:1px dashed var(--accent);background:var(--accent-soft);border-radius:6px;padding:10px 12px;margin:10px 0 12px;font-size:14px}
+.loadbox b{font-variant-numeric:tabular-nums}
+
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:13px}
+td.r,th.r{text-align:right}
+.strength td input{width:80px;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+
+/* aside */
+aside .card{position:sticky;top:12px}
+.sum-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.sum-row:last-child{border-bottom:0}
+.sum-row .val{font-weight:650;text-align:right;font-variant-numeric:tabular-nums}
+.sum-row .val small{display:block;font-weight:600;font-size:12px}
+.t-good{color:var(--good)} .t-warn{color:var(--warn)} .t-bad{color:var(--bad)} .t-none{color:var(--muted)}
+
+/* protocol */
+.proto-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:16px}
+.proto-head h2{font-size:22px;margin:0}
+.proto-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:760px){.proto-grid{grid-template-columns:1fr}}
+.radar-wrap{display:grid;grid-template-columns:minmax(260px,420px) 1fr;gap:20px;align-items:center}
+@media (max-width:760px){.radar-wrap{grid-template-columns:1fr}}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
+.focus-list{margin:8px 0 0;padding-left:18px}
+.empty{color:var(--muted);font-size:14px}
+
+dialog{border:0;border-radius:10px;padding:0;width:min(560px,92vw);box-shadow:0 20px 60px rgba(10,20,30,.35)}
+dialog::backdrop{background:rgba(15,25,35,.45)}
+.dlg-h{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.dlg-h h2{margin:0;font-size:17px}
+.dlg-b{padding:8px 20px 20px;max-height:60vh;overflow:auto}
+.arch-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.arch-item .meta{font-size:13px;color:var(--muted)}
+.lnk{background:none;border:0;color:var(--accent);padding:4px 6px}
+.lnk.del{color:var(--bad)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+.navbtns{display:flex;justify-content:space-between;margin-top:6px}
+.nbtn{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 14px}
+.nbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+@media print{
+  body{background:#fff;font-size:12px}
+  .top,.steps,aside,.navbtns,.no-print{display:none!important}
+  .wrap{display:block;padding:0}
+  section.panel{display:none!important}
+  section#p-protocol{display:block!important}
+  .card{border:0;padding:0;margin-bottom:12px}
+  .proto-grid{grid-template-columns:1fr 1fr}
+  .radar-wrap{grid-template-columns:320px 1fr}
+  table{font-size:11px} th,td{padding:4px 6px}
+}
+/* выгрузка картинкой */
+.export-sheet{position:fixed;left:-10000px;top:0;width:720px;background:#fff;padding:36px 36px 28px;color:var(--ink)}
+.export-sheet .proto-grid,.export-sheet .radar-wrap{grid-template-columns:1fr!important;gap:12px}
+.export-sheet .radar-wrap>div:first-child{max-width:560px;margin:0 auto;width:100%}
+.export-sheet .proto-head h2{font-size:26px}
+.export-foot{margin-top:22px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.nbtn:disabled{opacity:.6;cursor:progress}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Фитнес-диагностика</h1>
+  <div class="client">
+    <input type="text" id="name" placeholder="Имя клиента" aria-label="Имя клиента">
+    <input type="date" id="date" aria-label="Дата тестирования">
+    <div class="seg" role="group" aria-label="Пол">
+      <button type="button" data-sex="f" aria-pressed="true">Женщина</button>
+      <button type="button" data-sex="m" aria-pressed="false">Мужчина</button>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="bNew" type="button">Новый клиент</button>
+    <button class="btn" id="bExample" type="button">Пример</button>
+    <button class="btn" id="bArchive" type="button">Архив</button>
+    <button class="btn primary" id="bSave" type="button">Сохранить</button>
+  </div>
+</header>
+
+<nav class="steps" role="tablist" id="steps"></nav>
+
+<div class="wrap">
+  <main id="main"></main>
+  <aside><div class="card" id="summary"></div></aside>
+</div>
+
+<dialog id="archive">
+  <div class="dlg-h"><h2>Архив протоколов</h2><button class="lnk" id="closeArch" type="button">Закрыть</button></div>
+  <div class="dlg-b" id="archList"></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ===================== Справочные данные из таблиц ===================== */
+const STRESS = {
+  physio:{title:'Физиологические симптомы', items:['Стойкие головные боли, мигрень','Головные боли','Неопределённые боли','Нарушение пищеварения','Вздутие живота','Запор или диарея','Спазматические, резкие боли в животе','Сердцебиения','Чувство нехватки воздуха на вдохе','Тошнота','Судороги','Утомление','Подверженность аллергии','Повышенная потливость','Сжатые кулаки или челюсти','Обмороки','Частые простудные заболевания','Возобновление старых болезней','Быстрое увеличение или потеря веса','Частое мочеиспускание','Ощущение покалывания в руках и ногах','Мышечное напряжение, частые боли в шее и спине','Кожные сыпи','Чувство комка в горле','Двоение в глазах, трудно рассматривать предметы']},
+  intel:{title:'Интеллектуальные признаки', items:['Нерешительность','Ослабление памяти','Ухудшение концентрации внимания','Повышенная отвлекаемость','«Туннельное» зрение','Плохие сны, кошмары','Ошибочные действия','Потеря инициативы','Постоянные негативные мысли','Нарушение суждений, спутанное мышление','Импульсивность мышления, поспешные решения']},
+  emo:{title:'Эмоциональные симптомы', items:['Раздражительность','Беспокойство','Подозрительность','Мрачное настроение, депрессия','Суетливость','Ощущение напряжения','Истощённость','Подверженность приступам гнева','Циничный, неуместный юмор','Нервозность, боязливость, тревога','Потеря уверенности','Уменьшение удовлетворённости жизнью','Чувство отчуждённости','Отсутствие заинтересованности','Сниженная самооценка','Неудовлетворённость работой']},
+  behav:{title:'Поведенческие признаки', items:['Потеря аппетита или переедание','Плохое вождение автомобиля','Нарушение речи','Дрожание голоса','Увеличение проблем в семье','Плохое распределение времени','Избегание дружеских, поддерживающих отношений','Неухоженность','Антисоциальное поведение, лживость','Неспособность к развитию','Низкая продуктивность','Склонность к авариям','Нарушение сна или бессонница','Больше курения и алкоголя','Доделывание работы дома','Слишком занят(а), чтобы отдыхать']}
+};
+// пороги по категориям: [норма до, выше нормы до, высокий до] (строго меньше)
+const STRESS_TH = {
+  f:{physio:[10,20,30],intel:[10,20,30],emo:[10,20,30],behav:[10,20,30]},
+  m:{physio:[6,10,20],intel:[6,8,10],emo:[6,10,16],behav:[6,10,16]}
+};
+const STRESS_TOTAL_TH=[10,20,30];
+const STRESS_LABELS=['Норма','Выше нормы','Высокий','Очень высокий'];
+
+const REPS_COEF={1:1,2:1.03,3:1.06,4:1.09,5:1.13,6:1.16,7:1.20,8:1.24,9:1.29,10:1.33};
+
+const FAT_NORM={ // [норма от, норма до] по возрастам 18-29,30-39,40-49,50+
+  f:[[20,28],[22,30],[24,32],[26,35]],
+  m:[[8,18],[11,20],[13,22],[15,24]]
+};
+const PWC_TABLE={ // нижние границы: ниже средней, средняя, выше средней, высокая (высокая — строго больше)
+  f:[[450,550,750,849],[400,500,700,799],[300,400,600,699],[200,300,500,599]],
+  m:[[700,850,1150,1299],[600,750,1050,1199],[500,650,950,1099],[400,550,850,999]]
+};
+const PWC_LABELS=['Низкая','Ниже средней','Средняя','Выше средней','Высокая'];
+const VO2_TABLE={ // нижние границы для 2,3,4 баллов и порог «больше» для 5 баллов; возраст 20-29..60+
+  f:[[29,35,44,48],[26,32,40,44],[23,30,37,41],[21,28,34,38],[19,26,31,35]],
+  m:[[39,44,52,55],[35,40,48,51],[31,36,44,47],[26,32,40,43],[22,27,36,39]]
+};
+const VO2_LABELS={1:'Низкий',2:'Ниже среднего',3:'Средний',4:'Хороший',5:'Отличный'};
+const MACHINES={
+  f:[['Беговая дорожка',213.8,0.71],['Велоэргометр',211.6,0.88],['Эллиптический',194.3,0.31],['Гребной',206.1,0.5]],
+  m:[['Беговая дорожка',209.9,0.73],['Велоэргометр',204.4,0.72],['Эллиптический',197.7,0.42],['Гребной',207.5,0.64]]
+};
+const LIFTS=[['pull','Вертикальная тяга'],['press','Жим сидя'],['curl','Сгибание ног'],['ext','Разгибание ног']];
+
+/* ===================== Состояние ===================== */
+const FIELDS=['age','height','weight','sys','dia','hr','exp','chestP','chestI','waist','hips','forearmL','forearmR','shoulderL','shoulderR','thighL','thighR','shinL','shinR','wrist','f1','f2','f3','hr1','bp1s','bp1d','hr2','bp2s','bp2d','hr15','flex',
+  'pull_w','pull_r','press_w','press_r','curl_w','curl_r','ext_w','ext_r'];
+function blank(){
+  const s={id:null,sex:'f',name:'',date:new Date().toISOString().slice(0,10),fatMode:'jp',rec:'',contra:'',retest:'',stress:{physio:[],intel:[],emo:[],behav:[]}};
+  FIELDS.forEach(k=>s[k]='');
+  return s;
+}
+let S=blank();
+let tab=0;
+
+const EXAMPLE={sex:'f',name:'Пример (из таблицы)',age:33,height:145,weight:45,sys:129,dia:80,hr:77,exp:10,chestP:100,chestI:109,waist:107,hips:99,forearmL:27,shoulderL:35,thighL:50,shinL:40,wrist:15,f1:22,f2:22,f3:22,hr1:99,bp1s:139,bp1d:88,hr2:177,bp2s:150,bp2d:100,hr15:99,flex:36,pull_w:50,pull_r:6,press_w:55,press_r:5,curl_w:55,curl_r:5,ext_w:55,ext_r:5,
+  stress:{physio:[1,2,3,5,6,7,8,9,21,22],intel:[10],emo:[0,2,3,4,5,6,7,9],behav:[3,4,5,6]}};
+
+/* ===================== Расчёты ===================== */
+const n=k=>{const v=parseFloat(String(S[k]??'').replace(',','.'));return Number.isFinite(v)?v:null};
+const all=(...a)=>a.every(v=>v!==null&&Number.isFinite(v));
+const ageIdx4=a=>a<30?0:a<40?1:a<50?2:3;
+const ageIdx5=a=>a<30?0:a<40?1:a<50?2:a<60?3:4;
+
+function compute(){
+  const F=S.sex==='f', sx=S.sex, R={};
+  const a=n('age'), hcm=n('height'), w=n('weight'), sys=n('sys'), dia=n('dia'), hr=n('hr'), exp=n('exp')??0;
+  const hm=hcm?hcm/100:null;
+
+  // ИМТ, идеальный вес, идеальное АД
+  if(all(w,hm)){
+    R.bmi=w/(hm*hm);
+    const young=a!==null&&a<=25;
+    const cats=young
+      ?[[19.5,'Дефицит массы','bad'],[23,'Норма','good'],[27.6,'Повышенный вес','warn'],[30,'Ожирение I ст.','bad'],[35,'Ожирение II ст.','bad'],[40,'Ожирение III ст.','bad'],[Infinity,'Ожирение IV ст.','bad']]
+      :[[20,'Дефицит массы','bad'],[25.1,'Норма','good'],[28,'Повышенный вес','warn'],[31,'Ожирение I ст.','bad'],[36,'Ожирение II ст.','bad'],[41,'Ожирение III ст.','bad'],[Infinity,'Ожирение IV ст.','bad']];
+    const c=cats.find(c=>R.bmi<c[0]); R.bmiCat=c[1]; R.bmiT=c[2];
+  }
+  if(all(a,hm)){
+    const b=a<=24?20:a<=34?25:a<=44?26:a<=54?27:a<=64?28:29;
+    R.idealW=2.2*b+3.5*b*(hm-1.5);
+  }
+  if(a!==null){R.idealSys=102+0.6*a;R.idealDia=63+0.4*a;R.indHR=(220-a)*0.87;}
+
+  // Жироотложение, телосложение
+  const waist=n('waist'),hips=n('hips'),wrist=n('wrist');
+  if(all(waist,hips)){R.whr=waist/hips;R.fatType=R.whr<(F?0.85:1)?'Бедренно-ягодичный':'Абдоминальный';}
+  if(wrist!==null){
+    const [n1,n2]=F?[14.2,16]:[16.6,19];
+    R.frame=wrist<n1?'Узкокостный':wrist<n2?'Нормостенический':'Ширококостный';
+  }
+  const chP=n('chestP'),chI=n('chestI'); if(all(chP,chI)) R.chestExc=chI-chP;
+
+  // % жира (Джексон–Поллок, 3 складки)
+  const f1=n('f1'),f2=n('f2'),f3=n('f3');
+  if(all(f1,f2,f3,a,w)){
+    const s3=f1+f2+f3;
+    const [c0,c1,c2,c3]=F?[1.0994921,0.0009929,0.0000023,0.0001392]:[1.10938,0.0008267,0.0000016,0.0002574];
+    const D=S.fatMode==='excel'? c0-(c1*s3+c2*s3*s3-c3*a) : c0-c1*s3+c2*s3*s3-c3*a;
+    R.bf=(4.57/D-4.142)*100;
+    R.fatMass=R.bf/100*w; R.lbm=w-R.fatMass;
+    const [lo,hi]=FAT_NORM[sx][ageIdx4(a)];
+    R.bfCat=R.bf<lo?'Недостаток':R.bf<=hi?'Норма':'Избыток'; R.bfT=R.bf<lo?'warn':R.bf<=hi?'good':'bad';
+    R.bfNorm=`${lo}–${hi}%`;
+  }
+
+  // Уровень физического состояния (Пирогова)
+  if(all(a,hcm,w,sys,dia,hr)){
+    const mbp=(sys-dia)/3+dia;
+    R.ufs=(700-3*hr-2.5*mbp-2.7*a+0.28*w)/(350-2.6*a+0.21*hcm);
+    const L=[[0.375,'Низкий',60,'bad'],[0.525,'Ниже среднего',65,'warn'],[0.675,'Средний',70,'good'],[0.825,'Выше среднего',75,'good'],[Infinity,'Высокий',80,'good']].find(x=>R.ufs<=x[0]);
+    R.ufsCat=L[1];R.T1=L[2];R.ufsT=L[3];
+  }
+
+  // PWC
+  const k=F?0.3:0.4, hr1=n('hr1'), hr2=n('hr2'), hr15=n('hr15');
+  if(all(w,R.T1)) R.W1=w*k*(R.T1/4)*1.33;
+  if(all(a,hcm,w,R.bmi,R.T1,hr1,R.fatMass,R.bf,R.lbm,hr,hr15)){
+    R.W2=(F?0:259.22)-0.822*a-1.471*hcm+15.472*w-2.068*R.bmi+15.11*exp-1.18*R.T1-4.9781*hr1+0.190522*R.fatMass-3.59955*R.bf-6.60337*R.lbm-2.14752*hr+1.38449*hr15+1048.5;
+    R.T2=R.W2/(w*k*1.33)*4;
+  }
+  if(all(R.W1,R.W2,hr1,hr2,R.indHR)&&hr2>hr1){
+    R.pwc=R.W1+(R.W2-R.W1)*(R.indHR-hr1)/(hr2-hr1);
+    const t=PWC_TABLE[sx][ageIdx4(a)];
+    const i=R.pwc>t[3]?4:R.pwc>=t[2]?3:R.pwc>=t[1]?2:R.pwc>=t[0]?1:0;
+    R.pwcCat=PWC_LABELS[i];R.pwcT=i<=1?(i===0?'bad':'warn'):'good';
+    R.vo2=(1.7*R.pwc+1240)/w;
+    const v=VO2_TABLE[sx][ageIdx5(a)];
+    R.vo2Pts=R.vo2>v[3]?5:R.vo2>=v[2]?4:R.vo2>=v[1]?3:R.vo2>=v[0]?2:1;
+    R.vo2Cat=VO2_LABELS[R.vo2Pts];R.vo2T=R.vo2Pts>=3?'good':R.vo2Pts===2?'warn':'bad';
+  }
+  if(hr2!==null&&hr1!==null&&hr2<=hr1) R.pwcErr='ЧСС на 2-й нагрузке должна быть выше, чем на 1-й.';
+
+  // Реакция ССС на нагрузку (ориентиры пробы Летунова)
+  const rel=(x,b)=>all(x,b)&&b>0?(x-b)/b*100:null;
+  R.let1={hr:rel(hr1,hr),sys:rel(n('bp1s'),sys),dia:rel(n('bp1d'),dia)};
+  R.let2={hr:rel(hr2,hr),sys:rel(n('bp2s'),sys),dia:rel(n('bp2d'),dia)};
+
+  // Пульсовые зоны (Карвонен 60–80%)
+  if(all(a,hr)) R.zones=MACHINES[sx].map(([nm,b,c])=>{const mx=b-c*a;return [nm,(mx-hr)*0.6+hr,(mx-hr)*0.8+hr]});
+
+  // Сила: 1ПМ
+  R.rm={};R.repsWarn=false;
+  LIFTS.forEach(([key])=>{
+    const wt=n(key+'_w'),r=n(key+'_r');
+    if(all(wt,r)&&r>=1){const rr=Math.min(10,Math.round(r)); if(r>10)R.repsWarn=true; R.rm[key]=wt*REPS_COEF[rr];}
+  });
+  const sc=(v,ok)=>v==null?null:(ok?6:3.5);
+  let arm,leg;
+  if(F){arm=[sc(R.rm.pull,R.rm.pull>=40),sc(R.rm.press,R.rm.press>=40)];leg=[sc(R.rm.curl,R.rm.curl>=35),sc(R.rm.ext,R.rm.ext>=35)];}
+  else{arm=[sc(R.rm.pull,w!==null&&R.rm.pull>=w),sc(R.rm.press,w!==null&&R.rm.press>=1.2*w)];leg=[sc(R.rm.curl,R.rm.curl>=60),sc(R.rm.ext,R.rm.ext>=80)];}
+  const avg=arr=>{const v=arr.filter(x=>x!==null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
+  R.armScore=avg(arm);R.legScore=avg(leg);
+
+  // Гибкость
+  const flex=n('flex');
+  if(all(flex,a)){
+    const [lo,hi]=a<25?[36,Infinity]:a<30?[33,35]:a<45?[29,33]:[21,29];
+    R.flexNorm=hi===Infinity?`от ${lo} см`:`${lo}–${hi} см`;
+    R.flexCat=flex<lo?'Ниже нормы':flex>hi?'Выше нормы':'Норма';R.flexT=flex<lo?'bad':'good';
+  }
+
+  // Стресс
+  R.stress={};let tot=0;
+  Object.keys(STRESS).forEach(g=>{
+    const c=S.stress[g].length;tot+=c;
+    const th=STRESS_TH[sx][g];const i=c<th[0]?0:c<th[1]?1:c<th[2]?2:3;
+    R.stress[g]={c,i};
+  });
+  const ti=tot<STRESS_TOTAL_TH[0]?0:tot<STRESS_TOTAL_TH[1]?1:tot<STRESS_TOTAL_TH[2]?2:3;
+  R.stressTotal={c:tot,i:ti};
+
+  // Профиль (шкала 0–6, норма 3,5)
+  const band=(v,list)=>{if(v==null)return null;for(const [lim,sc,inc] of list){if(inc?v<=lim:v<lim)return sc}return list[list.length-1][1]};
+  R.profile=[
+    ['Стресс', band(tot,[[5,6],[15,3.5],[20,3],[Infinity,2]])],
+    ['Выносливость', F?band(R.vo2,[[25,2],[30,3,1],[40,3.5,1],[45,5,1],[Infinity,6]]):band(R.vo2,[[25,2],[35,3],[40,3.5],[50,5],[Infinity,6]])],
+    ['Мышечная масса', F?band(R.lbm,[[30,2,1],[35,3.5],[40,5],[Infinity,6]]):band(R.lbm,[[20,2],[25,3,1],[31,3.5],[35,5,1],[Infinity,6]])],
+    ['% жира', F?band(R.bf,[[20,6],[24,3.5,1],[28,3],[Infinity,2]]):band(R.bf,[[19,6,1],[22,3.5,1],[26,3],[Infinity,2]])],
+    ['Гибкость', F?band(flex,[[20,2],[25,3.5],[30,5],[Infinity,6]]):band(flex,[[30,2],[35,3.5],[40,5],[Infinity,6]])],
+    ['Сила рук', R.armScore],
+    ['Сила ног', R.legScore]
+  ];
+  return R;
+}
+
+/* ===================== Форматирование ===================== */
+const fmt=(x,d=1)=>x==null||!Number.isFinite(x)?'—':x.toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const stressT=i=>['good','warn','bad','bad'][i];
+
+/* ===================== Разметка ===================== */
+const TABS=['Анкета стресса','Антропометрия','Тест PWC','Сила и гибкость','Протокол'];
+
+function field(k,label,unit='',ph=''){
+  return `<div class="f"><label for="i-${k}">${label}</label><div class="in"><input id="i-${k}" data-k="${k}" inputmode="decimal" autocomplete="off" placeholder="${ph}">${unit?`<span class="u">${unit}</span>`:''}</div></div>`;
+}
+function pairField(k1,k2,label,unit){
+  return `<div class="f"><label>${label}</label><div class="pair">
+    <div class="in"><input data-k="${k1}" inputmode="decimal" aria-label="${label}, левая" placeholder="лев"><span class="u">${unit}</span></div>
+    <div class="in"><input data-k="${k2}" inputmode="decimal" aria-label="${label}, правая" placeholder="прав"><span class="u">${unit}</span></div></div></div>`;
+}
+const out=(key,label)=>`<div class="o" data-o="${key}"><div class="k">${label}</div><div class="v">—</div><div class="s"></div></div>`;
+const navBtns=i=>`<div class="navbtns">${i>0?`<button class="nbtn" type="button" data-go="${i-1}">Назад</button>`:'<span></span>'}${i<4?`<button class="nbtn primary" type="button" data-go="${i+1}">Далее: ${TABS[i+1]}</button>`:''}</div>`;
+
+function build(){
+  document.getElementById('steps').innerHTML=TABS.map((t,i)=>`<button type="button" role="tab" data-tab="${i}" aria-selected="${i===tab}"><span class="n">${i+1}</span>${t}</button>`).join('');
+
+  const stressHTML=Object.entries(STRESS).map(([g,d])=>`
+    <div class="sgroup">
+      <div class="sgroup-h"><h3>${d.title}</h3><span data-sg="${g}"></span></div>
+      <div class="chips">${d.items.map((t,i)=>`<button type="button" class="chip" data-g="${g}" data-i="${i}" aria-pressed="false">${t}</button>`).join('')}</div>
+    </div>`).join('');
+
+  document.getElementById('main').innerHTML=`
+  <section class="panel" id="p-0">
+    <div class="card">
+      <h2>Анкета уровня стресса</h2>
+      <p class="hint">Отметьте признаки, которые клиент замечал у себя за последние недели. Каждый отмеченный пункт — 1 балл.</p>
+      ${stressHTML}
+      <div class="outs">${out('stressTotal','Общий уровень стресса')}</div>
+    </div>
+    ${navBtns(0)}
+  </section>
+
+  <section class="panel" id="p-1">
+    <div class="card">
+      <h2>Основные данные</h2>
+      <p class="hint">Пульс и давление — в покое, сидя, после 5 минут отдыха.</p>
+      <div class="grid">
+        ${field('age','Возраст','лет')}${field('height','Рост','см')}${field('weight','Вес','кг')}
+        ${field('sys','АД систолическое','мм')}${field('dia','АД диастолическое','мм')}${field('hr','ЧСС в покое','уд/мин')}
+        ${field('exp','Тренировочный стаж','лет')}
+      </div>
+      <div class="outs">${out('bmi','ИМТ')}${out('idealW','Идеальный вес')}${out('idealBP','Идеальное АД')}${out('ufs','Уровень физ. состояния')}</div>
+    </div>
+    <div class="card">
+      <h2>Обхваты тела</h2>
+      <div class="grid">
+        ${field('chestP','Грудь, пауза','см')}${field('chestI','Грудь, вдох','см')}${field('waist','Талия','см')}${field('hips','Бёдра (таз)','см')}${field('wrist','Запястье','см')}
+      </div>
+      <div class="grid" style="margin-top:12px">
+        ${pairField('forearmL','forearmR','Предплечье','см')}${pairField('shoulderL','shoulderR','Плечо','см')}${pairField('thighL','thighR','Бедро','см')}${pairField('shinL','shinR','Голень','см')}
+      </div>
+      <div class="outs">${out('fatType','Тип жироотложения')}${out('frame','Тип телосложения')}${out('chestExc','Экскурсия грудной клетки')}</div>
+    </div>
+    <div class="card">
+      <h2>Кожно-жировые складки</h2>
+      <p class="hint">${'Три складки калипером, мм.'} <span data-foldhint></span></p>
+      <div class="grid">${field('f1','Верх','мм')}${field('f2','Середина','мм')}${field('f3','Низ','мм')}
+        <div class="f"><label for="fatMode">Формула плотности тела</label>
+          <select id="fatMode"><option value="jp">Джексон–Поллок (классическая)</option><option value="excel">Как в исходной таблице</option></select></div>
+      </div>
+      <div class="outs">${out('bf','Процент жира')}${out('fatMass','Масса жира')}${out('lbm','Безжировая масса (LBM)')}</div>
+    </div>
+    ${navBtns(1)}
+  </section>
+
+  <section class="panel" id="p-2">
+    <div class="card">
+      <h2>Тест PWC на велоэргометре</h2>
+      <p class="hint">Две нагрузки по 3 минуты с отдыхом 2 минуты. ЧСС фиксируется в конце каждой нагрузки. Мощность нагрузок рассчитывается из данных на шаге «Антропометрия».</p>
+      <h3>Нагрузка 1 — 3 минуты</h3>
+      <div class="loadbox" data-load1>Заполните возраст, рост, вес, АД и ЧСС покоя на шаге «Антропометрия».</div>
+      <div class="grid">${field('hr1','ЧСС в конце','уд/мин')}${field('bp1s','АД сист.','мм')}${field('bp1d','АД диаст.','мм')}${field('hr15','ЧСС после ходьбы 15 м','уд/мин')}</div>
+      <h3>Нагрузка 2 — 3 минуты</h3>
+      <div class="loadbox" data-load2>Для расчёта второй нагрузки нужны складки, ЧСС на 1-й нагрузке и ЧСС после ходьбы 15 м.</div>
+      <div class="grid">${field('hr2','ЧСС в конце','уд/мин')}${field('bp2s','АД сист.','мм')}${field('bp2d','АД диаст.','мм')}</div>
+      <div class="outs">${out('indHR','Индикаторная ЧСС')}${out('pwc','PWC')}${out('vo2','МПК')}</div>
+      <p class="empty" data-pwcerr></p>
+    </div>
+    <div class="card">
+      <h2>Реакция сердечно-сосудистой системы</h2>
+      <p class="hint">Прирост относительно покоя. Ориентиры нормотонической реакции — по модифицированной пробе Летунова.</p>
+      <div data-letunov></div>
+    </div>
+    <div class="card">
+      <h2>Тренировочный пульсовой диапазон</h2>
+      <p class="hint">60–80% резерва ЧСС (формула Карвонена) с учётом типа тренажёра.</p>
+      <div data-zones class="empty">Нужны возраст и ЧСС покоя.</div>
+    </div>
+    ${navBtns(2)}
+  </section>
+
+  <section class="panel" id="p-3">
+    <div class="card">
+      <h2>Силовые тесты</h2>
+      <p class="hint">Рабочий вес и число повторений до отказа (1–10). Повторный максимум (1ПМ) считается по коэффициентам из таблицы.</p>
+      <table class="strength"><thead><tr><th>Тренажёр</th><th>Вес, кг</th><th>Повторы</th><th class="r">1ПМ, кг</th></tr></thead><tbody>
+      ${LIFTS.map(([k,t])=>`<tr><td>${t}</td><td><input data-k="${k}_w" inputmode="decimal" aria-label="${t}, вес"></td><td><input data-k="${k}_r" inputmode="numeric" aria-label="${t}, повторы"></td><td class="r num" data-rm="${k}">—</td></tr>`).join('')}
+      </tbody></table>
+      <p class="empty" data-repswarn></p>
+      <div class="outs">${out('arm','Сила рук (балл)')}${out('leg','Сила ног (балл)')}</div>
+    </div>
+    <div class="card">
+      <h2>Гибкость</h2>
+      <div class="grid">${field('flex','Наклон вперёд сидя','см')}</div>
+      <div class="outs">${out('flex','Оценка гибкости')}</div>
+    </div>
+    ${navBtns(3)}
+  </section>
+
+  <section class="panel" id="p-protocol">
+    <div class="card" id="protocol"></div>
+    <div class="card no-print">
+      <h2>Заключение тренера</h2>
+      <div class="grid" style="grid-template-columns:1fr">
+        <div class="f"><label for="rec">Рекомендации</label><textarea id="rec"></textarea></div>
+        <div class="f"><label for="contra">Противопоказания</label><textarea id="contra"></textarea></div>
+        <div class="f" style="max-width:220px"><label for="retest">Дата повторного тестирования</label><input type="date" id="retest" style="border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%"></div>
+      </div>
+      <div class="navbtns"><button class="nbtn" type="button" data-go="3">Назад</button><div class="btn-row"><button class="nbtn" type="button" id="bPrint">Распечатать</button><button class="nbtn primary" type="button" id="bImage">Сохранить картинкой</button></div></div>
+    </div>
+  </section>`;
+}
+
+/* ===================== Отрисовка результатов ===================== */
+function setO(key,v,s='',t=''){
+  const el=document.querySelector(`[data-o="${key}"]`); if(!el)return;
+  el.querySelector('.v').innerHTML=v; el.querySelector('.s').textContent=s; el.dataset.t=t;
+}
+function render(){
+  const R=compute(),F=S.sex==='f';
+  // stress
+  Object.keys(STRESS).forEach(g=>{
+    const r=R.stress[g];
+    document.querySelector(`[data-sg="${g}"]`).innerHTML=`<span class="num">${r.c} из ${STRESS[g].items.length}</span> <span class="badge ${stressT(r.i)}">${STRESS_LABELS[r.i]}</span>`;
+  });
+  setO('stressTotal',R.stressTotal.c+' <small style="font-size:14px;color:var(--muted)">баллов</small>',STRESS_LABELS[R.stressTotal.i],stressT(R.stressTotal.i));
+
+  setO('bmi',fmt(R.bmi),R.bmiCat||'',R.bmiT||'');
+  setO('idealW',R.idealW!=null?fmt(R.idealW)+' кг':'—',R.idealW!=null&&n('weight')!=null?`факт ${fmt(n('weight'))} кг`:'','info');
+  setO('idealBP',R.idealSys!=null?`${fmt(R.idealSys,0)}/${fmt(R.idealDia,0)}`:'—',n('sys')!=null&&n('dia')!=null?`факт ${n('sys')}/${n('dia')}`:'','info');
+  setO('ufs',fmt(R.ufs,3),R.ufsCat||'',R.ufsT||'');
+  setO('fatType',R.fatType||'—',R.whr!=null?`талия/бёдра ${fmt(R.whr,2)}`:'',R.fatType?(R.fatType==='Абдоминальный'?'warn':'good'):'');
+  setO('frame',R.frame||'—',R.frame?`запястье ${fmt(n('wrist'))} см`:'','info');
+  setO('chestExc',R.chestExc!=null?fmt(R.chestExc)+' см':'—','','info');
+  setO('bf',R.bf!=null?fmt(R.bf)+'%':'—',R.bfCat?`${R.bfCat} (норма ${R.bfNorm})`:'',R.bfT||'');
+  setO('fatMass',R.fatMass!=null?fmt(R.fatMass)+' кг':'—','','info');
+  setO('lbm',R.lbm!=null?fmt(R.lbm)+' кг':'—','','info');
+  document.querySelector('[data-foldhint]').textContent=F?'Женщины: трицепс (верх), над подвздошной костью (середина), бедро (низ).':'Мужчины: грудь (верх), живот (середина), бедро (низ).';
+
+  // PWC
+  const l1=document.querySelector('[data-load1]'),l2=document.querySelector('[data-load2]');
+  l1.innerHTML=R.W1!=null?`Мощность <b>${fmt(R.W1,0)} кгм/мин</b>, темп педалирования <b>${R.T1} об/мин</b>.`:'Заполните возраст, рост, вес, АД и ЧСС покоя на шаге «Антропометрия».';
+  l2.innerHTML=R.W2!=null?`Мощность <b>${fmt(R.W2,0)} кгм/мин</b>, темп педалирования <b>${fmt(R.T2,0)} об/мин</b>.`:'Для расчёта второй нагрузки нужны складки, ЧСС на 1-й нагрузке и ЧСС после ходьбы 15 м.';
+  setO('indHR',R.indHR!=null?fmt(R.indHR,0)+' уд/мин':'—','(220 − возраст) × 0,87','info');
+  setO('pwc',R.pwc!=null?fmt(R.pwc,0)+' <small style="font-size:13px;color:var(--muted)">кгм/мин</small>':'—',R.pwcCat||'',R.pwcT||'');
+  setO('vo2',R.vo2!=null?fmt(R.vo2)+' <small style="font-size:13px;color:var(--muted)">мл/мин/кг</small>':'—',R.vo2Cat?`${R.vo2Cat}, ${R.vo2Pts} из 5`:'',R.vo2T||'');
+  document.querySelector('[data-pwcerr]').textContent=R.pwcErr||'';
+
+  const pc=(v,lo,hi)=>v==null?'<span class="t-none">—</span>':`<span class="num ${v>=lo&&v<=hi?'t-good':'t-warn'}">${v>0?'+':''}${fmt(v,0)}%</span>`;
+  document.querySelector('[data-letunov]').innerHTML=`<table><thead><tr><th></th><th class="r">ЧСС</th><th class="r">АД сист.</th><th class="r">АД диаст.</th></tr></thead><tbody>
+    <tr><td>После 1-й нагрузки<br><small class="t-none">норма: +60…80% / +10…15% / −10…35%</small></td><td class="r">${pc(R.let1.hr,60,80)}</td><td class="r">${pc(R.let1.sys,10,15)}</td><td class="r">${pc(R.let1.dia,-35,-10)}</td></tr>
+    <tr><td>После 2-й нагрузки<br><small class="t-none">норма: +100…120% / адекватно / −10…35%</small></td><td class="r">${pc(R.let2.hr,100,120)}</td><td class="r">${R.let2.sys==null?'<span class="t-none">—</span>':`<span class="num">${R.let2.sys>0?'+':''}${fmt(R.let2.sys,0)}%</span>`}</td><td class="r">${pc(R.let2.dia,-35,-10)}</td></tr>
+  </tbody></table>
+  <details style="margin-top:12px"><summary>Атипичные типы реакции</summary>
+  <table style="margin-top:8px"><thead><tr><th>Тип</th><th>ЧСС</th><th>АД сист.</th><th>АД диаст.</th><th>Восстановление</th></tr></thead><tbody>
+  <tr><td>Дистонический</td><td>Умеренно растёт, 140–160</td><td>До 180–200</td><td>Феномен «бесконечного тона»</td><td>1–2 мин</td></tr>
+  <tr><td>Гипертонический</td><td>Резко растёт</td><td>Резко, до 200–220</td><td>Без изменений или чуть растёт</td><td>Резко увеличено</td></tr>
+  <tr><td>Ступенчатый</td><td>Резко растёт</td><td>Повторно растёт на 2–3 мин</td><td>Без значимых изменений</td><td>Увеличено</td></tr>
+  <tr><td>Гипотонический</td><td>Резко, +120–150%</td><td>Без значимых изменений</td><td>Без значимых изменений</td><td>Резко увеличено</td></tr>
+  </tbody></table></details>`;
+
+  const zt=R.zones?`<table><thead><tr><th>Тренажёр</th><th class="r">ЧСС мин</th><th class="r">ЧСС макс</th></tr></thead><tbody>${R.zones.map(z=>`<tr><td>${z[0]}</td><td class="r num">${fmt(z[1],0)}</td><td class="r num">${fmt(z[2],0)}</td></tr>`).join('')}</tbody></table>`:'Нужны возраст и ЧСС покоя.';
+  const zEl=document.querySelector('[data-zones]');zEl.innerHTML=zt;zEl.className=R.zones?'':'empty';
+
+  // strength
+  LIFTS.forEach(([k])=>document.querySelector(`[data-rm="${k}"]`).textContent=fmt(R.rm[k]));
+  document.querySelector('[data-repswarn]').textContent=R.repsWarn?'Больше 10 повторений — расчёт по коэффициенту для 10. Для точности возьмите вес тяжелее.':'';
+  const st=v=>v==null?'':v>=6?'good':'warn';
+  setO('arm',v2(R.armScore),R.armScore==null?'':R.armScore>=6?'Норма достигнута':'Ниже нормы',st(R.armScore));
+  setO('leg',v2(R.legScore),R.legScore==null?'':R.legScore>=6?'Норма достигнута':'Ниже нормы',st(R.legScore));
+  setO('flex',n('flex')!=null?fmt(n('flex'),0)+' см':'—',R.flexCat?`${R.flexCat} (норма ${R.flexNorm})`:'',R.flexT||'');
+
+  renderSummary(R);
+  renderProtocol(R);
+  document.querySelectorAll('.steps button').forEach((b,i)=>b.classList.toggle('done',i<4&&isDone(i,R)&&i!==tab));
+}
+const v2=v=>v==null?'—':fmt(v,v%1?2:0)+' <small style="font-size:13px;color:var(--muted)">из 6</small>';
+function isDone(i,R){return i===0?R.stressTotal.c>0:i===1?R.bf!=null&&R.ufs!=null:i===2?R.pwc!=null:i===3?(R.armScore!=null||R.flexCat!=null):false}
+
+function sumRow(k,v,s,t){return `<div class="sum-row"><span>${k}</span><span class="val">${v}${s?`<small class="t-${t||'none'}">${s}</small>`:''}</span></div>`}
+function renderSummary(R){
+  document.getElementById('summary').innerHTML=`<h2 style="font-size:15px;margin:0 0 8px">Сводка</h2>
+  ${sumRow('Стресс',R.stressTotal.c,STRESS_LABELS[R.stressTotal.i],stressT(R.stressTotal.i))}
+  ${sumRow('ИМТ',fmt(R.bmi),R.bmiCat,R.bmiT)}
+  ${sumRow('% жира',R.bf!=null?fmt(R.bf)+'%':'—',R.bfCat,R.bfT)}
+  ${sumRow('Физ. состояние',fmt(R.ufs,3),R.ufsCat,R.ufsT)}
+  ${sumRow('PWC',fmt(R.pwc,0),R.pwcCat,R.pwcT)}
+  ${sumRow('МПК',fmt(R.vo2),R.vo2Cat,R.vo2T)}
+  ${sumRow('Гибкость',n('flex')!=null?n('flex')+' см':'—',R.flexCat,R.flexT)}
+  <div style="margin-top:12px">${radar(R.profile,220)}</div>`;
+}
+
+/* радар профиля: шкала 0–6, норма 3,5 */
+function radar(p,size){
+  const c=size/2,r=size/2-(size>300?40:28),N=p.length,ang=i=>-Math.PI/2+i*2*Math.PI/N;
+  const pt=(i,v)=>[c+Math.cos(ang(i))*r*v/6,c+Math.sin(ang(i))*r*v/6];
+  const poly=v=>p.map((_,i)=>pt(i,typeof v==='function'?v(i):v).map(x=>x.toFixed(1)).join(',')).join(' ');
+  const has=p.some(x=>x[1]!=null);
+  const fs=size>300?13:10;
+  const px=size>300?125:60;
+  let g=`<svg viewBox="${-px} 0 ${size+2*px} ${size}" width="100%" role="img" aria-label="Профиль физического состояния">`;
+  [2,4,6].forEach(v=>g+=`<polygon points="${poly(v)}" fill="none" stroke="#D3DAE1" stroke-width="1"/>`);
+  p.forEach((_,i)=>{const [x,y]=pt(i,6);g+=`<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="#D3DAE1"/>`});
+  g+=`<polygon points="${poly(3.5)}" fill="none" stroke="#A86F06" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  if(has){
+    g+=`<polygon points="${poly(i=>p[i][1]??0)}" fill="rgba(36,80,216,.18)" stroke="#2450D8" stroke-width="2"/>`;
+    p.forEach((x,i)=>{if(x[1]!=null){const [px,py]=pt(i,x[1]);g+=`<circle cx="${px}" cy="${py}" r="3.5" fill="#2450D8"/>`}});
+  }
+  p.forEach((x,i)=>{const [lx,ly]=pt(i,6+(size>300?0.7:0.75));const anchor=Math.abs(lx-c)<4?'middle':lx<c?'end':'start';
+    g+=`<text x="${lx}" y="${ly}" font-size="${fs}" text-anchor="${anchor}" dominant-baseline="middle" fill="#15202B">${x[0]}${size>300&&x[1]!=null?` · ${fmt(x[1],x[1]%1?1:0)}`:''}</text>`});
+  return g+'</svg>';
+}
+
+function renderProtocol(R){
+  const F=S.sex==='f';
+  const row=(k,v,s,t)=>`<tr><td>${k}</td><td class="r num">${v}</td><td>${s?`<span class="t-${t||'none'}">${esc(s)}</span>`:''}</td></tr>`;
+  const circ=[['Предплечье','forearm'],['Плечо','shoulder'],['Бедро','thigh'],['Голень','shin']].map(([t,k])=>{
+    const L=n(k+'L'),Rr=n(k+'R');return `<tr><td>${t}</td><td class="r num">${L??'—'}</td><td class="r num">${Rr??'—'}</td></tr>`}).join('');
+  const weak=R.profile.filter(x=>x[1]!=null&&x[1]<3.5).map(x=>x[0]);
+  const dt=S.date?new Date(S.date).toLocaleDateString('ru-RU'):'';
+  document.getElementById('protocol').innerHTML=`
+  <div class="proto-head"><div><h2>Протокол фитнес-тестирования</h2><div class="empty">${esc(S.name)||'Клиент не указан'} · ${F?'женщина':'мужчина'}${n('age')!=null?', '+n('age')+' лет':''}</div></div><div class="empty">${dt}</div></div>
+
+  <h3 style="margin-top:0">Профиль физического состояния</h3>
+  <div class="radar-wrap">
+    <div>${radar(R.profile,420)}</div>
+    <div>
+      <div class="legend"><span><i style="background:#2450D8"></i>Клиент</span><span><i style="background:#A86F06"></i>Норма (3,5)</span><span>Максимум — 6</span></div>
+      ${weak.length?`<p style="margin:14px 0 0;font-weight:600">Зоны внимания</p><ul class="focus-list">${weak.map(w=>`<li>${w}</li>`).join('')}</ul>`:(R.profile.some(x=>x[1]!=null)?'<p style="margin-top:14px">Все заполненные показатели на уровне нормы или выше.</p>':'<p class="empty" style="margin-top:14px">Заполните тесты, чтобы построить профиль.</p>')}
+    </div>
+  </div>
+
+  <div class="proto-grid" style="margin-top:20px">
+    <div>
+      <h3>Состав тела</h3>
+      <table><tbody>
+        ${row('Вес фактический / идеальный',`${fmt(n('weight'))} / ${fmt(R.idealW)}`,'кг')}
+        ${row('ИМТ',fmt(R.bmi),R.bmiCat,R.bmiT)}
+        ${row('% жира',fmt(R.bf),R.bfCat?`${R.bfCat}, норма ${R.bfNorm}`:'',R.bfT)}
+        ${row('Масса жира, кг',fmt(R.fatMass))}
+        ${row('Безжировая масса, кг',fmt(R.lbm))}
+        ${row('Тип жироотложения',R.whr!=null?fmt(R.whr,2):'—',R.fatType)}
+        ${row('Тип телосложения',n('wrist')??'—',R.frame)}
+      </tbody></table>
+      <h3>Обхваты, см</h3>
+      <table><tbody>
+        <tr><td>Грудная клетка (пауза / вдох)</td><td class="r num" colspan="2">${n('chestP')??'—'} / ${n('chestI')??'—'}</td></tr>
+        <tr><td>Талия / бёдра</td><td class="r num" colspan="2">${n('waist')??'—'} / ${n('hips')??'—'}</td></tr>
+        <tr><th></th><th class="r">Лев</th><th class="r">Прав</th></tr>${circ}
+      </tbody></table>
+    </div>
+    <div>
+      <h3>Функциональное состояние</h3>
+      <table><tbody>
+        ${row('АД покоя / идеальное',`${n('sys')??'—'}/${n('dia')??'—'} · ${fmt(R.idealSys,0)}/${fmt(R.idealDia,0)}`,'')}
+        ${row('ЧСС покоя',n('hr')??'—','')}
+        ${row('Уровень физ. состояния',fmt(R.ufs,3),R.ufsCat,R.ufsT)}
+        ${row('PWC, кгм/мин',fmt(R.pwc,0),R.pwcCat,R.pwcT)}
+        ${row('МПК, мл/мин/кг',fmt(R.vo2),R.vo2Cat,R.vo2T)}
+        ${row('Уровень стресса, баллов',R.stressTotal.c,STRESS_LABELS[R.stressTotal.i],stressT(R.stressTotal.i))}
+        ${row('Гибкость, см',n('flex')??'—',R.flexCat,R.flexT)}
+      </tbody></table>
+      <h3>Тренировочный пульс</h3>
+      ${R.zones?`<table><thead><tr><th>Тренажёр</th><th class="r">мин</th><th class="r">макс</th></tr></thead><tbody>${R.zones.map(z=>`<tr><td>${z[0]}</td><td class="r num">${fmt(z[1],0)}</td><td class="r num">${fmt(z[2],0)}</td></tr>`).join('')}</tbody></table>`:'<p class="empty">Нет данных</p>'}
+      <h3>Повторный максимум (1ПМ), кг</h3>
+      <table><tbody>${LIFTS.map(([k,t])=>`<tr><td>${t}</td><td class="r num">${fmt(R.rm[k])}</td></tr>`).join('')}</tbody></table>
+    </div>
+  </div>
+  ${S.rec?`<h3>Рекомендации</h3><p style="white-space:pre-wrap">${esc(S.rec)}</p>`:''}
+  ${S.contra?`<h3>Противопоказания</h3><p style="white-space:pre-wrap">${esc(S.contra)}</p>`:''}
+  ${S.retest?`<p><b>Повторное тестирование:</b> ${new Date(S.retest).toLocaleDateString('ru-RU')}</p>`:''}`;
+}
+
+/* ===================== Взаимодействие ===================== */
+function fillInputs(){
+  document.querySelectorAll('[data-k]').forEach(i=>i.value=S[i.dataset.k]??'');
+  document.getElementById('name').value=S.name;document.getElementById('date').value=S.date||'';
+  document.getElementById('fatMode').value=S.fatMode;
+  ['rec','contra','retest'].forEach(k=>document.getElementById(k).value=S[k]||'');
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.sex===S.sex));
+  document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',S.stress[c.dataset.g].includes(+c.dataset.i)));
+  render();
+}
+function showTab(i){
+  tab=i;
+  document.querySelectorAll('.steps button').forEach((b,j)=>b.setAttribute('aria-selected',j===i));
+  document.querySelectorAll('section.panel').forEach((p,j)=>p.classList.toggle('active',j===i));
+  render();window.scrollTo({top:0});
+}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2200)}
+
+build();
+document.addEventListener('input',e=>{
+  const k=e.target.dataset.k;
+  if(k){S[k]=e.target.value;render();return}
+  const id=e.target.id;
+  if(['name','date','rec','contra','retest'].includes(id)){S[id]=e.target.value;render()}
+});
+document.getElementById('fatMode').addEventListener('change',e=>{S.fatMode=e.target.value;render()});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.tab)showTab(+b.dataset.tab);
+  else if(b.dataset.go)showTab(+b.dataset.go);
+  else if(b.dataset.sex){S.sex=b.dataset.sex;document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()}
+  else if(b.classList.contains('chip')){
+    const g=b.dataset.g,i=+b.dataset.i,arr=S.stress[g],p=arr.indexOf(i);
+    p>=0?arr.splice(p,1):arr.push(i);b.setAttribute('aria-pressed',p<0);render();
+  }
+});
+document.getElementById('bPrint').onclick=()=>window.print();
+
+/* ===================== Выгрузка протокола картинкой ===================== */
+function loadH2C(){
+  if(window.html2canvas)return Promise.resolve(window.html2canvas);
+  return new Promise((res,rej)=>{
+    const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    sc.onload=()=>res(window.html2canvas);
+    sc.onerror=()=>rej(new Error('не удалось загрузить модуль. Проверьте интернет'));
+    document.head.appendChild(sc);
+  });
+}
+async function exportImage(){
+  const btn=document.getElementById('bImage');
+  btn.disabled=true;const label=btn.textContent;btn.textContent='Готовлю картинку…';
+  let sheet;
+  try{
+    const h2c=await loadH2C();
+    render();
+    sheet=document.createElement('div');sheet.className='export-sheet';
+    sheet.innerHTML=document.getElementById('protocol').innerHTML+
+      `<div class="export-foot">Фитнес-диагностика · ${new Date().toLocaleDateString('ru-RU')}</div>`;
+    document.body.appendChild(sheet);
+    const canvas=await h2c(sheet,{scale:2,backgroundColor:'#ffffff',logging:false});
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(!blob)throw new Error('не удалось создать изображение');
+    const safe=(S.name||'').trim().replace(/[^0-9A-Za-zА-Яа-яЁё-]+/g,'_').replace(/^_+|_+$/g,'')||'клиент';
+    const fname=`Протокол_${safe}_${S.date||''}.png`;
+    const file=new File([blob],fname,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'Протокол фитнес-тестирования'});toast('Готово');return}
+      catch(e){if(e.name==='AbortError')return}
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast('Картинка сохранена');
+  }catch(err){toast('Не удалось сохранить картинку: '+err.message)}
+  finally{sheet?.remove();btn.disabled=false;btn.textContent=label}
+}
+document.getElementById('bImage').onclick=exportImage;
+document.getElementById('bNew').onclick=()=>{S=blank();fillInputs();showTab(0);toast('Новый протокол')};
+document.getElementById('bExample').onclick=()=>{S=Object.assign(blank(),JSON.parse(JSON.stringify(EXAMPLE)));fillInputs();toast('Загружен пример из таблицы «Женщины»')};
+
+/* ===================== Архив (постоянное хранилище) ===================== */
+// Хранилище: в Claude — window.storage, в обычном браузере — localStorage
+const store=window.storage||(()=>{try{const ls=window.localStorage;ls.setItem('__t','1');ls.removeItem('__t');
+  return{
+    async get(k){const v=ls.getItem(k);if(v===null)throw new Error('not found');return{key:k,value:v}},
+    async set(k,v){ls.setItem(k,v);return{key:k,value:v}},
+    async delete(k){ls.removeItem(k);return{key:k,deleted:true}},
+    async list(prefix=''){const keys=[];for(let i=0;i<ls.length;i++){const k=ls.key(i);if(k.startsWith(prefix))keys.push(k)}return{keys}}
+  }}catch(e){return null}})();
+document.getElementById('bSave').onclick=async()=>{
+  if(!store){toast('Хранилище недоступно в этом окружении');return}
+  if(!S.id)S.id=String(Date.now());
+  try{
+    const r=await store.set('protocol:'+S.id,JSON.stringify(S),false);
+    toast(r?'Протокол сохранён':'Не удалось сохранить');
+  }catch(err){toast('Не удалось сохранить: '+err.message)}
+};
+async function openArchive(){
+  const dlg=document.getElementById('archive'),list=document.getElementById('archList');
+  list.innerHTML='<p class="empty">Загрузка…</p>';dlg.showModal();
+  if(!store){list.innerHTML='<p class="empty">Хранилище недоступно в этом окружении.</p>';return}
+  try{
+    const res=await store.list('protocol:',false);const keys=res?.keys||[];
+    if(!keys.length){list.innerHTML='<p class="empty">Сохранённых протоколов нет. Заполните тестирование и нажмите «Сохранить».</p>';return}
+    const items=[];
+    for(const k of keys){try{const r=await store.get(k,false);if(r)items.push(JSON.parse(r.value))}catch(e){}}
+    items.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    list.innerHTML=items.map(p=>`<div class="arch-item"><div><div>${esc(p.name)||'Без имени'}</div><div class="meta">${p.date?new Date(p.date).toLocaleDateString('ru-RU'):''} · ${p.sex==='f'?'женщина':'мужчина'}${p.age?', '+esc(p.age)+' лет':''}</div></div>
+      <div><button class="lnk" type="button" data-open="${p.id}">Открыть</button><button class="lnk del" type="button" data-del="${p.id}">Удалить</button></div></div>`).join('');
+    list._items=items;
+  }catch(err){list.innerHTML='<p class="empty">Не удалось загрузить архив: '+esc(err.message)+'</p>'}
+}
+document.getElementById('bArchive').onclick=openArchive;
+document.getElementById('closeArch').onclick=()=>document.getElementById('archive').close();
+document.getElementById('archList').addEventListener('click',async e=>{
+  const b=e.target.closest('button');if(!b)return;const list=document.getElementById('archList');
+  if(b.dataset.open){const p=list._items.find(x=>x.id===b.dataset.open);S=Object.assign(blank(),p);fillInputs();document.getElementById('archive').close();showTab(4);toast('Протокол открыт')}
+  if(b.dataset.del){if(!confirm('Удалить протокол?'))return;try{await store.delete('protocol:'+b.dataset.del,false);openArchive()}catch(err){toast('Не удалось удалить')}}
+});
+
+fillInputs();showTab(0);
+</script>
+</body>
+</html>
