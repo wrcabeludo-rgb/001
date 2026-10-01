@@ -8,3 +8,10 @@
 Сайт: https://wrcabeludo-rgb.github.io/001/fitnes-diagnostika/
 
 Устанавливается на телефон как приложение (PWA) и работает без интернета. При изменении файлов приложения увеличивайте `VERSION` в `fitnes-diagnostika/sw.js`.
+
+## Фитнес-диагностика — веб-версия
+
+Та же программа без установки на телефон и офлайн-режима, просто открывается в браузере.
+
+Папка: [`fitnes-diagnostika-web/`](fitnes-diagnostika-web/)
+Сайт: https://wrcabeludo-rgb.github.io/001/fitnes-diagnostika-web/
