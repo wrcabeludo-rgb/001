@@ -1,5 +1,5 @@
-const CACHE = 'ft-quiz-v3';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data1.js', 'data2.js', 'data3.js', 'data4.js', 'data5.js', 'data6.js', 'images.js', 'images2.js',
+const CACHE = 'ft-quiz-v4';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data1.js', 'data2.js', 'data3.js', 'data4.js', 'data5.js', 'data6.js', 'data7.js', 'images.js', 'images2.js', 'images3.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
