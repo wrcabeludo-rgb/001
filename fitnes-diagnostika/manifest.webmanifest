@@ -1,0 +1,19 @@
+{
+  "name": "Фитнес-диагностика",
+  "short_name": "Фитнес-тест",
+  "description": "Фитнес-тестирование клиентов: стресс, антропометрия, PWC и МПК, сила, гибкость, протокол.",
+  "lang": "ru",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E6EAEE",
+  "theme_color": "#15202B",
+  "categories": ["health", "fitness", "medical"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -6,3 +6,5 @@
 
 Папка: [`fitnes-diagnostika/`](fitnes-diagnostika/)
 Сайт: https://wrcabeludo-rgb.github.io/001/fitnes-diagnostika/
+
+Устанавливается на телефон как приложение (PWA) и работает без интернета. При изменении файлов приложения увеличивайте `VERSION` в `fitnes-diagnostika/sw.js`.

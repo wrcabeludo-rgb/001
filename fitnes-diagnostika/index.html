@@ -2,8 +2,16 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Фитнес-диагностика</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#15202B">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Фитнес-тест">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{
   --bg:#E6EAEE; --surface:#FFFFFF; --ink:#15202B; --muted:#5A6774; --line:#D3DAE1;
@@ -20,7 +28,7 @@ button{cursor:pointer}
 .num{font-variant-numeric:tabular-nums}
 
 /* top bar */
-.top{background:var(--ink);color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.top{background:var(--ink);color:#fff;padding:calc(14px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) 14px calc(20px + env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
 .top h1{font-size:18px;font-weight:650;margin:0;letter-spacing:.2px;margin-right:auto}
 .top input{background:#24313E;border:1px solid #33424F;border-radius:6px;padding:7px 10px;color:#fff;min-width:0}
 .top input::placeholder{color:#93A1AE}
@@ -169,6 +177,7 @@ dialog::backdrop{background:rgba(15,25,35,.45)}
     </div>
   </div>
   <div class="actions">
+    <button class="btn" id="bInstall" type="button" hidden>Установить</button>
     <button class="btn" id="bNew" type="button">Новый клиент</button>
     <button class="btn" id="bExample" type="button">Пример</button>
     <button class="btn" id="bArchive" type="button">Архив</button>
@@ -781,6 +790,25 @@ document.getElementById('archList').addEventListener('click',async e=>{
 });
 
 fillInputs();showTab(0);
+
+/* ===================== PWA: установка и офлайн ===================== */
+if('serviceWorker' in navigator&&location.protocol!=='file:'){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+(()=>{
+  const btn=document.getElementById('bInstall');
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  if(standalone)return;
+  let deferred=null;
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;btn.hidden=false});
+  window.addEventListener('appinstalled',()=>{btn.hidden=true;toast('Приложение установлено')});
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(ios)btn.hidden=false;
+  btn.onclick=async()=>{
+    if(deferred){deferred.prompt();await deferred.userChoice;deferred=null;btn.hidden=true;return}
+    if(ios)alert('Чтобы установить приложение на iPhone или iPad:\n\n1. Откройте эту страницу в Safari.\n2. Нажмите «Поделиться» (квадрат со стрелкой вверх).\n3. Выберите «На экран „Домой“» и нажмите «Добавить».');
+  };
+})();
 </script>
 </body>
 </html>
