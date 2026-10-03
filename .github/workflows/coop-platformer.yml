@@ -1,0 +1,59 @@
+name: Coop Platformer build
+
+on:
+  push:
+    paths:
+      - "coop-platformer/**"
+      - ".github/workflows/coop-platformer.yml"
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.4.1"
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: coop-platformer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and Windows export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          tmp="$RUNNER_TEMP/godot"
+          mkdir -p "$tmp"
+          wget -q -O "$tmp/godot.zip" "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          wget -q -O "$tmp/templates.tpz" "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "$tmp/godot.zip" -d "$tmp"
+          sudo mv "$tmp/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          templates="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$templates"
+          unzip -q -j "$tmp/templates.tpz" "templates/windows_*" "templates/version.txt" -d "$templates"
+          ls "$templates"
+          rm -rf "$tmp"
+
+      - name: Import project
+        run: godot --headless --path game --import
+
+      - name: Smoke test (run the game for 5 seconds)
+        run: |
+          godot --headless --path game --quit-after 300 2>&1 | tee run.log
+          if grep -E "SCRIPT ERROR|ERROR:" run.log; then
+            echo "::error::The game printed errors while running"
+            exit 1
+          fi
+
+      - name: Export Windows build
+        run: |
+          mkdir -p build/windows
+          godot --headless --path game --export-release "Windows" ../build/windows/CoopPlatformer.exe 2>&1 | tee export.log
+          test -f build/windows/CoopPlatformer.exe
+          ls -la build/windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CoopPlatformer-windows
+          path: coop-platformer/build/windows/
+          if-no-files-found: error

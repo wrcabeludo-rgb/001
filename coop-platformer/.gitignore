@@ -1,0 +1,4 @@
+# Godot cache and local editor state
+game/.godot/
+# Exported builds (produced by CI)
+build/
