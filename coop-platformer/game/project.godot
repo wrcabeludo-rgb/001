@@ -28,6 +28,10 @@ window/size/window_height_override=900
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 
+[gui]
+
+theme/custom_font="res://assets/fonts/Exo2-SemiBold.ttf"
+
 [physics]
 
 common/physics_ticks_per_second=60
