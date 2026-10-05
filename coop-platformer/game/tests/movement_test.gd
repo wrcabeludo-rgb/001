@@ -1,38 +1,7 @@
-extends Node
+extends "res://tests/test_harness.gd"
 ## Headless movement checks, run by CI:
 ##   godot --headless --path game res://tests/movement_test.tscn
-## Drives a hero with a scripted input device inside the test room and
-## exits with code 1 if any check fails.
-
-const ROOM := preload("res://scenes/test_room.tscn")
-const ROOM_SCRIPT := preload("res://scripts/test_room.gd")
-## Floor top is y = 1020 in the test room; a hero standing on it has this centre.
-const FLOOR_Y := 1020.0 - Player.SIZE.y / 2
-## Open space with no platforms above (columns 24..28 of the room).
-const OPEN_X := 1560.0
-
-var _room: Node
-var _input: PlayerInput
-var _player: Player
-var _failures := PackedStringArray()
-var _checks := 0
-
-
-func _ready() -> void:
-	process_priority = -50
-	_room = ROOM.instantiate()
-	add_child(_room)
-	await _run_all()
-	print("Проверок: %d, провалено: %d" % [_checks, _failures.size()])
-	for failure in _failures:
-		printerr("FAIL: " + failure)
-	get_tree().quit(1 if _failures.size() > 0 else 0)
-
-
-func _physics_process(_delta: float) -> void:
-	# Runs before the hero (lower priority value), like PlayerManager does.
-	if _input != null:
-		_input.poll()
+## Drives a hero with a scripted input device inside the test room.
 
 
 func _run_all() -> void:
@@ -199,26 +168,3 @@ func _measure_double_jump() -> float:
 		top_y = minf(top_y, _player.position.y)
 	_input.set_virtual("jump", false)
 	return start_y - top_y
-
-
-func _spawn(hero: Heroes.Id, at: Vector2) -> void:
-	if _player != null:
-		_player.free()
-	_input = PlayerInput.scripted()
-	_player = Player.new()
-	_player.setup(0, _input, hero)
-	_player.position = at
-	_room.add_child(_player)
-	await _frames(3)
-
-
-func _frames(count: int) -> void:
-	for i in count:
-		await get_tree().physics_frame
-
-
-func _check(ok: bool, description: String) -> void:
-	_checks += 1
-	print(("ok   " if ok else "FAIL ") + description)
-	if not ok:
-		_failures.append(description)

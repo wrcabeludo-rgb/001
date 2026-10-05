@@ -40,6 +40,7 @@ jobs:
       - name: Smoke test (run the game for 5 seconds)
         run: |
           godot --headless --path game --quit-after 300 2>&1 | tee run.log
+          godot --headless --path game res://scenes/test_room.tscn --quit-after 300 2>&1 | tee -a run.log
           if grep -E "SCRIPT ERROR|ERROR:" run.log; then
             echo "::error::The game printed errors while running"
             exit 1
@@ -52,6 +53,18 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if grep -E "SCRIPT ERROR" test.log; then
+            echo "::error::Script errors during tests"
+            exit 1
+          fi
+          exit $status
+
+      - name: Combat tests
+        run: |
+          set +e
+          timeout 180 godot --headless --path game res://tests/combat_test.tscn 2>&1 | tee combat.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR" combat.log; then
             echo "::error::Script errors during tests"
             exit 1
           fi

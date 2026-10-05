@@ -65,6 +65,14 @@ func swap_hero(slot: int) -> void:
 	hero_changed.emit(slot)
 
 
+## Slows the whole game for a moment (hit feedback). Lives here because the
+## autoload is never freed, so time always returns to normal.
+func hitstop(duration: float, time_scale: float) -> void:
+	Engine.time_scale = time_scale
+	await get_tree().create_timer(duration, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+
 func remove_player(slot: int) -> void:
 	if players[slot] == null:
 		return

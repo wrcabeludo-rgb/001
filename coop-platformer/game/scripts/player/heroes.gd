@@ -18,6 +18,11 @@ const MOVEMENT := {
 	Id.SWORDSMAN: preload("res://resources/heroes/swordsman_movement.tres"),
 }
 
+const COMBAT := {
+	Id.SHOOTER: preload("res://resources/heroes/shooter_combat.tres"),
+	Id.SWORDSMAN: preload("res://resources/heroes/swordsman_combat.tres"),
+}
+
 
 static func other(id: Id) -> Id:
 	return Id.SWORDSMAN if id == Id.SHOOTER else Id.SHOOTER

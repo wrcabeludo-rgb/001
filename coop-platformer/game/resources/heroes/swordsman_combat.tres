@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CombatStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/combat_stats.gd" id="1_combat"]
+
+[resource]
+script = ExtResource("1_combat")
+max_health = 12
+hurt_invulnerability = 0.8
+hurt_stun = 0.25
+slash1_damage = 3
+slash2_damage = 3
+slash3_damage = 5
+up_slash_damage = 3
+swing_time = 0.2
+combo_window = 0.3
+slash_knockback = 300.0
+finisher_knockback = 800.0
+block_damage_multiplier = 0.25
+block_knockback_multiplier = 0.3
+block_speed_multiplier = 0.45

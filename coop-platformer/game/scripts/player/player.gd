@@ -3,19 +3,25 @@ extends CharacterBody2D
 ## Placeholder hero (a coloured box) with the full platforming movement:
 ## acceleration, coyote time, jump buffering, variable jump height,
 ## wall slide and wall jump, double jump (shooter) and dash (swordsman).
-## All numbers live in MovementStats.
+## Attacks live in a HeroCombat child (ShooterCombat / SwordsmanCombat).
+## Movement numbers live in MovementStats, combat numbers in CombatStats.
+
+signal died(player: Player)
 
 const SIZE := Vector2(48, 96)
-const LAYER_WORLD := 1
-const LAYER_PLAYERS := 2
 ## How far to probe sideways when looking for a wall to slide on.
 const WALL_PROBE := 2.0
+const HITSTOP_TIME := 0.05
+const HITSTOP_SCALE := 0.05
 
 var slot := 0
 var input: PlayerInput
 var hero: Heroes.Id = Heroes.Id.SHOOTER
 var stats: MovementStats
+var combat_stats: CombatStats
 var facing := 1
+var health: Health
+var combat: HeroCombat
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
@@ -28,6 +34,9 @@ var _dash_timer := 0.0
 var _dash_cooldown_timer := 0.0
 ## True while rising from a jump the player can still cut short.
 var _jump_rising := false
+var _stun_timer := 0.0
+var _invulnerable_timer := 0.0
+var _hurtbox: Hurtbox
 
 var _body: ColorRect
 var _eye: ColorRect
@@ -43,7 +52,9 @@ func setup(p_slot: int, p_input: PlayerInput, p_hero: Heroes.Id) -> void:
 func set_hero(p_hero: Heroes.Id) -> void:
 	hero = p_hero
 	stats = Heroes.MOVEMENT[hero]
+	combat_stats = Heroes.COMBAT[hero]
 	if is_inside_tree():
+		_build_combat()
 		_apply_look()
 
 
@@ -51,10 +62,48 @@ func is_dashing() -> bool:
 	return _dash_timer > 0.0
 
 
+func is_stunned() -> bool:
+	return _stun_timer > 0.0
+
+
+func is_invulnerable() -> bool:
+	return _invulnerable_timer > 0.0
+
+
+## Called by a Hurtbox when an enemy attack lands. Returns true if it counted.
+func receive_hit(hit: Hit) -> bool:
+	if is_invulnerable() or health.is_dead():
+		return false
+	hit = combat.modify_hit(hit)
+	health.damage(hit.damage)
+	velocity = hit.knockback
+	_dash_timer = 0.0
+	_jump_rising = false
+	_invulnerable_timer = combat_stats.hurt_invulnerability if not hit.blocked else 0.2
+	if not hit.blocked:
+		_stun_timer = combat_stats.hurt_stun
+	return true
+
+
+## Back to full health and control (respawn).
+func revive(at: Vector2, invulnerable_time := 1.0) -> void:
+	global_position = at
+	velocity = Vector2.ZERO
+	_stun_timer = 0.0
+	_invulnerable_timer = invulnerable_time
+	health.reset(combat_stats.max_health)
+
+
+## A tiny freeze of the whole game when a melee hit lands, so it feels heavy.
+func hitstop() -> void:
+	PlayerManager.hitstop(HITSTOP_TIME, HITSTOP_SCALE)
+
+
 func _ready() -> void:
+	add_to_group("players")
 	# Players stand on the world but pass through each other.
-	collision_layer = LAYER_PLAYERS
-	collision_mask = LAYER_WORLD
+	collision_layer = Layers.PLAYER_BODIES
+	collision_mask = Layers.WORLD
 
 	var shape := RectangleShape2D.new()
 	shape.size = SIZE
@@ -82,6 +131,14 @@ func _ready() -> void:
 	_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_tag)
 
+	health = Health.new()
+	add_child(health)
+	health.died.connect(func() -> void: died.emit(self))
+	_hurtbox = Hurtbox.new()
+	add_child(_hurtbox)
+	_hurtbox.setup(Layers.Team.PLAYERS, SIZE - Vector2(8, 8), self)
+
+	_build_combat()
 	_apply_look()
 
 
@@ -94,6 +151,9 @@ func _physics_process(delta: float) -> void:
 	var wall_dir := _get_wall_dir()
 
 	_tick_timers(delta)
+	if is_stunned():
+		_process_stun(on_floor, delta)
+		return
 	if on_floor:
 		_coyote_timer = stats.coyote_time
 		_air_jumps_left = stats.air_jumps
@@ -107,10 +167,12 @@ func _physics_process(delta: float) -> void:
 
 	if is_dashing():
 		_process_dash(delta)
+		combat.update(delta)
 		return
 	if stats.dash_enabled and input.just_pressed("skill") and _can_dash(on_floor):
 		_start_dash(move, on_floor)
 		_process_dash(delta)
+		combat.update(delta)
 		return
 
 	if move.x != 0.0 and _wall_jump_lock_timer <= 0.0:
@@ -128,10 +190,35 @@ func _physics_process(delta: float) -> void:
 		_jump_rising = false
 
 	move_and_slide()
+	combat.update(delta)
 	_update_look(sliding)
 
 
+## Knocked back after a hit: no control, the push slowly fades.
+func _process_stun(on_floor: bool, delta: float) -> void:
+	_apply_gravity(0.0, on_floor, 0, delta)
+	velocity.x = move_toward(velocity.x, 0.0, stats.ground_decel * 0.4 * delta)
+	move_and_slide()
+	combat.update(delta)
+	_update_look(false)
+
+
+func _build_combat() -> void:
+	if combat != null:
+		combat.queue_free()
+	match hero:
+		Heroes.Id.SHOOTER:
+			combat = ShooterCombat.new()
+		Heroes.Id.SWORDSMAN:
+			combat = SwordsmanCombat.new()
+	add_child(combat)
+	combat.setup(self)
+	health.reset(combat_stats.max_health)
+
+
 func _tick_timers(delta: float) -> void:
+	_stun_timer -= delta
+	_invulnerable_timer -= delta
 	_coyote_timer -= delta
 	_jump_buffer_timer -= delta
 	_wall_coyote_timer -= delta
@@ -147,7 +234,8 @@ func _apply_horizontal(direction: float, on_floor: bool, delta: float) -> void:
 		accel = stats.ground_accel if direction != 0.0 else stats.ground_decel
 	else:
 		accel = stats.air_accel if direction != 0.0 else stats.air_decel
-	velocity.x = move_toward(velocity.x, direction * stats.run_speed, accel * delta)
+	var target := direction * stats.run_speed * combat.speed_multiplier()
+	velocity.x = move_toward(velocity.x, target, accel * delta)
 
 
 ## Applies gravity and wall sliding. Returns true while sliding down a wall.
@@ -232,7 +320,13 @@ func _update_look(sliding: bool) -> void:
 	var color: Color = Heroes.COLORS[hero]
 	if is_dashing():
 		color = color.lightened(0.6)
+	elif is_stunned():
+		color = Color.WHITE
+	elif combat.is_glowing():
+		color = color.lightened(0.35 + 0.25 * sin(Time.get_ticks_msec() * 0.02))
 	elif sliding:
 		color = color.darkened(0.3)
 	_body.color = color
+	# Blink while invulnerable after a hit.
+	modulate.a = 0.35 if is_invulnerable() and (Time.get_ticks_msec() / 70) % 2 == 0 else 1.0
 	_eye.position = Vector2(facing * (SIZE.x / 2 - 14) - 5, -SIZE.y / 2 + 14)

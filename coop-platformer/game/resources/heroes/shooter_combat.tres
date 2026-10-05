@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CombatStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/combat_stats.gd" id="1_combat"]
+
+[resource]
+script = ExtResource("1_combat")
+max_health = 8
+hurt_invulnerability = 0.8
+hurt_stun = 0.25
+fire_cooldown = 0.16
+shot_damage = 1
+shot_speed = 1400.0
+shot_lifetime = 0.7
+shot_knockback = 120.0
+charge_time = 0.6
+charged_damage = 6
+charged_cost = 2
+charged_pierce = 3
+charged_knockback = 600.0
+start_ammo = 20
+max_ammo = 40
+kick_damage = 1
+kick_knockback = 750.0
+kick_cooldown = 0.45
