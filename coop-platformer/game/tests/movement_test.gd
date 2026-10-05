@@ -5,6 +5,7 @@ extends Node
 ## exits with code 1 if any check fails.
 
 const ROOM := preload("res://scenes/test_room.tscn")
+const ROOM_SCRIPT := preload("res://scripts/test_room.gd")
 ## Floor top is y = 1020 in the test room; a hero standing on it has this centre.
 const FLOOR_Y := 1020.0 - Player.SIZE.y / 2
 ## Open space with no platforms above (columns 24..28 of the room).
@@ -35,6 +36,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _run_all() -> void:
+	_test_room_has_no_low_ceilings()
 	await _test_run()
 	await _test_jump_height()
 	await _test_jump_cut()
@@ -44,6 +46,26 @@ func _run_all() -> void:
 	await _test_jump_buffer()
 	await _test_dash()
 	await _test_wall_slide_and_jump()
+
+
+## Every gap between a floor and an overhang must fit the hero with room to spare.
+func _test_room_has_no_low_ceilings() -> void:
+	var map: Array = ROOM_SCRIPT.MAP
+	var tile: float = ROOM_SCRIPT.TILE
+	var low := PackedStringArray()
+	for col in range(1, map[0].length() - 1):
+		var row := 1
+		while row < map.size() - 1:
+			if map[row][col] == "#":
+				row += 1
+				continue
+			var top := row
+			while row < map.size() - 1 and map[row][col] != "#":
+				row += 1
+			var gap := (row - top) * tile
+			if map[row][col] == "#" and map[top - 1][col] == "#" and gap < Player.SIZE.y + 30.0:
+				low.append("колонка %d, высота %d" % [col, int(gap)])
+	_check(low.is_empty(), "в комнате нет проходов ниже роста героя %s" % ", ".join(low))
 
 
 func _test_run() -> void:

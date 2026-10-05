@@ -1,14 +1,18 @@
 extends Control
-## Plays a comic: full-screen panels with a slow zoom, fades and a caption at the bottom.
+## Plays a comic: full-screen panels with fades and a caption at the bottom.
+## A panel can ask for a screen shake ("shake": true) — used for the explosion.
 ## Jump / attack on any device shows the next panel, Start skips the whole comic.
 
 signal finished
 
 const FADE_TIME := 0.6
 const HOLD_TIME := 5.0
-const ZOOM := 0.05
+const SHAKE_STRENGTH := 18.0
+const SHAKE_TIME := 1.6
+## Shaking panels are drawn slightly larger so the edges never show.
+const SHAKE_OVERSCAN := 1.04
 
-## Each entry: {"image": Texture2D, "caption": String}
+## Each entry: {"image": Texture2D, "caption": String, "shake": bool (optional)}
 var panels: Array = []
 ## Scene to open when the comic ends; empty means only emit `finished`.
 var next_scene := ""
@@ -93,8 +97,10 @@ func _process(delta: float) -> void:
 		alpha = (_time - FADE_TIME - HOLD_TIME) / FADE_TIME
 	_fade.color.a = alpha
 
-	_image.pivot_offset = _image.size / 2.0
-	_image.scale = Vector2.ONE * (1.0 + ZOOM * _time / total)
+	_image.position = Vector2.ZERO
+	if panels[_index].get("shake", false) and _time < SHAKE_TIME:
+		var strength := SHAKE_STRENGTH * pow(1.0 - _time / SHAKE_TIME, 2.0)
+		_image.position = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * strength
 
 
 func _show_next() -> void:
@@ -104,6 +110,8 @@ func _show_next() -> void:
 		_finish()
 		return
 	_image.texture = panels[_index]["image"]
+	_image.pivot_offset = _image.size / 2.0
+	_image.scale = Vector2.ONE * (SHAKE_OVERSCAN if panels[_index].get("shake", false) else 1.0)
 	_caption.text = panels[_index]["caption"]
 	_fade.color.a = 1.0
 

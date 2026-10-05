@@ -1,7 +1,8 @@
 extends Node2D
 ## Test room: grey-box geometry built from an ASCII map, players spawned
 ## as they join, a help overlay and the F1 movement tuning panel.
-## Left: a shaft for wall jumps. Right: a gap for double jump / dash.
+## Left: a shaft for wall jumps. Middle: stairs, each step 2 tiles higher and never
+## overhanging another. Right: a gap for double jump / dash.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -22,10 +23,10 @@ const MAP := [
 	"#...#..........................#",
 	"#...#...........###............#",
 	"#...#..........................#",
-	"#...#......####................#",
-	"#...#..........................#",
-	"#......####.........##.........#",
-	"#......####.1.2.....##.........#",
+	"#...#.......###................#",
+	"#..............................#",
+	"#.......###....................#",
+	"#.......###....1.2.............#",
 	"################################",
 ]
 

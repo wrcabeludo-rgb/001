@@ -11,6 +11,7 @@ func _init() -> void:
 		{
 			"image": preload("res://assets/art/comics/intro_02.png"),
 			"caption": "Потом была Вспышка.",
+			"shake": true,
 		},
 		{
 			"image": preload("res://assets/art/comics/intro_03.png"),
