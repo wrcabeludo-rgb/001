@@ -45,6 +45,18 @@ jobs:
             exit 1
           fi
 
+      - name: Movement tests
+        run: |
+          set +e
+          timeout 180 godot --headless --path game res://tests/movement_test.tscn 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR" test.log; then
+            echo "::error::Script errors during tests"
+            exit 1
+          fi
+          exit $status
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows

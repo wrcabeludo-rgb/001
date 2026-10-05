@@ -1,11 +1,12 @@
 class_name PlayerInput
 extends RefCounted
-## One input device (half of the keyboard or a gamepad) and its button state.
+## One input device (half of the keyboard, a gamepad, or a scripted test device)
+## and its button state.
 ##
 ## The state is polled once per physics frame by PlayerManager, so every
 ## script reading it in the same frame sees the same "just pressed" values.
 
-enum Kind { KEYBOARD, GAMEPAD }
+enum Kind { KEYBOARD, GAMEPAD, VIRTUAL }
 
 const ACTIONS := ["left", "right", "up", "down", "jump", "attack", "skill", "extra", "start"]
 const STICK_DEADZONE := 0.4
@@ -52,6 +53,7 @@ var device_id := -1
 var label := ""
 
 var _key_map := {}
+var _virtual := {}
 var _held := {}
 var _prev := {}
 
@@ -72,6 +74,19 @@ static func gamepad(p_device_id: int) -> PlayerInput:
 	input.label = "Геймпад %d (%s)" % [p_device_id + 1, Input.get_joy_name(p_device_id)]
 	input._reset_state()
 	return input
+
+
+## A device driven from code (automated tests): buttons are set with set_virtual().
+static func scripted(p_label := "Виртуальный") -> PlayerInput:
+	var input := PlayerInput.new()
+	input.kind = Kind.VIRTUAL
+	input.label = p_label
+	input._reset_state()
+	return input
+
+
+func set_virtual(action: String, held: bool) -> void:
+	_virtual[action] = held
 
 
 func poll() -> void:
@@ -121,6 +136,8 @@ func _reset_state() -> void:
 
 
 func _read(action: String) -> bool:
+	if kind == Kind.VIRTUAL:
+		return _virtual.get(action, false)
 	if kind == Kind.KEYBOARD:
 		for key in _key_map[action]:
 			if Input.is_physical_key_pressed(key):

@@ -1,10 +1,11 @@
 extends Node2D
-## Stage 0 test room: grey-box geometry built from an ASCII map,
-## players spawned as they join, and a help overlay.
+## Test room: grey-box geometry built from an ASCII map, players spawned
+## as they join, a help overlay and the F1 movement tuning panel.
+## Left: a shaft for wall jumps. Right: a gap for double jump / dash.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
-const PLAYER_COLORS := [Color(0.3, 0.8, 1.0), Color(1.0, 0.6, 0.25)]
+const TUNING_PANEL := preload("res://scripts/debug/tuning_panel.gd")
 
 ## '#' = wall, '1' / '2' = spawn point of player 1 / 2. 32 x 18 tiles = 1920 x 1080.
 const MAP := [
@@ -12,27 +13,28 @@ const MAP := [
 	"#..............................#",
 	"#..............................#",
 	"#..............................#",
-	"#..............................#",
-	"#..............................#",
-	"#..............................#",
-	"#..............................#",
-	"#..............................#",
-	"#.....................######...#",
-	"#..............................#",
-	"#..............######..........#",
-	"#..............................#",
-	"#.......######.................#",
-	"#..............................#",
-	"#..#####...........##..........#",
-	"#.........1.2......##..........#",
+	"#...#######....................#",
+	"#...#..........................#",
+	"#...#..........................#",
+	"#...#..........................#",
+	"#...#..........................#",
+	"#...#...............####.....###",
+	"#...#..........................#",
+	"#...#...........###............#",
+	"#...#..........................#",
+	"#...#......####................#",
+	"#...#..........................#",
+	"#......####.........##.........#",
+	"#...........1.2.....##.........#",
 	"################################",
 ]
 
-const HELP_TEXT := """ЭТАП 0 — тестовая комната
-Присоединиться: прыжок или Start на своём устройстве. Выйти: удерживать Start 1.5 с.
-Клавиатура (левая): A/D — бег, W/S — вверх/вниз, K или Пробел — прыжок, J — атака, L — навык, I — доп., Esc — Start
-Клавиатура (правая): стрелки — бег, Num2 — прыжок, Num1 — атака, Num3 — навык, Num5 — доп., Num Enter — Start
-Геймпад: стик или крестовина — бег, A — прыжок, X — атака, B — навык, Y — доп., Start — Start"""
+const HELP_TEXT := """ЭТАП 1 — движение.  F1 — настройка движения
+Присоединиться: прыжок или Start. Выйти: удерживать Start 1.5 с. Сменить героя: доп. кнопка (I / Num5 / Y)
+Левая клавиатура: A/D — бег, K или Пробел — прыжок, L — навык (рывок мечника)
+Правая клавиатура: стрелки — бег, Num2 — прыжок, Num3 — навык
+Геймпад: стик или крестовина — бег, A — прыжок, B — навык
+Стрелок: двойной прыжок. Мечник: рывок. Оба: прыжок от стены (прижмись к стене в воздухе и прыгай)"""
 
 var _spawn_points := {}
 var _players := {}
@@ -44,9 +46,18 @@ func _ready() -> void:
 	_build_hud()
 	PlayerManager.player_joined.connect(_spawn_player)
 	PlayerManager.player_left.connect(_despawn_player)
+	PlayerManager.hero_changed.connect(_on_hero_changed)
+	add_child(TUNING_PANEL.new())
 	for slot in PlayerManager.MAX_PLAYERS:
 		if PlayerManager.players[slot] != null:
 			_spawn_player(slot)
+
+
+func _physics_process(_delta: float) -> void:
+	for slot in PlayerManager.MAX_PLAYERS:
+		var device: PlayerInput = PlayerManager.players[slot]
+		if device != null and device.just_pressed("extra"):
+			PlayerManager.swap_hero(slot)
 
 
 func _process(_delta: float) -> void:
@@ -56,7 +67,8 @@ func _process(_delta: float) -> void:
 		if device == null:
 			lines.append("Игрок %d: свободно" % (slot + 1))
 		else:
-			lines.append("Игрок %d: %s  [%s]" % [slot + 1, device.label, " ".join(device.held_actions())])
+			var hero_name: String = Heroes.NAMES[PlayerManager.heroes[slot]]
+			lines.append("Игрок %d: %s — %s  [%s]" % [slot + 1, hero_name, device.label, " ".join(device.held_actions())])
 	lines.append("Геймпадов подключено: %d    FPS: %d" % [PlayerManager.gamepad_count(), Engine.get_frames_per_second()])
 	_status.text = "\n".join(lines)
 
@@ -106,12 +118,12 @@ func _build_hud() -> void:
 
 	var help := Label.new()
 	help.text = HELP_TEXT
-	help.position = Vector2(80, 76)
+	help.position = Vector2(340, 76)
 	help.add_theme_font_size_override("font_size", 20)
 	hud.add_child(help)
 
 	_status = Label.new()
-	_status.position = Vector2(80, 260)
+	_status.position = Vector2(340, 320)
 	_status.add_theme_font_size_override("font_size", 22)
 	_status.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
 	hud.add_child(_status)
@@ -120,10 +132,15 @@ func _build_hud() -> void:
 func _spawn_player(slot: int) -> void:
 	var player := Player.new()
 	player.name = "Player%d" % (slot + 1)
-	player.setup(slot, PlayerManager.players[slot], PLAYER_COLORS[slot])
+	player.setup(slot, PlayerManager.players[slot], PlayerManager.heroes[slot])
 	player.position = _spawn_points[slot]
 	add_child(player)
 	_players[slot] = player
+
+
+func _on_hero_changed(slot: int) -> void:
+	if _players.has(slot):
+		_players[slot].set_hero(PlayerManager.heroes[slot])
 
 
 func _despawn_player(slot: int) -> void:

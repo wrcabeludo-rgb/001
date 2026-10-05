@@ -1,17 +1,20 @@
 extends Node
-## Knows which input device belongs to which player.
+## Knows which input device and which hero belong to which player.
 ##
 ## Drop-in / drop-out: an unused device joins by pressing jump or Start,
 ## a player leaves by holding Start. Registered as the PlayerManager autoload.
 
 signal player_joined(slot: int)
 signal player_left(slot: int)
+signal hero_changed(slot: int)
 
 const MAX_PLAYERS := 2
 const LEAVE_HOLD_TIME := 1.5
 
 ## PlayerInput for each slot, or null when the slot is free.
 var players: Array = []
+## Heroes.Id for each joined slot. Two players never share a hero.
+var heroes: Array = []
 
 var _keyboards: Array[PlayerInput] = []
 var _gamepads := {}
@@ -22,6 +25,7 @@ func _ready() -> void:
 	# Poll devices before any player reads them in the same physics frame.
 	process_priority = -100
 	players.resize(MAX_PLAYERS)
+	heroes.resize(MAX_PLAYERS)
 	_leave_timers.resize(MAX_PLAYERS)
 	_leave_timers.fill(0.0)
 	_keyboards = [
@@ -52,6 +56,15 @@ func gamepad_count() -> int:
 	return _gamepads.size()
 
 
+## Switches the slot to the other hero if nobody else plays it.
+func swap_hero(slot: int) -> void:
+	var wanted := Heroes.other(heroes[slot])
+	if _hero_taken(wanted, slot):
+		return
+	heroes[slot] = wanted
+	hero_changed.emit(slot)
+
+
 func remove_player(slot: int) -> void:
 	if players[slot] == null:
 		return
@@ -71,7 +84,15 @@ func _handle_joining() -> void:
 			return
 		device.consume()
 		players[slot] = device
+		heroes[slot] = Heroes.Id.SWORDSMAN if _hero_taken(Heroes.Id.SHOOTER, slot) else Heroes.Id.SHOOTER
 		player_joined.emit(slot)
+
+
+func _hero_taken(hero: Heroes.Id, except_slot: int) -> bool:
+	for slot in MAX_PLAYERS:
+		if slot != except_slot and players[slot] != null and heroes[slot] == hero:
+			return true
+	return false
 
 
 func _handle_leaving(delta: float) -> void:
