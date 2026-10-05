@@ -13,9 +13,9 @@ const MAP := [
 	"#..............................#",
 	"#..............................#",
 	"#..............................#",
+	"#..............................#",
+	"#..............................#",
 	"#...#######....................#",
-	"#...#..........................#",
-	"#...#..........................#",
 	"#...#..........................#",
 	"#...#..........................#",
 	"#...#...............####.....###",
@@ -118,12 +118,12 @@ func _build_hud() -> void:
 
 	var help := Label.new()
 	help.text = HELP_TEXT
-	help.position = Vector2(340, 76)
+	help.position = Vector2(700, 76)
 	help.add_theme_font_size_override("font_size", 20)
 	hud.add_child(help)
 
 	_status = Label.new()
-	_status.position = Vector2(340, 320)
+	_status.position = Vector2(700, 250)
 	_status.add_theme_font_size_override("font_size", 22)
 	_status.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
 	hud.add_child(_status)
