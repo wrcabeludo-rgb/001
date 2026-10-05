@@ -20,5 +20,5 @@ charged_knockback = 600.0
 start_ammo = 20
 max_ammo = 40
 kick_damage = 1
-kick_knockback = 750.0
+kick_knockback = 1100.0
 kick_cooldown = 0.45

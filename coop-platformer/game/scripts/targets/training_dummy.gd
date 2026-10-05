@@ -1,11 +1,17 @@
 class_name TrainingDummy
 extends Node2D
 ## A practice target: takes hits, shows a health bar and floating damage numbers,
-## flinches when hit and comes back a moment after it is destroyed.
+## is pushed back in proportion to the hit's knockback and springs back to its
+## post, and comes back a moment after it is destroyed.
 
 const SIZE := Vector2(52, 100)
 const COLOR := Color(0.55, 0.35, 0.6)
 const RESPAWN_TIME := 2.0
+## How far a hit pushes the dummy per unit of knockback, and the push limit.
+const PUSH_PER_KNOCKBACK := 0.07
+const MAX_PUSH := 90.0
+## How fast the dummy returns to its post, pixels per second.
+const RETURN_SPEED := 220.0
 
 @export var max_health := 20
 @export var body_size := SIZE
@@ -54,14 +60,19 @@ func receive_hit(hit: Hit) -> bool:
 		return false
 	health.damage(hit.damage)
 	_flash_timer = 0.08
-	_flinch = signf(hit.knockback.x) * 10.0
+	_flinch = clampf(_flinch + hit.knockback.x * PUSH_PER_KNOCKBACK, -MAX_PUSH, MAX_PUSH)
 	_show_damage(hit.damage)
 	return true
 
 
+## Current sideways push from hits, in pixels (positive = pushed right).
+func push() -> float:
+	return _flinch
+
+
 func _process(delta: float) -> void:
 	_flash_timer -= delta
-	_flinch = move_toward(_flinch, 0.0, 80.0 * delta)
+	_flinch = move_toward(_flinch, 0.0, RETURN_SPEED * delta)
 	_body.color = Color.WHITE if _flash_timer > 0.0 else COLOR
 	_body.position = -body_size / 2 + Vector2(_flinch, 0)
 	_bar_fill.size.x = (body_size.x + 10) * health.ratio()

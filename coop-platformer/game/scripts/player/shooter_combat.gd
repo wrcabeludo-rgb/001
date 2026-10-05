@@ -23,7 +23,7 @@ func setup(p_player: Player) -> void:
 	ammo = stats.start_ammo
 	_kick = Hitbox.new()
 	add_child(_kick)
-	_kick.setup(Layers.Team.PLAYERS, Vector2(46, 44), Vector2(44, 12), SHOT_COLOR)
+	_kick.setup(Layers.Team.PLAYERS, Vector2(62, 48), Vector2(52, 12), SHOT_COLOR)
 	_kick.landed.connect(func(_target: Hurtbox) -> void: player.hitstop())
 
 
@@ -49,7 +49,7 @@ func update(delta: float) -> void:
 
 	if input.just_pressed("skill") and _kick_cooldown <= 0.0:
 		_kick_cooldown = stats.kick_cooldown
-		_kick.activate(0.12, stats.kick_damage, Vector2(stats.kick_knockback, -250), player.facing)
+		_kick.activate(0.12, stats.kick_damage, Vector2(stats.kick_knockback, -320), player.facing)
 
 
 func is_charged() -> bool:

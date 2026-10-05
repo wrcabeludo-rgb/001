@@ -29,7 +29,7 @@ extends Resource
 
 @export_group("Стрелок: пинок")
 @export var kick_damage := 1
-@export var kick_knockback := 750.0
+@export var kick_knockback := 1100.0
 @export var kick_cooldown := 0.45
 
 @export_group("Мечник: удары")

@@ -15,6 +15,7 @@ func _run_all() -> void:
 	await _test_charged_shot_needs_ammo()
 	await _test_aim_up()
 	await _test_kick()
+	await _test_kick_pushes_harder_than_shot()
 	await _test_sword_combo()
 	await _test_up_slash()
 	await _test_block_front_and_back()
@@ -75,6 +76,18 @@ func _test_kick() -> void:
 	await _frames(12)
 	_check(dummy.health.current == DUMMY_HEALTH - _player.combat_stats.kick_damage,
 		"пинок стрелка бьёт вплотную (здоровье %d)" % dummy.health.current)
+
+
+func _test_kick_pushes_harder_than_shot() -> void:
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var dummy := await _dummy(Vector2(HERO_X + 70, 0))
+	await _press("skill")
+	var kick_push := await _max_push(dummy, 20)
+	dummy = await _dummy(Vector2(1750, 0))
+	await _press("attack")
+	var shot_push := await _max_push(dummy, 30)
+	_check(kick_push > 60.0 and kick_push > shot_push * 4.0,
+		"пинок отталкивает сильнее выстрела (%.0f px против %.0f px)" % [kick_push, shot_push])
 
 
 func _test_sword_combo() -> void:
@@ -154,6 +167,15 @@ func _dummy(at: Vector2, center_y := 1020.0 - TrainingDummy.SIZE.y / 2) -> Train
 	_dummies.append(dummy)
 	await _frames(2)
 	return dummy
+
+
+## The largest sideways push of the dummy over the next `frames` frames.
+func _max_push(dummy: TrainingDummy, frames: int) -> float:
+	var largest := 0.0
+	for i in frames:
+		await _frames(1)
+		largest = maxf(largest, absf(dummy.push()))
+	return largest
 
 
 func _newest_projectile() -> Projectile:
