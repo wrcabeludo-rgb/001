@@ -3,7 +3,7 @@ name: Coop Platformer build
 on:
   push:
     paths:
-      - "coop-platformer/**"
+      - "coop-platformer/game/**"
       - ".github/workflows/coop-platformer.yml"
   workflow_dispatch:
 
