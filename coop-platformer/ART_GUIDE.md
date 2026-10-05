@@ -190,6 +190,8 @@ cyan and orange glow, clean bold shapes, centered, no text, transparent backgrou
 ## 10. Куда класть и как называть
 
 ```
+art_source/        исходники и концепты (в игру не попадают)
+  concepts/
 game/assets/
   art/
     heroes/       gunner_concept_01.png, swordsman_concept_01.png
@@ -218,3 +220,6 @@ game/assets/
 ## Утверждено
 
 - **Название:** «Неон и пепел».
+- **Стрелок:** `art_source/concepts/gunner_concept_approved.png` — капюшон с циановой окантовкой, противогаз с циановыми линзами,
+  плащ-пончо с крупными лоскутами, красный шарф, винтовка из лома в руках с циановыми трубками, циановые ячейки на поясе.
+  Боковой вид — прицеливание, подойдёт как основа для позы стрельбы.
