@@ -23,6 +23,7 @@ func _run_all() -> void:
 	await _test_fall_respawns_next_to_partner()
 	await _test_team_respawns_at_checkpoint()
 	await _test_late_joiner_appears_next_to_partner()
+	await _test_heroes_swap_on_any_level()
 
 
 func _test_camera_zooms_out() -> void:
@@ -96,6 +97,32 @@ func _test_late_joiner_appears_next_to_partner() -> void:
 	_b = _level.spawn_player(1, input_b, Heroes.Id.SWORDSMAN)
 	_check(_b.global_position.distance_to(_a.global_position) < 5.0,
 		"второй игрок появляется рядом с первым (%.0f px)" % _b.global_position.distance_to(_a.global_position))
+
+
+func _test_heroes_swap_on_any_level() -> void:
+	_clear()
+	await _frames(1)
+	# Joined players as PlayerManager sees them (the test polls the scripted devices).
+	var input_a := PlayerInput.scripted()
+	var input_b := PlayerInput.scripted()
+	_extra_inputs = [input_a, input_b]
+	PlayerManager.players[0] = input_a
+	PlayerManager.players[1] = input_b
+	PlayerManager.heroes[0] = Heroes.Id.SHOOTER
+	PlayerManager.heroes[1] = Heroes.Id.SWORDSMAN
+	_a = _level.spawn_player(0, input_a, Heroes.Id.SHOOTER)
+	_b = _level.spawn_player(1, input_b, Heroes.Id.SWORDSMAN)
+	await _frames(3)
+	input_a.set_virtual("down", true)
+	input_a.set_virtual("extra", true)
+	await _frames(2)
+	input_a.set_virtual("extra", false)
+	input_a.set_virtual("down", false)
+	await _frames(2)
+	_check(_a.hero == Heroes.Id.SWORDSMAN and _b.hero == Heroes.Id.SHOOTER,
+		"вниз + доп. на «Полигоне»: игроки меняются героями")
+	PlayerManager.players[0] = null
+	PlayerManager.players[1] = null
 
 
 ## Two fresh heroes at the given places (they stand still: nothing is pressed).

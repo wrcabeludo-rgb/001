@@ -29,7 +29,7 @@ const MAP := [
 ]
 
 const HELP_TEXT := """Тестовая комната.  F1 — настройка движения.  F2 — «Полигон» (враги), ещё раз F2 — «Мастерская» (механики)
-Присоединиться: прыжок или Start. Выйти: удерживать Start 1.5 с. Сменить героя: вниз + доп.
+Присоединиться: прыжок или Start. Выйти: удерживать Start 1.5 с. Сменить героя (на любом уровне): вниз + доп.
 Левая клавиатура: A/D/W/S — бег и прицел, K/Пробел — прыжок, J — атака, L — навык, I — доп.
 Правая клавиатура: стрелки, Num2 — прыжок, Num1 — атака, Num3 — навык, Num5 — доп.
 Геймпад: стик/крестовина, A — прыжок, X — атака, B — навык, Y — доп.
@@ -63,14 +63,6 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 22)
 	_status.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6))
 	hud.add_child(_status)
-
-
-func _physics_process(delta: float) -> void:
-	super._physics_process(delta)
-	for slot in PlayerManager.MAX_PLAYERS:
-		var device: PlayerInput = PlayerManager.players[slot]
-		if device != null and device.is_held("down") and device.just_pressed("extra"):
-			PlayerManager.swap_hero(slot)
 
 
 func _process(delta: float) -> void:

@@ -36,6 +36,9 @@ var spawn_targets := true
 var use_coop_camera := true
 ## Scene that F2 switches to; empty = none.
 var other_scene := ""
+## While the game is being tested, down + extra switches heroes on any level
+## (with two players, they trade heroes). Turn off for the release.
+var allow_hero_swap := true
 
 ## Hero of each joined slot.
 var players := {}
@@ -134,6 +137,8 @@ func respawn_time_left(slot: int) -> float:
 
 func _physics_process(delta: float) -> void:
 	_update_respawns(delta)
+	if allow_hero_swap:
+		_check_hero_swap()
 	if camera != null:
 		camera.follow(alive_players(), delta)
 		_hold_heroes_on_screen()
@@ -177,6 +182,18 @@ func _on_player_joined(slot: int) -> void:
 func _on_hero_changed(slot: int) -> void:
 	if players.has(slot):
 		players[slot].set_hero(PlayerManager.heroes[slot])
+		show_toast("P%d: %s" % [slot + 1, Heroes.NAMES[PlayerManager.heroes[slot]]])
+
+
+## Down + extra: switch to the other hero (only a living hero, so a fallen
+## one is not brought back by switching).
+func _check_hero_swap() -> void:
+	for slot in players:
+		var device: PlayerInput = PlayerManager.players[slot]
+		if device != null and device.is_held("down") and device.just_pressed("extra") \
+				and players[slot].is_alive():
+			PlayerManager.swap_hero(slot)
+			return
 
 
 func _on_player_died(player: Player) -> void:

@@ -56,11 +56,17 @@ func gamepad_count() -> int:
 	return _gamepads.size()
 
 
-## Switches the slot to the other hero if nobody else plays it.
+## Switches the slot to the other hero. If the partner plays that hero,
+## the two players trade heroes.
 func swap_hero(slot: int) -> void:
 	var wanted := Heroes.other(heroes[slot])
-	if _hero_taken(wanted, slot):
-		return
+	for other in MAX_PLAYERS:
+		if other != slot and players[other] != null and heroes[other] == wanted:
+			heroes[other] = heroes[slot]
+			heroes[slot] = wanted
+			hero_changed.emit(other)
+			hero_changed.emit(slot)
+			return
 	heroes[slot] = wanted
 	hero_changed.emit(slot)
 
