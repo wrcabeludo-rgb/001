@@ -1,0 +1,122 @@
+# Графика для мира 1 — что сгенерировать в ChatGPT
+
+> Порядок важен: сверху — то, что сильнее всего меняет вид игры. Присылай картинки пачками, как получатся,
+> я сразу встраиваю. Перед каждым промптом вставляй **Блок стиля** из [ART_GUIDE.md](ART_GUIDE.md), раздел 2.
+> Нарезку, прозрачность, бесшовность и анимацию делаю я — от тебя только картинки.
+
+## Общие правила
+
+- **Персонажи, враги, предметы:** вид строго **сбоку**, ровный свет, **белый фон** (прозрачный ChatGPT делает плохо,
+  белый я убираю сам). Ничего не обрезано краем картинки.
+- **Герои:** прикладывай утверждённый концепт (`art_source/concepts/...`) и пиши
+  «keep exactly the same character design as the attached image».
+- **Текстуры и фоны:** без людей и врагов, без текста.
+- Один чат на одну серию: «Герои», «Враги мира 1», «Тайлы мира 1», «Предметы», «Фоны мира 1».
+
+---
+
+## 1. Герои для анимации (самое важное)
+
+Анимацию делаю «куклой»: режу героя на части (голова, туловище, руки, ноги, оружие) и двигаю их в игре.
+Для этого нужна **одна чистая поза сбоку**, где руки и ноги не перекрывают друг друга.
+
+### 1.1 Стрелок
+```
+[Блок стиля]
+Keep exactly the same character design as the attached image (the Gunner).
+Full body, strict side view facing right, neutral standing pose for a cutout animation rig:
+legs slightly apart and both fully visible, the far arm hidden behind the body, the near arm
+holding the rifle level and pointing right, the coat hanging straight down, nothing overlapping
+the legs. Flat even lighting, white background, nothing cropped. Portrait 2:3.
+```
+
+### 1.2 Мечник
+```
+[Блок стиля]
+Keep exactly the same character design as the attached image (the Swordsman).
+Full body, strict side view facing right, neutral standing pose for a cutout animation rig:
+legs slightly apart and both fully visible, the mechanical arm in front holding the blade
+pointing forward and slightly down, the other arm relaxed behind the body, nothing overlapping
+the legs. Flat even lighting, white background, nothing cropped. Portrait 2:3.
+```
+
+Если ChatGPT упорно перекрывает руки и ноги — пришли как есть, я скажу, что поправить.
+
+---
+
+## 2. Враги мира 1 (все — мутанты)
+
+Мир 1 — мутанты, поэтому роботов-заглушек переодеваем: дрон → летучая тварь, турель → плевун, тяжёлый → громила.
+Каждого — **отдельной картинкой**, вид сбоку, смотрит **влево**, белый фон, квадрат 1:1.
+Общая приписка ко всем: `mutated by glowing toxic green sludge (#8CFF4F), side view facing left, full body, white background, nothing cropped. Square 1:1.`
+
+| Файл | Кто | Промпт (после Блока стиля) |
+|---|---|---|
+| `enemy_walker` | Ходок | `A hunched mutant scavenger, thin limbs, tattered clothes fused with skin, glowing green pustules, long claws.` |
+| `enemy_flyer` | Летун (вместо дрона) | `A flying mutant bat-like creature with torn membrane wings, bloated glowing green belly, small claws.` |
+| `enemy_spitter` | Плевун (вместо турели) | `A stationary mutant growth rooted into the ground, a bulbous sac with a wide mouth that spits sludge, tentacle roots.` |
+| `enemy_brute` | Громила (вместо тяжёлого) | `A huge hulking mutant brute with one oversized arm made of fused scrap and flesh, small head, heavy stance.` |
+| `enemy_charger` | Рывковый | `A low four-legged mutant dog-like beast with a bony armored head for ramming, glowing green eyes.` |
+| `enemy_ambusher` | Засадник | `A dark spider-like mutant with long thin legs, clinging pose, dim glowing eyes, almost black.` |
+| `boss_sludge_master` | Хозяин стока | `A giant boss mutant rising from a sewer drain, a mass of sludge, pipes and bones, huge maw, two massive arms, glowing green core in the chest. Very large and imposing.` |
+
+---
+
+## 3. Тайлы и текстуры зон
+
+Каждая — **квадрат 1:1, бесшовная** (края стыкуются), плоский вид спереди, без перспективы.
+Приписка ко всем: `Seamless tileable square texture, flat front view, no perspective, no objects, no text. Square 1:1.`
+
+| Файл | Зона | Промпт |
+|---|---|---|
+| `tile_1-1_ground` | 1-1 Трущобы | `Cracked concrete and packed dirt ground with rusty scrap pieces, dark, wet.` |
+| `tile_1-1_wall` | 1-1 Трущобы | `Wall of stacked corrugated rusty metal sheets and bricks, slum shack wall.` |
+| `tile_1-2_ground` | 1-2 Метро | `Old subway station tiled floor, cracked dirty ceramic tiles, puddles.` |
+| `tile_1-2_wall` | 1-2 Метро | `Subway tunnel wall: dark concrete segments, cables, grime, faded tiles.` |
+| `tile_1-3_ground` | 1-3 Сток | `Sewer floor: slimy dark bricks with streaks of glowing green sludge.` |
+| `tile_1-3_wall` | 1-3 Сток | `Sewer wall: old wet bricks, rusty pipe fragments, green slime drips.` |
+| `tile_platform` | все | `A horizontal strip of rusty metal grating catwalk, seen from the front.` (здесь `Landscape 3:2`) |
+
+---
+
+## 4. Фоны зон 1-2 и 1-3 (параллакс)
+
+Как в ART_GUIDE, раздел 5: **бесшовные по горизонтали**, горизонталь 3:2.
+
+| Файл | Промпт |
+|---|---|
+| `bg_far_1-2` | `Background layer for parallax: a huge flooded underground subway hall, dark arches and columns fading into darkness, faint green glow on the water. Seamless horizontally tileable. Landscape 3:2.` |
+| `bg_mid_1-2` | `Background layer for parallax: abandoned subway trains and platforms, broken lamps, cables. Only the bottom half is filled, the top is white. Seamless horizontally tileable. Landscape 3:2.` |
+| `bg_far_1-3` | `Background layer for parallax: a vast sewer cistern with giant pipes, waterfalls of glowing green sludge in the darkness. Seamless horizontally tileable. Landscape 3:2.` |
+| `bg_mid_1-3` | `Background layer for parallax: sewer pipes, valves, ladders and catwalks, dripping green sludge. Only the bottom half is filled, the top is white. Seamless horizontally tileable. Landscape 3:2.` |
+
+---
+
+## 5. Предметы и механики
+
+Каждый — отдельной картинкой, вид сбоку/спереди, белый фон, квадрат 1:1, `nothing cropped`.
+
+| Файл | Промпт |
+|---|---|
+| `prop_barrel` | `An explosive rusty red fuel barrel with a yellow hazard stripe and a glowing warning light.` |
+| `prop_cover` | `A barricade of stacked scrap metal sheets, sandbags and a tire, chest-high.` |
+| `prop_crate` | `A wooden and metal scrap crate.` |
+| `prop_door` | `A heavy industrial sliding door, rusty metal with rivets, tall and narrow, front view.` |
+| `prop_gate` | `A heavy arena gate of welded rebar and sheet metal with red warning lights, tall and narrow, front view.` |
+| `prop_lever` | `A big industrial wall lever switch on a metal post, yellow handle.` |
+| `prop_checkpoint` | `A makeshift lamp post with a glowing mint-green neon lamp, wires wrapped around, standing on the ground.` |
+| `prop_exit` | `A glowing mint-green neon doorway in a ruined wall, the way out.` |
+| `prop_ladder` | `A tall rusty metal ladder, front view, straight vertical.` (Portrait 2:3) |
+| `prop_flamethrower` | `A makeshift wall-mounted flamethrower turret made of pipes and a gas tank, nozzle pointing right.` |
+| `prop_spikes` | `A row of rusty metal spikes and rebar sticking up from the ground.` (Landscape 3:2) |
+| `prop_lift` | `A small industrial lift platform: metal grating floor with yellow-black hazard edges, front view, flat and wide.` (Landscape 3:2) |
+| `pickup_health` | `A small medkit made of scrap with a red cross, game pickup icon.` |
+| `pickup_ammo` | `A small bundle of glowing cyan energy cells, game pickup icon.` |
+| `pickup_scrap` | `A small pile of shiny scrap metal bolts and gears, game pickup icon.` |
+| `npc_trader` | `A friendly old scavenger trader sitting behind a counter made of scrap, many gadgets and weapons hanging around, side view facing left.` |
+
+---
+
+## 6. Комикс конца мира 1
+
+Сценарий и промпты — в [STORY.md](STORY.md). Если промптов для конца мира 1 там нет, скажи — допишу.
