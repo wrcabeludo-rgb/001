@@ -184,6 +184,24 @@ def build_heroes():
         print("wrote", path)
 
 
+# ---------------------------------------------------------------- tiles
+
+TILE_SIZE = 640
+
+
+def build_tiles():
+    """Seamless zone textures, scaled down (they tile in the game)."""
+    folder = os.path.join(SRC, "tiles")
+    if not os.path.isdir(folder):
+        return
+    for file in sorted(os.listdir(folder)):
+        if not file.endswith("_original.png"):
+            continue
+        img = Image.open(os.path.join(folder, file)).convert("RGB").resize((TILE_SIZE, TILE_SIZE), Image.LANCZOS)
+        save(img, "tiles/" + file.replace("_original", "").replace("tile_", ""))
+
+
 if __name__ == "__main__":
     build_enemies()
     build_heroes()
+    build_tiles()

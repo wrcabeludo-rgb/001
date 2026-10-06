@@ -70,6 +70,8 @@ func _init() -> void:
 	wall_color = Color(0.3, 0.33, 0.36)
 	# Until the metro's own backgrounds are drawn: the slum layers, colder and darker.
 	backgrounds = [[BG_FAR, 0.1, Color(0.18, 0.22, 0.28)], [BG_MID, 0.3, Color(0.24, 0.28, 0.34)]]
+	wall_texture = load("res://assets/art/tiles/1-2_wall.png")
+	ground_texture = load("res://assets/art/tiles/1-2_ground.png")
 	other_scene = "res://scenes/test_room.tscn"
 
 

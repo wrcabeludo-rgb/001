@@ -52,8 +52,15 @@ var secrets_total := 0
 var secrets_found := 0
 ## Parallax layers behind the level: [texture, scroll factor, tint], far first.
 var backgrounds: Array = []
-## Colour of walls and floors.
+## Colour of walls and floors (used when there is no texture).
 var wall_color := COLOR_WALL
+## Seamless textures of the zone: the inside of walls, and the walkable top
+## layer of the ground (falls back to the wall texture, lighter).
+var wall_texture: Texture2D
+var ground_texture: Texture2D
+## Materials made from the textures (null without textures).
+var wall_material: ShaderMaterial
+var ground_material: ShaderMaterial
 ## Music loop of this level (empty = silence).
 var music_track := ""
 ## Scene opened after the results screen.
@@ -424,6 +431,10 @@ func _build_level() -> void:
 	add_child(walls)
 
 	var map := get_map()
+	if wall_texture != null:
+		wall_material = TerrainMaterial.make(wall_texture, Color(0.45, 0.45, 0.5))
+		ground_material = TerrainMaterial.make(ground_texture if ground_texture != null else wall_texture,
+			Color(0.95, 0.95, 1.0) if ground_texture != null else Color(0.8, 0.8, 0.85))
 	for row in map.size():
 		var line: String = map[row]
 		var col := 0
@@ -474,6 +485,7 @@ func _build_level() -> void:
 			while col < line.length() and line[col] == "#":
 				col += 1
 			_add_wall(walls, Rect2(start * TILE, row * TILE, (col - start) * TILE, TILE))
+			_add_ground_tops(walls, map, row, start, col)
 	_build_mechanics(map)
 	_build_secrets(map)
 	for sign_info in get_signs():
@@ -620,6 +632,9 @@ func _build_secrets(map: Array) -> void:
 			var secret := SecretArea.new()
 			secret.setup("%s#%d" % [zone_id if zone_id != "" else name, secrets_total], cells)
 			secret.color = wall_color
+			for cell in cells:
+				var cell_index := Vector2i(int(cell.position.x / TILE), int(cell.position.y / TILE))
+				secret.cell_materials.append(ground_material if is_ground_top(map, cell_index.y, cell_index.x) else wall_material)
 			secret.found.connect(_on_secret_found)
 			add_child(secret)
 			secrets_total += 1
@@ -641,7 +656,12 @@ func add_one_way(body: StaticBody2D, cells: Rect2) -> void:
 	collision.one_way_collision = true
 	collision.position = cells.position + Vector2(cells.size.x / 2.0, MovingPlatform.THICKNESS / 2.0)
 	body.add_child(collision)
-	body.add_child(Harm.box(cells.position, Vector2(cells.size.x, MovingPlatform.THICKNESS), Color(0.5, 0.55, 0.62)))
+	var plank := Harm.box(cells.position, Vector2(cells.size.x, MovingPlatform.THICKNESS), Color(0.5, 0.55, 0.62))
+	if ground_material != null:
+		plank.color = Color.WHITE
+		plank.material = ground_material
+	body.add_child(plank)
+	body.add_child(Harm.box(cells.position, Vector2(cells.size.x, 3), Color(1, 1, 1, 0.25)))
 
 
 static func _at(map: Array, col: int, row: int) -> String:
@@ -685,8 +705,35 @@ func _add_wall(walls: StaticBody2D, rect: Rect2) -> void:
 	visual.position = rect.position
 	visual.size = rect.size
 	visual.color = wall_color
+	visual.material = wall_material
 	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	walls.add_child(visual)
+
+
+## Wall tiles in a run whose top is open get the ground texture and a light edge,
+## so the surfaces heroes walk on stand out from the mass of the walls.
+func _add_ground_tops(walls: StaticBody2D, map: Array, row: int, from_col: int, to_col: int) -> void:
+	if ground_material == null:
+		return
+	var col := from_col
+	while col < to_col:
+		if not is_ground_top(map, row, col):
+			col += 1
+			continue
+		var start := col
+		while col < to_col and is_ground_top(map, row, col):
+			col += 1
+		var top := ColorRect.new()
+		top.position = Vector2(start * TILE, row * TILE)
+		top.size = Vector2((col - start) * TILE, TILE)
+		top.material = ground_material
+		top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		walls.add_child(top)
+		walls.add_child(Harm.box(top.position, Vector2(top.size.x, 3), Color(1, 1, 1, 0.18)))
+
+
+static func is_ground_top(map: Array, row: int, col: int) -> bool:
+	return _at(map, col, row - 1) not in ["#", "s", ""]
 
 
 ## Parallax layers from `backgrounds`, scaled to the screen height.

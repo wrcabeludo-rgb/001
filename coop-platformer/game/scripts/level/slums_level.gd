@@ -72,6 +72,7 @@ func _init() -> void:
 	level_title = "Мир 1-1 · Трущобы"
 	music_track = "zone_1_1"
 	backgrounds = [[BG_FAR, 0.1, Color(0.3, 0.3, 0.38)], [BG_MID, 0.3, Color(0.4, 0.4, 0.48)]]
+	wall_texture = load("res://assets/art/tiles/1-1_wall.png")
 	other_scene = "res://scenes/test_room.tscn"
 
 

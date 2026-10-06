@@ -4,6 +4,8 @@ extends "res://tests/test_harness.gd"
 ##   xvfb-run -a godot --path game res://tests/screenshot.tscn -- out=/tmp/shot
 
 var _out := "/tmp/shot"
+## Where the heroes stand: column and the row of the floor surface.
+var _spot := Vector2i(10, 26)
 
 
 func _init() -> void:
@@ -11,15 +13,22 @@ func _init() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("out="):
 			_out = arg.substr(4)
+		elif arg.begins_with("scene="):
+			room_scene = load("res://scenes/%s.tscn" % arg.substr(6))
+		elif arg.begins_with("spot="):
+			var parts := arg.substr(5).split(",")
+			_spot = Vector2i(int(parts[0]), int(parts[1]))
 
 
 func _run_all() -> void:
 	var level := _room as Level
-	await _spawn(Heroes.Id.SHOOTER, Vector2(600, 25 * 60 - 48 + 60))
-	var partner := _spawn_extra(Heroes.Id.SWORDSMAN, Vector2(760, 26 * 60 - 48))
+	var floor_y := _spot.y * 60.0
+	var x := (_spot.x + 0.5) * 60.0
+	await _spawn(Heroes.Id.SHOOTER, Vector2(x, floor_y - 48))
+	var partner := _spawn_extra(Heroes.Id.SWORDSMAN, Vector2(x + 160, floor_y - 48))
 	for letter in ["w", "c"]:
-		level.spawn_enemy(letter, Vector2(1000 + (0 if letter == "w" else 220), 26 * 60))
-	var hanging := level.spawn_enemy("a", Level.cell_floor(14, 20))
+		level.spawn_enemy(letter, Vector2(x + 400 + (0 if letter == "w" else 220), floor_y))
+	var hanging := level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))
 	var _keep := [partner, hanging]
 	level.camera.follow([_player, partner], 0.0, true)
 	await _frames(20)

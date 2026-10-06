@@ -9,6 +9,8 @@ signal found(area: SecretArea)
 ## Same colour as the level's walls, so the false wall does not stand out.
 var color := Level.COLOR_WALL
 var secret_id := ""
+## Optional textured look per cell (the level's wall or ground material).
+var cell_materials: Array = []
 var is_found := false
 
 var _cells: Array[Rect2] = []
@@ -25,8 +27,12 @@ func _ready() -> void:
 	z_index = 5
 	_cover = Node2D.new()
 	add_child(_cover)
-	for cell in _cells:
-		_cover.add_child(Harm.box(cell.position, cell.size, color))
+	for i in _cells.size():
+		var box := Harm.box(_cells[i].position, _cells[i].size, color)
+		if i < cell_materials.size() and cell_materials[i] != null:
+			box.color = Color.WHITE
+			box.material = cell_materials[i]
+		_cover.add_child(box)
 
 
 func _physics_process(delta: float) -> void:
