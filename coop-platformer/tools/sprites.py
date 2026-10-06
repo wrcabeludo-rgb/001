@@ -208,6 +208,27 @@ def build_tiles():
         save(img, "tiles/" + file.replace("_original", "").replace("tile_", ""))
 
 
+# ---------------------------------------------------------------- props
+
+PROPS = {
+    # output: (source, box around the wanted object in the original, height x2)
+    "props/barrel.png": ("props/prop_barrel_original.png", (20, 90, 630, 1120), 170),
+    "props/cover.png": ("props/prop_cover_original.png", (380, 650, 960, 1120), 170),
+    "props/crate.png": ("props/prop_crate_original.png", (10, 290, 650, 920), 130),
+}
+
+
+def build_props():
+    """Props: the picture often shows several variants; one is picked by its box."""
+    for name, (source, box, height) in PROPS.items():
+        path = os.path.join(SRC, source)
+        if not os.path.exists(path):
+            continue
+        img, _ = crop(remove_background(Image.open(path).crop(box)))
+        img, _ = scaled(img, height)
+        save(img, name)
+
+
 PLATFORM_HEIGHT = 30
 
 
@@ -227,7 +248,7 @@ BACKGROUNDS = {
     # output: (source, has a white sky to remove, seam overlap)
     "backgrounds/bg_far_world1_2.png": ("backgrounds/bg_far_world1_2_original.png", False, 400),
     "backgrounds/bg_mid_world1_2.png": ("backgrounds/bg_mid_world1_2_original.png", True, 360),
-    "backgrounds/bg_far_world1_3.png": ("backgrounds/bg_far_world1_3_original.png", False, 400),
+    "backgrounds/bg_far_world1_3.png": ("backgrounds/bg_far_world1_3_original.png", True, 400),
     "backgrounds/bg_mid_world1_3.png": ("backgrounds/bg_mid_world1_3_original.png", True, 360),
 }
 
@@ -247,6 +268,7 @@ def build_backgrounds():
 if __name__ == "__main__":
     build_platform()
     build_backgrounds()
+    build_props()
     build_enemies()
     build_heroes()
     build_tiles()

@@ -43,11 +43,11 @@ for c0 in (248, 253, 258):
 ground(263, 342, 26)
 fill(0, 18, 263, 292)
 put(19, 275, "a"); put(19, 288, "a"); put(25, 280, "w"); put(25, 294, "c")
-fill(26, 26, 268, 273, "s"); fill(27, 27, 268, 273, ".")
+fill(26, 27, 268, 273, "s")
 put(27, 270, "$"); put(27, 272, "U")
 # G. A lever on a ledge (and a hidden room behind it) opens the door; a gauntlet
 fill(20, 20, 296, 307); fill(17, 17, 295, 302); fill(17, 20, 295, 295)
-fill(18, 19, 302, 302, "s")
+fill(18, 19, 296, 302, "s")
 put(19, 298, "$"); put(19, 300, "+")
 fill(21, 25, 308, 308, "H"); put(19, 304, "/")
 fill(0, 21, 315, 315); put(22, 315, "d")

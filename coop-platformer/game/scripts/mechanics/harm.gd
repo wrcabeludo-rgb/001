@@ -65,3 +65,18 @@ static func plank(at: Vector2, width: float, fallback: Color) -> Control:
 	strip.size = Vector2(width, strip.texture.get_height())
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return strip
+
+
+## A prop's picture from assets/art/props, standing on the bottom of a box of
+## `size` centred on the origin (null if the picture is not drawn yet).
+static func prop_sprite(prop: String, size: Vector2) -> Sprite2D:
+	var path := "res://assets/art/props/%s.png" % prop
+	if not ResourceLoader.exists(path):
+		return null
+	var sprite := Sprite2D.new()
+	sprite.texture = load(path)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	sprite.scale = Vector2(0.5, 0.5)
+	sprite.position = Vector2(0, size.y / 2.0 - sprite.texture.get_height() * 0.25)
+	sprite.material = Flash.material()
+	return sprite

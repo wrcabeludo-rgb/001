@@ -4,7 +4,7 @@ extends StaticBody2D
 ## jumped over. Enemy fire slowly breaks it (it darkens as it weakens). It comes
 ## back when the team restarts at a checkpoint.
 
-const SIZE := Vector2(56, 110)
+const SIZE := Vector2(96, 84)
 const COLOR := Color(0.42, 0.5, 0.45)
 
 @export var max_health := 10
@@ -16,6 +16,7 @@ var health: Health
 var _cooldown := 0.0
 var _collision: CollisionShape2D
 var _look: ColorRect
+var _art: Sprite2D
 var _hurtbox: Hurtbox
 
 
@@ -29,7 +30,13 @@ func _ready() -> void:
 	add_child(_collision)
 	_look = Harm.box(-SIZE / 2.0, SIZE, COLOR)
 	add_child(_look)
-	_look.add_child(Harm.box(Vector2(0, 0), Vector2(SIZE.x, 8), COLOR.lightened(0.3)))
+	_art = Harm.prop_sprite("cover", SIZE)
+	if _art != null:
+		_look.color = Color.TRANSPARENT
+		_look.add_child(_art)
+		_art.position += SIZE / 2.0
+	else:
+		_look.add_child(Harm.box(Vector2(0, 0), Vector2(SIZE.x, 8), COLOR.lightened(0.3)))
 	health = Health.new()
 	add_child(health)
 	health.reset(max_health)
@@ -50,7 +57,11 @@ func receive_hit(hit: Hit) -> bool:
 
 func _physics_process(delta: float) -> void:
 	_cooldown -= delta
-	_look.color = COLOR.darkened(0.6 * (1.0 - health.ratio()))
+	if _art != null:
+		# Darker as it breaks.
+		_art.modulate = Color.WHITE.darkened(0.6 * (1.0 - health.ratio()))
+	else:
+		_look.color = COLOR.darkened(0.6 * (1.0 - health.ratio()))
 
 
 func _on_broken() -> void:

@@ -21,6 +21,7 @@ func _init() -> void:
 		},
 		{
 			"image": preload("res://assets/art/comics/intro_04.png"),
+			"zoom": "in",
 			"caption": "Двое идут туда, где всё началось.",
 		},
 	]

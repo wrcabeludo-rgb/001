@@ -7,7 +7,7 @@ extends StaticBody2D
 
 enum State { READY, FUSE, GONE }
 
-const SIZE := Vector2(50, 70)
+const SIZE := Vector2(48, 80)
 const COLOR := Color(0.85, 0.25, 0.15)
 const BLAST_COLOR := Color(1.0, 0.7, 0.2, 0.8)
 
@@ -22,6 +22,7 @@ var state := State.READY
 var _timer := 0.0
 var _collision: CollisionShape2D
 var _look: ColorRect
+var _art: Sprite2D
 var _hurtboxes: Array[Hurtbox] = []
 
 
@@ -35,8 +36,14 @@ func _ready() -> void:
 	add_child(_collision)
 	_look = Harm.box(-SIZE / 2.0, SIZE, COLOR)
 	add_child(_look)
-	_look.add_child(Harm.box(Vector2(0, 16), Vector2(SIZE.x, 8), Color(0.95, 0.8, 0.2)))
-	_look.add_child(Harm.box(Vector2(0, 46), Vector2(SIZE.x, 8), Color(0.95, 0.8, 0.2)))
+	_art = Harm.prop_sprite("barrel", SIZE)
+	if _art != null:
+		_look.color = Color.TRANSPARENT
+		_look.add_child(_art)
+		_art.position += SIZE / 2.0
+	else:
+		_look.add_child(Harm.box(Vector2(0, 16), Vector2(SIZE.x, 8), Color(0.95, 0.8, 0.2)))
+		_look.add_child(Harm.box(Vector2(0, 46), Vector2(SIZE.x, 8), Color(0.95, 0.8, 0.2)))
 	# Both sides can set it off: heroes' attacks and enemies' shots.
 	for team in [Layers.Team.ENEMIES, Layers.Team.PLAYERS]:
 		var hurtbox := Hurtbox.new()
@@ -63,7 +70,11 @@ func _physics_process(delta: float) -> void:
 	if state != State.FUSE:
 		return
 	_timer -= delta
-	_look.color = Color.WHITE if int(_timer * 16.0) % 2 == 0 else COLOR
+	var blink := int(_timer * 16.0) % 2 == 0
+	if _art != null:
+		Flash.set_flash(_art, Color.WHITE, 0.8 if blink else 0.0)
+	else:
+		_look.color = Color.WHITE if blink else COLOR
 	if _timer <= 0.0:
 		explode()
 
@@ -95,7 +106,10 @@ func explode() -> void:
 func reset() -> void:
 	state = State.READY
 	_look.visible = true
-	_look.color = COLOR
+	if _art != null:
+		Flash.set_flash(_art, Color.WHITE, 0.0)
+	else:
+		_look.color = COLOR
 	_collision.set_deferred("disabled", false)
 	for hurtbox in _hurtboxes:
 		hurtbox.set_deferred("monitorable", true)

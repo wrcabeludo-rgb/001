@@ -59,7 +59,7 @@ fill(12, 12, 323, 361)  # high walkway (one tile thick, solid)
 put(11, 330, "g"); put(11, 336, "k")
 put(25, 340, "h"); put(25, 350, "w"); put(25, 356, "w")
 # Secret 1: a patch of false ground under the walkway drops into a cellar
-fill(26, 26, 344, 349, "s"); fill(27, 27, 344, 349, ".")
+fill(26, 27, 344, 349, "s")
 put(27, 346, "$"); put(27, 348, "U")
 fill(13, 25, 362, 362, "H")
 # J. Bridge over the abyss along the walkway: gaps, crumbling planks, a rope, a charger
@@ -78,7 +78,7 @@ put(25, 430, "k"); put(25, 434, "b"); put(25, 435, "b"); put(25, 437, "h")
 fill(24, 25, 442, 444); put(23, 443, "g")
 put(25, 448, "w"); put(25, 452, "c")
 # Secret 2: a false patch of ground drops into a small cellar
-fill(26, 26, 456, 464, "s"); fill(27, 27, 456, 464, ".")
+fill(26, 27, 456, 464, "s")
 put(27, 460, "$"); put(27, 462, "+")
 put(25, 468, "w"); put(17, 470, "f"); put(25, 474, "h")
 # L. Final climb: a lift up to the rooftops and the exit

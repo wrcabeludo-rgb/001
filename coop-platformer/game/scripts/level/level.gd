@@ -22,7 +22,8 @@ extends Node2D
 ##   '[' ... ']' arena gates; the waves come from get_arena_waves()
 ##   '+' health kit, 'p' ammo lying on the floor   'E' level exit
 ##   'U' power-up (rage / shield / haste by column)   '$' cache of 10 scrap
-##   's' false wall: looks solid, hides a secret room
+##   's' false wall: looks solid, hides a secret room (fill the whole room with
+##       's'; loot letters inside it are covered as well)
 ## Bosses only appear in arena waves: 'B' the Sludge Master.
 
 const TILE := 60
@@ -626,7 +627,8 @@ func _build_secrets(map: Array) -> void:
 				cells.append(Level.cell_rect(cell.x, cell.y))
 				for step in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 					var next: Vector2i = cell + step
-					if _at(map, next.x, next.y) == "s" and not seen.has(next):
+					# Loot inside the hidden room is part of it (covered too).
+					if _at(map, next.x, next.y) in ["s", "$", "U", "+", "p"] and not seen.has(next):
 						seen[next] = true
 						queue.append(next)
 			var secret := SecretArea.new()
