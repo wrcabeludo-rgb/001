@@ -23,7 +23,11 @@ var _left_x := 0.0
 var _right_x := 0.0
 ## Each wave: Array of [enemy letter, floor point].
 var _waves: Array = []
-var _alive: Array[Enemy] = []
+## Enemies of the current wave. Untyped on purpose: an enemy can be freed
+## between two checks, and a freed object must not pass through a typed slot.
+var _alive: Array = []
+## Where each enemy of the wave appeared, by instance id.
+var _spawn_points := {}
 
 
 func setup(level: Level, left_gate: Door, right_gate: Door, waves: Array) -> void:
@@ -45,10 +49,30 @@ func _physics_process(_delta: float) -> void:
 			if hero != null:
 				_start(hero)
 		State.FIGHT:
-			_alive = _alive.filter(func(enemy: Enemy) -> bool:
-				return is_instance_valid(enemy) and not enemy.is_queued_for_deletion() and enemy.is_alive())
+			_track_wave()
 			if _alive.is_empty():
 				_next_wave()
+
+
+## Forgets beaten enemies (they may already be freed, so they are checked as
+## plain objects) and brings back any that ended up outside the arena.
+func _track_wave() -> void:
+	var still: Array = []
+	for item in _alive:
+		if not is_instance_valid(item):
+			continue
+		var enemy := item as Enemy
+		if enemy == null or enemy.is_queued_for_deletion() or not enemy.is_alive():
+			continue
+		still.append(enemy)
+		var x := enemy.global_position.x
+		if x < _left_x or x > _right_x or enemy.global_position.y > _level.level_rect().end.y:
+			enemy.global_position = _spawn_points.get(enemy.get_instance_id(), enemy.global_position)
+			enemy.velocity = Vector2.ZERO
+	if still.size() != _alive.size():
+		_alive = still
+		if not _alive.is_empty():
+			_level.show_toast("Осталось врагов: %d" % _alive.size())
 
 
 func wave_count() -> int:
@@ -61,6 +85,7 @@ func reset() -> void:
 		return
 	state = State.WAITING
 	_alive.clear()
+	_spawn_points.clear()
 	for gate in _gates:
 		gate.open()
 
@@ -95,6 +120,7 @@ func _next_wave() -> void:
 		enemy.stun_timer = SPAWN_WARNING
 		enemy.telegraph(SPAWN_WARNING)
 		_alive.append(enemy)
+		_spawn_points[enemy.get_instance_id()] = enemy.global_position
 
 
 func _hero_inside() -> Player:

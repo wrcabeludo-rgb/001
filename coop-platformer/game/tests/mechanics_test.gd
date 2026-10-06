@@ -284,6 +284,9 @@ func _test_arena() -> void:
 	_check(partner.global_position.x > 1290.0 and partner.global_position.x < 1800.0, "напарника переносит внутрь")
 	for i in 2:
 		await _frames(5)
+		# Hit after the physics step, like a hero's attack landing after the arena's
+		# check: the beaten enemy is already freed when the arena looks again.
+		await get_tree().process_frame
 		for enemy in get_tree().get_nodes_in_group("enemies"):
 			enemy.receive_hit(Hit.make(100, Vector2.ZERO, enemy.global_position))
 		await _frames(5)
