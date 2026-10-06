@@ -4,6 +4,11 @@ extends Control
 ## each hero pays from their own wallet. In co-op players take turns.
 
 const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
+const BACKGROUNDS := [
+	preload("res://assets/art/backgrounds/sky_world1_1.png"),
+	preload("res://assets/art/backgrounds/bg_mid_world1_01.png"),
+]
+const TRADER := preload("res://assets/art/props/trader.png")
 const LINES := [
 	"Лом — вот настоящая валюта. Неон его не заменит.",
 	"Всё рабочее. Ну, почти всё.",
@@ -19,11 +24,23 @@ var _wallet: Label
 
 
 func _ready() -> void:
-	add_child(Harm.box(Vector2.ZERO, Vector2(1920, 1080), Color(0.06, 0.06, 0.09)))
-	add_child(Harm.box(Vector2(0, 760), Vector2(1920, 320), Color(0.1, 0.09, 0.12)))
-	# The trader (placeholder until the art arrives).
-	add_child(Harm.box(Vector2(1460, 420), Vector2(220, 340), Color(0.42, 0.36, 0.3)))
-	add_child(Harm.box(Vector2(1380, 640), Vector2(380, 120), Color(0.3, 0.24, 0.2)))
+	# The slums at night behind, the trader's stall on the right, the goods on a dark panel.
+	for picture in BACKGROUNDS:
+		var backdrop := TextureRect.new()
+		backdrop.texture = picture
+		backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		backdrop.size = Vector2(1920, 1080)
+		backdrop.modulate = Color(0.5, 0.47, 0.55)
+		add_child(backdrop)
+	add_child(Harm.box(Vector2(0, 900), Vector2(1920, 180), Color(0.05, 0.04, 0.06, 0.9)))
+	var stall := TextureRect.new()
+	stall.texture = TRADER
+	stall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	stall.size = TRADER.get_size() * 0.82
+	stall.position = Vector2(1900 - stall.size.x, 905 - stall.size.y)
+	add_child(stall)
+	add_child(Harm.box(Vector2(80, 40), Vector2(1020, 860), Color(0.04, 0.04, 0.06, 0.82)))
 	var title := Label.new()
 	title.text = "ЛАВКА СТАРЬЁВЩИКА"
 	title.position = Vector2(120, 60)
@@ -33,8 +50,8 @@ func _ready() -> void:
 	add_child(title)
 	var quote := Label.new()
 	quote.text = "«%s»" % LINES.pick_random()
-	quote.position = Vector2(1180, 330)
-	quote.size = Vector2(700, 80)
+	quote.position = Vector2(1140, 250)
+	quote.size = Vector2(740, 80)
 	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quote.add_theme_font_size_override("font_size", 26)

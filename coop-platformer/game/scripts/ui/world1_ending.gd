@@ -9,7 +9,7 @@ func _init() -> void:
 	next_scene = "res://scenes/title.tscn"
 	panels = [
 		{"image": _art(1), "caption": "Трубы ведут на заводы «Люмена». Они всё ещё работают.", "zoom": "in"},
-		{"image": _art(2), "caption": "— Я здесь уже был, — сказал Мечник."},
+		{"image": _art(2), "caption": "— Я здесь уже был, — сказал Мечник.", "zoom": "out"},
 		{"image": null, "caption": "Конец первого мира. Продолжение следует."},
 	]
 

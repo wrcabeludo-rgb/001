@@ -16,6 +16,13 @@ const LOOKS := {
 	Kind.POWER: [Color.WHITE, "?"],
 }
 
+## Pictures for the kinds that have one (power-ups keep their coloured box).
+const ART := {
+	Kind.HEALTH: "res://assets/art/props/pickup_health.png",
+	Kind.AMMO: "res://assets/art/props/pickup_ammo.png",
+	Kind.SCRAP: "res://assets/art/props/pickup_scrap.png",
+}
+
 var kind: Kind = Kind.SCRAP
 ## For a power-up: "rage", "shield" or "haste" (see Player.POWER_TIME).
 var power := ""
@@ -54,11 +61,12 @@ func _ready() -> void:
 	box.color = LOOKS[kind][0] if kind != Kind.POWER else Player.POWER_COLORS.get(power, Color.WHITE)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
-	var art := "res://assets/art/props/pickup_health.png"
-	if kind == Kind.HEALTH and ResourceLoader.exists(art):
+	var art: String = ART.get(kind, "")
+	if art != "" and ResourceLoader.exists(art):
 		var picture := Sprite2D.new()
 		picture.texture = load(art)
-		picture.scale = Vector2(0.5, 0.5)
+		# A big stash of scrap looks bigger.
+		picture.scale = Vector2.ONE * (0.7 if kind == Kind.SCRAP and amount >= 10 else 0.5)
 		picture.position = Vector2(0, -6)
 		add_child(picture)
 		box.visible = false

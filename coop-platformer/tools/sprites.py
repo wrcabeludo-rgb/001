@@ -22,7 +22,9 @@ OUT = os.path.join(HERE, "..", "game", "assets", "art")
 
 def remove_background(img, threshold=232, holes=False):
     """RGBA picture with the near-white background (connected to the border) made transparent.
-    With `holes`, near-white areas enclosed by the object (between ladder rungs) go too."""
+    With `holes`, near-white areas enclosed by the object (between ladder rungs) go too;
+    a number instead of True clears only enclosed areas of at least that many pixels,
+    so small bright spots (lamp glare) stay."""
     rgb = np.asarray(img.convert("RGB")).astype(np.int16)
     near_white = rgb.min(axis=2) >= threshold
     pure_white = rgb.min(axis=2) >= 250
@@ -42,9 +44,13 @@ def remove_background(img, threshold=232, holes=False):
         if (grown == background).all():
             break
         background = grown
-    background |= pure_white
+    if holes is True:
+        background |= pure_white | near_white
+    elif holes:
+        background |= _big_regions(near_white & ~background, holes)
+    else:
+        background |= pure_white
     if holes:
-        background |= near_white
         # Eat the light fringe around the holes as well.
         grown = background.copy()
         grown[1:, :] |= background[:-1, :]
@@ -58,6 +64,22 @@ def remove_background(img, threshold=232, holes=False):
     alpha = np.minimum(alpha, soft.astype(np.uint8))
     rgba = np.dstack([rgb.astype(np.uint8), alpha])
     return Image.fromarray(rgba, "RGBA")
+
+
+def _big_regions(mask, min_area):
+    """The parts of `mask` made of connected areas of at least `min_area` pixels."""
+    marks = Image.fromarray(np.where(mask, 255, 0).astype(np.uint8)).copy()
+    result = np.zeros_like(mask)
+    ys, xs = np.nonzero(mask[::4, ::4])
+    for y, x in zip(ys * 4, xs * 4):
+        if marks.getpixel((int(x), int(y))) != 255:
+            continue
+        ImageDraw.floodfill(marks, (int(x), int(y)), 128)
+        area = np.asarray(marks) == 128
+        if area.sum() >= min_area:
+            result |= area
+        ImageDraw.floodfill(marks, (int(x), int(y)), 0)
+    return result
 
 
 def crop(img, pad=4):
@@ -237,6 +259,10 @@ PROPS = {
     "props/lift.png": ("props/prop_lift_original.png", (150, 510, 1390, 880), 104, True),
     "props/flamethrower.png": ("props/prop_flamethrower_original.png", (40, 140, 990, 930), 140),
     "props/pickup_health.png": ("props/pickup_health_original.png", (0, 100, 1254, 1100), 80),
+    "props/pickup_ammo.png": ("props/pickup_ammo_original.png", (60, 120, 1200, 1060), 80),
+    "props/pickup_scrap.png": ("props/pickup_scrap_original.png", (40, 180, 1220, 1060), 80),
+    # The white gap between the awning and the counter has to go too.
+    "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 300),
 }
 
 
