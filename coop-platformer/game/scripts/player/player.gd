@@ -64,6 +64,8 @@ var _body: ColorRect
 var _aura: ColorRect
 var _eye: ColorRect
 var _tag: Label
+## The drawn puppet (null until the hero has art; then the box is hidden).
+var _rig: HeroRig
 
 
 func setup(p_slot: int, p_input: PlayerInput, p_hero: Heroes.Id) -> void:
@@ -498,7 +500,29 @@ func _get_wall_dir() -> int:
 
 func _apply_look() -> void:
 	_tag.text = "P%d %s" % [slot + 1, Heroes.NAMES[hero]]
+	if _rig != null:
+		_rig.queue_free()
+	_rig = HeroRig.create("gunner" if hero == Heroes.Id.SHOOTER else "swordsman")
+	if _rig != null:
+		_rig.position = Vector2(0, SIZE.y / 2.0)
+		add_child(_rig)
+		move_child(_rig, _aura.get_index() + 1)
+		_aura.position = Vector2(-40, SIZE.y / 2.0 - 156)
+		_aura.size = Vector2(80, 160)
+		_tag.position.y = SIZE.y / 2.0 - 180
+	_body.visible = _rig == null
+	_eye.visible = _rig == null
 	_update_look(false)
+
+
+## The puppet's motion for an attack: the Gunner recoils, the Swordsman lunges.
+func animate_attack() -> void:
+	if _rig == null:
+		return
+	if hero == Heroes.Id.SHOOTER:
+		_rig.recoil()
+	else:
+		_rig.lunge()
 
 
 func _update_look(sliding: bool) -> void:
@@ -512,6 +536,16 @@ func _update_look(sliding: bool) -> void:
 	elif sliding:
 		color = color.darkened(0.3)
 	_body.color = color
+	if _rig != null:
+		_rig.pose(self, get_physics_process_delta_time())
+		if is_stunned():
+			_rig.tint(Color.WHITE, 0.7)
+		elif combat.is_glowing():
+			_rig.tint(Heroes.COLORS[hero], 0.25 + 0.2 * sin(Time.get_ticks_msec() * 0.02))
+		elif is_dashing():
+			_rig.tint(Color.WHITE, 0.3)
+		else:
+			_rig.tint(Color.WHITE, 0.0)
 	_aura.visible = not powers.is_empty()
 	if _aura.visible:
 		var power: String = powers.keys()[0]

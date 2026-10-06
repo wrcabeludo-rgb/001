@@ -71,7 +71,7 @@ func _init() -> void:
 	zone_id = "1-1"
 	level_title = "Мир 1-1 · Трущобы"
 	music_track = "zone_1_1"
-	backgrounds = [[BG_FAR, 0.1, Color(0.45, 0.45, 0.55)], [BG_MID, 0.3, Color(0.6, 0.6, 0.68)]]
+	backgrounds = [[BG_FAR, 0.1, Color(0.3, 0.3, 0.38)], [BG_MID, 0.3, Color(0.4, 0.4, 0.48)]]
 	other_scene = "res://scenes/test_room.tscn"
 
 

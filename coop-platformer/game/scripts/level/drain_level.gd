@@ -72,7 +72,7 @@ func _init() -> void:
 	music_track = "zone_1_3"
 	wall_color = Color(0.3, 0.36, 0.32)
 	# Until the drain's own backgrounds are drawn: the slum layers, tinted green.
-	backgrounds = [[BG_FAR, 0.1, Color(0.3, 0.42, 0.32)], [BG_MID, 0.3, Color(0.35, 0.48, 0.36)]]
+	backgrounds = [[BG_FAR, 0.1, Color(0.2, 0.3, 0.22)], [BG_MID, 0.3, Color(0.26, 0.36, 0.27)]]
 	other_scene = "res://scenes/test_room.tscn"
 
 

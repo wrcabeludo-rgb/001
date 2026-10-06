@@ -23,6 +23,11 @@ const ROBOT_COLOR := Color(0.5, 0.58, 0.7)
 @export var knockback_resistance := 0.0
 @export var hit_stun := 0.2
 @export var uses_gravity := true
+## Picture in assets/art/enemies (without ".png"); empty = a coloured box.
+## The picture faces left. Its height on screen is `art_height`; the area
+## where the enemy can be hit grows to the picture's size.
+@export var art := ""
+@export var art_height := 100.0
 @export_group("Добыча")
 @export var health_drop_chance := 0.25
 @export var ammo_drop_chance := 0.3
@@ -42,6 +47,9 @@ var _eye: ColorRect
 var _alert: Label
 var _hurtbox: Hurtbox
 var _contact: Area2D
+var _sprite: Sprite2D
+var _sprite_rest := Vector2.ZERO
+var _anim_time := 0.0
 
 
 func _ready() -> void:
@@ -81,7 +89,27 @@ func _ready() -> void:
 
 	_hurtbox = Hurtbox.new()
 	add_child(_hurtbox)
-	_hurtbox.setup(Layers.Team.ENEMIES, body_size, self)
+	var hurt_size := body_size
+	var art_path := "res://assets/art/enemies/%s.png" % art
+	if art != "" and ResourceLoader.exists(art_path):
+		_sprite = Sprite2D.new()
+		_sprite.texture = load(art_path)
+		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var factor := art_height / _sprite.texture.get_height()
+		_sprite.scale = Vector2(factor, factor)
+		var drawn := _sprite.texture.get_size() * factor
+		# Standing on the same floor as the body.
+		_sprite_rest = Vector2(0, body_size.y / 2.0 - drawn.y / 2.0)
+		_sprite.position = _sprite_rest
+		_sprite.material = Flash.material()
+		add_child(_sprite)
+		move_child(_sprite, _body.get_index())
+		_body.visible = false
+		_eye.visible = false
+		hurt_size = Vector2(maxf(body_size.x, drawn.x * 0.6), maxf(body_size.y, drawn.y * 0.95))
+		_hurtbox.position = Vector2(0, body_size.y / 2.0 - hurt_size.y / 2.0)
+		_alert.position.y = body_size.y / 2.0 - drawn.y - 50.0
+	_hurtbox.setup(Layers.Team.ENEMIES, hurt_size, self)
 
 	_contact = Area2D.new()
 	_contact.collision_layer = 0
@@ -210,14 +238,37 @@ func _deal_contact_damage() -> void:
 
 
 func _update_look() -> void:
+	if _sprite != null:
+		_animate_sprite()
 	var look := color
 	if _flash_timer > 0.0:
 		look = Color.WHITE
 	elif is_telegraphing() and int(Time.get_ticks_msec() / 80) % 2 == 0:
 		look = TELEGRAPH_COLOR
 	_body.color = look
+	if _sprite != null:
+		if _flash_timer > 0.0:
+			Flash.set_flash(_sprite, Color.WHITE, 0.8)
+		elif is_telegraphing() and int(Time.get_ticks_msec() / 80) % 2 == 0:
+			Flash.set_flash(_sprite, TELEGRAPH_COLOR, 0.55)
+		else:
+			Flash.set_flash(_sprite, Color.WHITE, 0.0)
 	_alert.visible = is_telegraphing()
 	_eye.position = Vector2(facing * (body_size.x / 2.0 - 14.0) - 5.0, -body_size.y / 2.0 + 12.0)
+
+
+## The picture's motion: faces the way the enemy looks, bobs while walking,
+## leans into a fast run. Enemy types can add their own touches.
+func _animate_sprite() -> void:
+	var delta := get_physics_process_delta_time()
+	var speed := absf(velocity.x)
+	_anim_time += delta * (2.0 + speed * 0.04)
+	_sprite.flip_h = facing > 0
+	var bob := absf(sin(_anim_time * 2.0)) * minf(speed, 200.0) * 0.03 if is_on_floor() or not uses_gravity else 0.0
+	if not uses_gravity:
+		bob = sin(_anim_time) * 4.0
+	_sprite.position = _sprite_rest + Vector2(0, -bob)
+	_sprite.rotation = -facing * clampf(speed / 3000.0, 0.0, 0.18)
 
 
 func _on_died() -> void:

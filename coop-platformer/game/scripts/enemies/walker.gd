@@ -13,6 +13,8 @@ func _init() -> void:
 	body_size = Vector2(56, 70)
 	color = MUTANT_COLOR
 	contact_damage = 2
+	art = "walker"
+	art_height = 110.0
 
 
 func _think(_delta: float) -> void:

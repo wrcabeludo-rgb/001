@@ -69,7 +69,7 @@ func _init() -> void:
 	music_track = "zone_1_2"
 	wall_color = Color(0.3, 0.33, 0.36)
 	# Until the metro's own backgrounds are drawn: the slum layers, colder and darker.
-	backgrounds = [[BG_FAR, 0.1, Color(0.25, 0.3, 0.38)], [BG_MID, 0.3, Color(0.3, 0.36, 0.42)]]
+	backgrounds = [[BG_FAR, 0.1, Color(0.18, 0.22, 0.28)], [BG_MID, 0.3, Color(0.24, 0.28, 0.34)]]
 	other_scene = "res://scenes/test_room.tscn"
 
 

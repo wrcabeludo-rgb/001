@@ -21,6 +21,8 @@ func _init() -> void:
 	body_size = Vector2(50, 50)
 	color = MUTANT_COLOR.darkened(0.45)
 	uses_gravity = false
+	art = "ambusher"
+	art_height = 90.0
 
 
 func _ready() -> void:
@@ -55,3 +57,14 @@ func _on_interrupted() -> void:
 	if state != State.DROPPED:
 		state = State.DROPPED
 		uses_gravity = true
+
+
+## Hanging, it is drawn upside down against the ceiling.
+func _animate_sprite() -> void:
+	super._animate_sprite()
+	var hanging := state != State.DROPPED
+	_sprite.flip_v = hanging
+	if hanging:
+		var drawn := _sprite.texture.get_height() * _sprite.scale.y
+		_sprite.position = Vector2(0, -body_size.y / 2.0 + drawn / 2.0)
+		_sprite.rotation = 0.0

@@ -9,8 +9,8 @@ extends HeroCombat
 const SHOT_COLOR := Color(0.3, 0.95, 1.0)
 const CHARGED_COLOR := Color(0.7, 1.0, 1.0)
 ## Shots leave the gun this far from the hero's centre.
-const MUZZLE_DISTANCE := 34.0
-const MUZZLE_HEIGHT := -12.0
+const MUZZLE_DISTANCE := 44.0
+const MUZZLE_HEIGHT := -36.0
 
 var ammo := 0
 ## "rifle" or "shotgun".
@@ -117,6 +117,7 @@ func _shoot(damage: int, knockback: float, size: Vector2, color: Color, pierce: 
 
 func _fire(start: Vector2, direction: Vector2, damage: int, knockback: float, size: Vector2, color: Color,
 		pierce: int, lifetime: float) -> void:
+	player.animate_attack()
 	var projectile := Projectile.new()
 	projectile.setup(Layers.Team.PLAYERS, start, direction, stats.shot_speed,
 		roundi(damage * player.damage_multiplier()), knockback, size, color, pierce, lifetime)

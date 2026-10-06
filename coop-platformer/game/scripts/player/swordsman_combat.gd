@@ -92,6 +92,7 @@ func _damage(base: int) -> int:
 func _swing() -> void:
 	var swing_time := stats.swing_time * (HEAVY_SWING if heavy else 1.0)
 	_swing_timer = swing_time
+	player.animate_attack()
 	if player.input.is_held("up"):
 		_up_slash.activate(swing_time, _damage(stats.up_slash_damage), Vector2(0, -stats.slash_knockback), 1)
 		Sound.play("slash")

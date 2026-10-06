@@ -25,6 +25,8 @@ func _init() -> void:
 	body_size = Vector2(66, 62)
 	color = MUTANT_COLOR.lightened(0.15)
 	contact_damage = 2
+	art = "charger"
+	art_height = 100.0
 
 
 func _ready() -> void:
