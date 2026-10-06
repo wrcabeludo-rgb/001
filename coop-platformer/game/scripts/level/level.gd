@@ -11,6 +11,15 @@ extends Node2D
 ## 'D' training dummy, 'T' practice turret; enemies: 'w' walker, 'f' drone
 ## (flying), 'g' gun turret, 'h' heavy, 'c' charger, 'a' ambusher (hangs from
 ## the ceiling of its cell). Other objects stand on the bottom of their cell.
+## Level mechanics:
+##   '=' one-way platform (top of the cell)   'x' crumbling block
+##   'M' moving platform, shuttles to the '*' in the same row
+##   'L' lift, rises to the '*' above it in the same column
+##   'H' ladder (a ledge is added above its top)   'r' rope
+##   '^' spikes   '~' acid   'z' laser (ceiling emitter, beam down to the floor)
+##   'v' falling debris (under a ceiling)   'F' flamethrower on a wall
+##   'b' explosive barrel   'k' cover   'd' door (down to the floor) + '/' lever
+##   '[' ... ']' arena gates; the waves come from get_arena_waves()
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -47,6 +56,18 @@ var _toast_time := 0.0
 
 ## Overridden by each level: the rows of its ASCII map.
 func get_map() -> Array:
+	return []
+
+
+## Overridden by levels with arenas: the waves of arena number `index`
+## (counted left to right, top to bottom). Each wave is an Array of
+## [enemy letter, column, row] — the enemy stands on the bottom of that cell.
+func get_arena_waves(_index: int) -> Array:
+	return []
+
+
+## Overridden by levels that want hints in the world: [column, row, text].
+func get_signs() -> Array:
 	return []
 
 
@@ -171,6 +192,7 @@ func _update_respawns(delta: float) -> void:
 		if _team_respawn_timer < 0.0:
 			_respawn_timers.clear()
 			reset_enemies()
+			reset_mechanics()
 			for slot in players:
 				var start := _entry_point_without_partner(slot)
 				players[slot].revive(start)
@@ -226,6 +248,22 @@ func reset_enemies() -> void:
 		spawn_enemy(spot[0], spot[1])
 
 
+## Puts barrels, covers, crumbling blocks and unfinished arenas back as they were.
+func reset_mechanics() -> void:
+	for node in get_tree().get_nodes_in_group("resettable"):
+		if is_ancestor_of(node):
+			node.reset()
+
+
+## The point on the bottom of a map cell, in level coordinates.
+static func cell_floor(col: int, row: int) -> Vector2:
+	return Vector2((col + 0.5) * TILE, (row + 1) * TILE)
+
+
+static func cell_rect(col: int, row: int) -> Rect2:
+	return Rect2(col * TILE, row * TILE, TILE, TILE)
+
+
 ## Creates the enemy of map letter `letter` in the cell whose floor point is given.
 func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 	var enemy: Enemy
@@ -279,7 +317,7 @@ func _build_level() -> void:
 		var col := 0
 		while col < line.length():
 			var cell := line[col]
-			var floor_point := Vector2((col + 0.5) * TILE, (row + 1) * TILE)
+			var floor_point := Level.cell_floor(col, row)
 			match cell:
 				"1", "2":
 					_spawn_points[int(cell) - 1] = floor_point - Vector2(0, Player.SIZE.y / 2)
@@ -306,6 +344,169 @@ func _build_level() -> void:
 			while col < line.length() and line[col] == "#":
 				col += 1
 			_add_wall(walls, Rect2(start * TILE, row * TILE, (col - start) * TILE, TILE))
+	_build_mechanics(map)
+	for sign_info in get_signs():
+		var label := Label.new()
+		label.text = sign_info[2]
+		label.position = Vector2(sign_info[0] * TILE, sign_info[1] * TILE)
+		label.add_theme_font_size_override("font_size", 22)
+		label.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.75))
+		add_child(label)
+
+
+func _build_mechanics(map: Array) -> void:
+	var one_way := StaticBody2D.new()
+	one_way.name = "OneWay"
+	one_way.collision_layer = Layers.ONE_WAY
+	one_way.collision_mask = 0
+	add_child(one_way)
+	var doors: Array[Door] = []
+	var levers: Array[Lever] = []
+	var gates: Array[Door] = []
+	var lasers := 0
+	var flamers := 0
+
+	for row in map.size():
+		var line: String = map[row]
+		var col := 0
+		while col < line.length():
+			var cell := line[col]
+			# Letters that form horizontal runs.
+			if cell in ["=", "^", "~"]:
+				var start := col
+				while col < line.length() and line[col] == cell:
+					col += 1
+				var run := Rect2(start * TILE, row * TILE, (col - start) * TILE, TILE)
+				if cell == "=":
+					add_one_way(one_way, run)
+				else:
+					var hazard := Hazard.new()
+					hazard.setup(Hazard.Kind.SPIKES if cell == "^" else Hazard.Kind.ACID, run)
+					add_child(hazard)
+				continue
+			var rect := Level.cell_rect(col, row)
+			var bottom := Level.cell_floor(col, row)
+			match cell:
+				"H", "r":
+					# A vertical run is built once, from its topmost cell.
+					if _at(map, col, row - 1) != cell:
+						var end_row := row
+						while _at(map, col, end_row + 1) == cell:
+							end_row += 1
+						var climbable := Climbable.new()
+						var kind := Climbable.Kind.LADDER if cell == "H" else Climbable.Kind.ROPE
+						climbable.setup(kind, Rect2(rect.position, Vector2(TILE, (end_row - row + 1) * TILE)), TILE)
+						add_child(climbable)
+						if cell == "H" and _at(map, col, row - 1) == ".":
+							add_one_way(one_way, Level.cell_rect(col, row - 1))
+				"x":
+					var block := CrumblingBlock.new()
+					block.setup(rect)
+					add_child(block)
+				"M", "L":
+					var target := _find_marker(map, col, row, cell == "L")
+					var platform := MovingPlatform.new()
+					var mode := MovingPlatform.Mode.LIFT if cell == "L" else MovingPlatform.Mode.SHUTTLE
+					var raise := Vector2(0, -MovingPlatform.THICKNESS)
+					platform.setup(mode, bottom + raise, Level.cell_floor(target.x, target.y) + raise, TILE * 3)
+					add_child(platform)
+				"z":
+					var laser := Laser.new()
+					laser.setup(rect.position + Vector2(TILE / 2.0, 0), (_wall_below(map, col, row) - row) * TILE,
+						(lasers % 2) * laser.cycle_time() / 2.0)
+					lasers += 1
+					add_child(laser)
+				"F":
+					var direction := 1 if _at(map, col - 1, row) == "#" else -1
+					var reach := 0
+					while reach < 4 and _at(map, col + direction * (reach + 1), row) not in ["#", ""]:
+						reach += 1
+					var flamer := Flamethrower.new()
+					flamer.setup(rect.get_center(), direction, reach * TILE + TILE / 2.0, (flamers % 2) * 1.5)
+					flamers += 1
+					add_child(flamer)
+				"v":
+					var debris := DebrisSpot.new()
+					debris.setup(Vector2(rect.get_center().x, rect.position.y))
+					add_child(debris)
+				"b":
+					_add_object(Barrel.new(), bottom - Vector2(0, Barrel.SIZE.y / 2.0))
+				"k":
+					_add_object(Cover.new(), bottom - Vector2(0, Cover.SIZE.y / 2.0))
+				"d", "[", "]":
+					var door := Door.new()
+					var door_rect := Rect2(rect.position, Vector2(TILE, (_wall_below(map, col, row) - row) * TILE))
+					door.setup(door_rect, cell != "d", cell != "d")
+					add_child(door)
+					if cell == "d":
+						doors.append(door)
+					else:
+						gates.append(door)
+				"/":
+					var lever := Lever.new()
+					lever.position = bottom
+					add_child(lever)
+					levers.append(lever)
+			col += 1
+
+	for lever in levers:
+		var best_distance := INF
+		for door in doors:
+			var distance := lever.position.distance_to(door.position)
+			if distance < best_distance:
+				best_distance = distance
+				lever.door = door
+	for i in range(0, gates.size() - 1, 2):
+		var waves: Array = []
+		for wave in get_arena_waves(i / 2):
+			var spots: Array = []
+			for spot in wave:
+				spots.append([spot[0], Level.cell_floor(spot[1], spot[2])])
+			waves.append(spots)
+		var arena := Arena.new()
+		arena.setup(self, gates[i], gates[i + 1], waves)
+		add_child(arena)
+
+
+## Adds a one-way platform along the top of `cells` to `body`.
+func add_one_way(body: StaticBody2D, cells: Rect2) -> void:
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(cells.size.x, MovingPlatform.THICKNESS)
+	var collision := CollisionShape2D.new()
+	collision.shape = shape
+	collision.one_way_collision = true
+	collision.position = cells.position + Vector2(cells.size.x / 2.0, MovingPlatform.THICKNESS / 2.0)
+	body.add_child(collision)
+	body.add_child(Harm.box(cells.position, Vector2(cells.size.x, MovingPlatform.THICKNESS), Color(0.5, 0.55, 0.62)))
+
+
+static func _at(map: Array, col: int, row: int) -> String:
+	if row < 0 or row >= map.size() or col < 0 or col >= map[row].length():
+		return ""
+	return map[row][col]
+
+
+## The row of the first wall below a cell (or the bottom of the map).
+static func _wall_below(map: Array, col: int, row: int) -> int:
+	var r := row + 1
+	while r < map.size() and _at(map, col, r) != "#":
+		r += 1
+	return r
+
+
+## The '*' that ends the path of a moving platform: the nearest one in the same
+## row, or for a lift the nearest one above in the same column.
+static func _find_marker(map: Array, col: int, row: int, vertical: bool) -> Vector2i:
+	if vertical:
+		for r in range(row - 1, -1, -1):
+			if _at(map, col, r) == "*":
+				return Vector2i(col, r)
+		return Vector2i(col, row)
+	for distance in range(1, map[row].length()):
+		for c in [col + distance, col - distance]:
+			if _at(map, c, row) == "*":
+				return Vector2i(c, row)
+	return Vector2i(col, row)
 
 
 func _add_wall(walls: StaticBody2D, rect: Rect2) -> void:

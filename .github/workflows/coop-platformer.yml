@@ -42,6 +42,7 @@ jobs:
           godot --headless --path game --quit-after 300 2>&1 | tee run.log
           godot --headless --path game res://scenes/test_room.tscn --quit-after 300 2>&1 | tee -a run.log
           godot --headless --path game res://scenes/coop_level.tscn --quit-after 300 2>&1 | tee -a run.log
+          godot --headless --path game res://scenes/mechanics_level.tscn --quit-after 300 2>&1 | tee -a run.log
           if grep -E "SCRIPT ERROR|ERROR:" run.log; then
             echo "::error::The game printed errors while running"
             exit 1
@@ -90,6 +91,18 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if grep -E "SCRIPT ERROR" enemy.log; then
+            echo "::error::Script errors during tests"
+            exit 1
+          fi
+          exit $status
+
+      - name: Level mechanics tests
+        run: |
+          set +e
+          timeout 180 godot --headless --path game res://tests/mechanics_test.tscn 2>&1 | tee mechanics.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR" mechanics.log; then
             echo "::error::Script errors during tests"
             exit 1
           fi

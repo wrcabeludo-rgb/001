@@ -2,7 +2,8 @@ class_name Player
 extends CharacterBody2D
 ## Placeholder hero (a coloured box) with the full platforming movement:
 ## acceleration, coyote time, jump buffering, variable jump height,
-## wall slide and wall jump, double jump (shooter) and dash (swordsman).
+## wall slide and wall jump, double jump (shooter) and dash (swordsman),
+## climbing ladders and ropes, dropping through one-way platforms (down + jump).
 ## Attacks live in a HeroCombat child (ShooterCombat / SwordsmanCombat).
 ## Movement numbers live in MovementStats, combat numbers in CombatStats.
 
@@ -13,6 +14,10 @@ const SIZE := Vector2(48, 96)
 const WALL_PROBE := 2.0
 const HITSTOP_TIME := 0.05
 const HITSTOP_SCALE := 0.05
+## After jumping off a ladder or rope, it cannot be grabbed again for this long.
+const REGRAB_TIME := 0.3
+## How long one-way platforms are ignored after dropping through one.
+const DROP_TIME := 0.22
 
 var slot := 0
 var input: PlayerInput
@@ -42,6 +47,10 @@ var _stun_timer := 0.0
 var _invulnerable_timer := 0.0
 var _hurtbox: Hurtbox
 var _collision: CollisionShape2D
+## The ladder or rope the hero is holding, or null.
+var _climb: Climbable
+var _regrab_timer := 0.0
+var _drop_timer := 0.0
 
 var _body: ColorRect
 var _eye: ColorRect
@@ -75,6 +84,10 @@ func is_invulnerable() -> bool:
 	return _invulnerable_timer > 0.0
 
 
+func is_climbing() -> bool:
+	return _climb != null
+
+
 func is_alive() -> bool:
 	return health != null and not health.is_dead()
 
@@ -103,6 +116,7 @@ func receive_hit(hit: Hit) -> bool:
 	velocity = hit.knockback
 	_dash_timer = 0.0
 	_jump_rising = false
+	_release_climb()
 	_invulnerable_timer = combat_stats.hurt_invulnerability if not hit.blocked else 0.2
 	if not hit.blocked:
 		_stun_timer = combat_stats.hurt_stun
@@ -116,6 +130,7 @@ func revive(at: Vector2, invulnerable_time := 1.0) -> void:
 	last_safe_position = at
 	velocity = Vector2.ZERO
 	_stun_timer = 0.0
+	_release_climb()
 	_invulnerable_timer = invulnerable_time
 	health.reset(combat_stats.max_health)
 
@@ -129,7 +144,7 @@ func _ready() -> void:
 	add_to_group("players")
 	# Players stand on the world but pass through each other.
 	collision_layer = Layers.PLAYER_BODIES
-	collision_mask = Layers.WORLD
+	collision_mask = Layers.GROUND
 
 	var shape := RectangleShape2D.new()
 	shape.size = SIZE
@@ -192,6 +207,13 @@ func _physics_process(delta: float) -> void:
 	if input.just_pressed("jump"):
 		_jump_buffer_timer = stats.jump_buffer
 
+	if _climb == null and not is_dashing():
+		_try_grab(move, on_floor)
+	if _climb != null:
+		_process_climb(move, delta)
+		combat.update(delta)
+		return
+
 	if is_dashing():
 		_process_dash(delta)
 		combat.update(delta)
@@ -207,6 +229,8 @@ func _physics_process(delta: float) -> void:
 
 	_apply_horizontal(move.x, on_floor, delta)
 	var sliding := _apply_gravity(move.x, on_floor, wall_dir, delta)
+	if on_floor and move.y > 0.5 and _jump_buffer_timer > 0.0 and _on_one_way():
+		_drop_through()
 	_try_jump(on_floor)
 
 	# Variable jump height: letting go of jump while rising cuts the jump short.
@@ -253,6 +277,11 @@ func _tick_timers(delta: float) -> void:
 	_wall_coyote_timer -= delta
 	_wall_jump_lock_timer -= delta
 	_dash_cooldown_timer -= delta
+	_regrab_timer -= delta
+	if _drop_timer > 0.0:
+		_drop_timer -= delta
+		if _drop_timer <= 0.0 and _climb == null:
+			collision_mask = Layers.GROUND
 
 
 func _apply_horizontal(direction: float, on_floor: bool, delta: float) -> void:
@@ -305,6 +334,83 @@ func _jump(vertical_velocity: float) -> void:
 	_jump_buffer_timer = 0.0
 	_coyote_timer = 0.0
 	_wall_coyote_timer = 0.0
+
+
+## Grabs a ladder with up (or down from its top), or a rope by jumping into it.
+func _try_grab(move: Vector2, on_floor: bool) -> void:
+	if _regrab_timer > 0.0 or is_stunned():
+		return
+	var feet := global_position + Vector2(0, SIZE.y / 2.0)
+	for node in get_tree().get_nodes_in_group("climbables"):
+		var climbable := node as Climbable
+		if not climbable.reaches(feet):
+			continue
+		var wants := false
+		if move.y < -0.5:
+			wants = climbable.reaches(feet + Vector2(0, -8))
+		elif move.y > 0.5:
+			wants = climbable.reaches(feet + Vector2(0, 8))
+		if climbable.kind == Climbable.Kind.ROPE and not on_floor:
+			wants = true
+		if wants:
+			_climb = climbable
+			collision_mask = Layers.WORLD
+			velocity = Vector2.ZERO
+			_jump_rising = false
+			_air_jumps_left = stats.air_jumps
+			_air_dashes_left = stats.air_dashes
+			return
+
+
+## On a ladder or rope: up/down to climb, jump to let go with a jump.
+func _process_climb(move: Vector2, delta: float) -> void:
+	if move.x != 0.0:
+		facing = int(signf(move.x))
+	if _jump_buffer_timer > 0.0:
+		_release_climb()
+		_jump(stats.velocity_for_height(stats.jump_height * stats.climb_jump_factor))
+		velocity.x = move.x * stats.run_speed
+		_regrab_timer = REGRAB_TIME
+		return
+	velocity.x = (_climb.center_x() - global_position.x) / maxf(delta, 0.001) * 0.3
+	velocity.y = move.y * stats.climb_speed if absf(move.y) > 0.3 else 0.0
+	move_and_slide()
+	var feet := global_position.y + SIZE.y / 2.0
+	var top := _climb.feet_area.position.y
+	if feet <= top:
+		# Reached the top: a ladder puts the hero on the ledge, a rope just holds.
+		global_position.y = top - SIZE.y / 2.0
+		velocity.y = 0.0
+		if _climb.kind == Climbable.Kind.LADDER:
+			_release_climb()
+			last_safe_position = global_position
+	elif feet > _climb.feet_area.end.y or (is_on_floor() and move.y > 0.3):
+		_release_climb()
+	_update_look(false)
+
+
+func _release_climb() -> void:
+	if _climb == null:
+		return
+	_climb = null
+	if _drop_timer <= 0.0:
+		collision_mask = Layers.GROUND
+
+
+## True if the hero stands on a one-way platform (and not on solid ground).
+func _on_one_way() -> bool:
+	var saved := collision_mask
+	collision_mask = Layers.WORLD
+	var solid := test_move(global_transform, Vector2(0, 4))
+	collision_mask = saved
+	return not solid
+
+
+func _drop_through() -> void:
+	_drop_timer = DROP_TIME
+	_jump_buffer_timer = 0.0
+	collision_mask = Layers.WORLD
+	global_position.y += 2.0
 
 
 func _can_dash(on_floor: bool) -> bool:

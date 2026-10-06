@@ -47,7 +47,7 @@ var _contact: Area2D
 func _ready() -> void:
 	add_to_group("enemies")
 	collision_layer = Layers.ENEMY_BODIES
-	collision_mask = Layers.WORLD
+	collision_mask = Layers.GROUND
 
 	var shape := RectangleShape2D.new()
 	shape.size = body_size
@@ -189,7 +189,7 @@ func wall_ahead(direction: int) -> bool:
 func ground_ahead(direction: int) -> bool:
 	var from := global_position + Vector2(direction * (body_size.x / 2.0 + 6.0), 0.0)
 	var to := from + Vector2(0.0, body_size.y / 2.0 + 24.0)
-	var query := PhysicsRayQueryParameters2D.create(from, to, Layers.WORLD)
+	var query := PhysicsRayQueryParameters2D.create(from, to, Layers.GROUND)
 	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 

@@ -43,6 +43,11 @@ extends Resource
 @export var dash_cooldown := 0.4
 @export var air_dashes := 1
 
+@export_group("Лестницы и канаты")
+@export var climb_speed := 280.0
+## Jumping off a ladder or rope reaches this fraction of a normal jump.
+@export var climb_jump_factor := 0.8
+
 
 ## Gravity while rising, derived from jump height and time to apex.
 func rise_gravity() -> float:

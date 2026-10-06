@@ -11,14 +11,29 @@ const MIN_ZOOM := 0.7
 const PADDING := Vector2(320, 240)
 const FOLLOW_SPEED := 8.0
 const ZOOM_SPEED := 3.0
+## How fast a screen shake dies down, per second.
+const SHAKE_DECAY := 40.0
 
 ## The level area in world coordinates.
 var bounds := Rect2()
 
+var _shake := 0.0
+
 
 func _ready() -> void:
+	add_to_group("cameras")
 	anchor_mode = Camera2D.ANCHOR_MODE_DRAG_CENTER
 	position_smoothing_enabled = false
+
+
+## Shakes the picture (explosions); `strength` is the starting offset in pixels.
+func shake(strength: float) -> void:
+	_shake = maxf(_shake, strength)
+
+
+func _process(delta: float) -> void:
+	_shake = move_toward(_shake, 0.0, SHAKE_DECAY * delta)
+	offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
 
 
 ## Moves and zooms towards the heroes; `instant` jumps there (after a respawn).

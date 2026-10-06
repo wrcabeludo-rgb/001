@@ -1,7 +1,7 @@
 extends Level
 ## "Полигон": a level several screens wide for the co-op rules — the camera
 ## zooming out and holding heroes back, falls into pits, respawning next to the
-## partner and at checkpoints. F2 opens the test room.
+## partner and at checkpoints. F2 opens the mechanics level.
 ## Left to right: start + checkpoint and a walker, a pit, a walker by the stairs
 ## up to a plateau with a checkpoint and a heavy, a wide pit with a stepping stone
 ## and a drone, an arena with a charger, an ambusher under the upper ledge and a
@@ -33,11 +33,11 @@ const MAP := [
 	"#####################....###############################..........##################################",
 ]
 
-const HELP_TEXT := "ЭТАП 4 — враги.  F2 — тестовая комната.  Падение в пропасть или за нижний край экрана — гибель.  «!» над врагом — сейчас атакует"
+const HELP_TEXT := "ЭТАП 4 — враги.  F2 — «Мастерская» (механики).  Падение в пропасть или за нижний край экрана — гибель.  «!» над врагом — сейчас атакует"
 
 
 func _init() -> void:
-	other_scene = "res://scenes/test_room.tscn"
+	other_scene = "res://scenes/mechanics_level.tscn"
 
 
 func get_map() -> Array:

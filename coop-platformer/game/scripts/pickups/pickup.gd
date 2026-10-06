@@ -85,7 +85,7 @@ func _fall(delta: float) -> void:
 		motion.x = 0.0
 	if motion.y > 0.0:
 		var down := PhysicsRayQueryParameters2D.create(global_position,
-			global_position + Vector2(0.0, motion.y + SIZE.y / 2.0), Layers.WORLD)
+			global_position + Vector2(0.0, motion.y + SIZE.y / 2.0), Layers.GROUND)
 		var hit := space.intersect_ray(down)
 		if not hit.is_empty():
 			global_position.y = hit["position"].y - SIZE.y / 2.0

@@ -9,6 +9,10 @@ const PLAYER_BODIES := 2
 const ENEMY_BODIES := 4
 const PLAYER_HURTBOXES := 8
 const ENEMY_HURTBOXES := 16
+## Platforms that can be jumped through from below and dropped through (down + jump).
+const ONE_WAY := 32
+## Everything a hero or an enemy can stand on.
+const GROUND := WORLD | ONE_WAY
 
 
 static func hurtbox_layer(team: Team) -> int:

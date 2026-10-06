@@ -1,8 +1,8 @@
 extends "res://scripts/ui/comic_player.gd"
-## Opening comic (story: STORY.md, "Вступление"). Leads into the Polygon level for now.
+## Opening comic (story: STORY.md, "Вступление"). Leads into the mechanics level for now.
 
 func _init() -> void:
-	next_scene = "res://scenes/coop_level.tscn"
+	next_scene = "res://scenes/mechanics_level.tscn"
 	panels = [
 		{
 			"image": preload("res://assets/art/comics/intro_01.png"),
