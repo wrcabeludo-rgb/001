@@ -24,6 +24,8 @@ var health: Health
 var combat: HeroCombat
 ## Where the hero last stood safely on the ground (partners respawn here).
 var last_safe_position := Vector2.ZERO
+## Scrap (money) collected by this hero; each hero has their own wallet.
+var scrap := 0
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
@@ -93,7 +95,8 @@ func set_active(active: bool) -> void:
 
 ## Called by a Hurtbox when an enemy attack lands. Returns true if it counted.
 func receive_hit(hit: Hit) -> bool:
-	if is_invulnerable() or health.is_dead():
+	# The Swordsman's dash passes through enemies and their attacks.
+	if is_invulnerable() or is_dashing() or health.is_dead():
 		return false
 	hit = combat.modify_hit(hit)
 	health.damage(hit.damage)

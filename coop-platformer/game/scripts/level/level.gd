@@ -5,10 +5,12 @@ extends Node2D
 ## the co-op camera keeps everyone in view and its edges hold heroes back,
 ## falling below the screen kills, a fallen hero returns next to the partner
 ## after RESPAWN_DELAY, and when everyone is down the team restarts at the
-## last checkpoint with full health.
+## last checkpoint with full health — and every enemy comes back too.
 ##
 ## Map legend: '#' wall, '1' / '2' start of player 1 / 2, 'C' checkpoint,
-## 'D' training dummy, 'T' turret. Objects stand on the bottom of their cell.
+## 'D' training dummy, 'T' practice turret; enemies: 'w' walker, 'f' drone
+## (flying), 'g' gun turret, 'h' heavy, 'c' charger, 'a' ambusher (hangs from
+## the ceiling of its cell). Other objects stand on the bottom of their cell.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -19,7 +21,7 @@ const TEAM_RESPAWN_DELAY := 1.5
 ## A hero this far below the bottom of the screen is lost.
 const FALL_MARGIN := 80.0
 
-## Off in automated tests that need a quiet level.
+## Off in automated tests that need a quiet level (no targets, no enemies).
 var spawn_targets := true
 ## The co-op camera; off for single-screen rooms.
 var use_coop_camera := true
@@ -33,6 +35,8 @@ var active_checkpoint: Checkpoint
 var hud: CanvasLayer
 
 var _spawn_points := {}
+## [letter, cell floor point] of every enemy on the map, to bring them back.
+var _enemy_spots: Array = []
 ## Seconds left before a fallen hero returns, by slot.
 var _respawn_timers := {}
 var _team_respawn_timer := -1.0
@@ -166,6 +170,7 @@ func _update_respawns(delta: float) -> void:
 		_team_respawn_timer -= delta
 		if _team_respawn_timer < 0.0:
 			_respawn_timers.clear()
+			reset_enemies()
 			for slot in players:
 				var start := _entry_point_without_partner(slot)
 				players[slot].revive(start)
@@ -210,6 +215,38 @@ func _check_falls() -> void:
 	for player in alive_players():
 		if player.global_position.y - Player.SIZE.y / 2.0 > bottom:
 			player.kill()
+
+
+## Removes all enemies and loot and puts every enemy from the map back in place.
+func reset_enemies() -> void:
+	for node in get_tree().get_nodes_in_group("enemies") + get_tree().get_nodes_in_group("pickups"):
+		if is_ancestor_of(node):
+			node.queue_free()
+	for spot in _enemy_spots:
+		spawn_enemy(spot[0], spot[1])
+
+
+## Creates the enemy of map letter `letter` in the cell whose floor point is given.
+func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
+	var enemy: Enemy
+	match letter:
+		"w": enemy = Walker.new()
+		"f": enemy = Drone.new()
+		"g": enemy = GunTurret.new()
+		"h": enemy = Heavy.new()
+		"c": enemy = Charger.new()
+		"a": enemy = Ambusher.new()
+		_: return null
+	var half_height := enemy.body_size.y / 2.0
+	match letter:
+		"f":
+			enemy.position = floor_point - Vector2(0, TILE / 2.0)
+		"a":
+			enemy.position = floor_point - Vector2(0, TILE - half_height)
+		_:
+			enemy.position = floor_point - Vector2(0, half_height)
+	add_child(enemy)
+	return enemy
 
 
 ## Puts the camera on the heroes at once (after a respawn or a teleport).
@@ -257,6 +294,10 @@ func _build_level() -> void:
 				"T":
 					if spawn_targets:
 						_add_object(TurretDummy.new(), floor_point - Vector2(0, 25))
+				"w", "f", "g", "h", "c", "a":
+					if spawn_targets:
+						_enemy_spots.append([cell, floor_point])
+						spawn_enemy(cell, floor_point)
 			if cell != "#":
 				col += 1
 				continue

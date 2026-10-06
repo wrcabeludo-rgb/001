@@ -54,6 +54,7 @@ func show_player(player: Player, respawn_left := -1.0) -> void:
 		_ammo.text = "Вернётся через %.1f с" % respawn_left if respawn_left >= 0.0 else "Ждёт напарника"
 		return
 	var shooter := player.combat as ShooterCombat
-	_ammo.visible = shooter != null
+	_ammo.visible = true
+	_ammo.text = "Лом: %d" % player.scrap
 	if shooter != null:
-		_ammo.text = "Патроны: %d   (заряженный выстрел: %d)" % [shooter.ammo, shooter.stats.charged_cost]
+		_ammo.text = "Патроны: %d   Лом: %d" % [shooter.ammo, player.scrap]
