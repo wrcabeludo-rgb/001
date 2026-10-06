@@ -62,7 +62,7 @@ func _ready() -> void:
 	for slot in PlayerManager.MAX_PLAYERS:
 		if PlayerManager.players[slot] != null:
 			_on_player_joined(slot)
-	_snap_camera()
+	snap_camera()
 
 
 func level_rect() -> Rect2:
@@ -169,7 +169,7 @@ func _update_respawns(delta: float) -> void:
 			for slot in players:
 				var start := _entry_point_without_partner(slot)
 				players[slot].revive(start)
-			_snap_camera()
+			snap_camera()
 		return
 	for slot in _respawn_timers.keys():
 		_respawn_timers[slot] -= delta
@@ -212,7 +212,8 @@ func _check_falls() -> void:
 			player.kill()
 
 
-func _snap_camera() -> void:
+## Puts the camera on the heroes at once (after a respawn or a teleport).
+func snap_camera() -> void:
 	if camera != null:
 		camera.follow(alive_players(), 0.0, true)
 

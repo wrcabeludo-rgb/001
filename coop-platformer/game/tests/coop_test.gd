@@ -27,7 +27,6 @@ func _run_all() -> void:
 
 func _test_camera_zooms_out() -> void:
 	await _pair(Vector2(120, GROUND_Y), Vector2(1700, GROUND_Y))
-	_level.camera.follow(_level.alive_players(), 0.0, true)
 	await _frames(60)
 	var view := _level.camera.visible_rect()
 	_check(_level.camera.zoom.x < 0.95, "камера отдаляется, когда герои расходятся (zoom %.2f)" % _level.camera.zoom.x)
@@ -36,7 +35,6 @@ func _test_camera_zooms_out() -> void:
 
 func _test_screen_edges_hold_heroes() -> void:
 	await _pair(Vector2(120, GROUND_Y), Vector2(3300, PLATEAU_Y))
-	_level.camera.follow(_level.alive_players(), 0.0, true)
 	await _frames(30)
 	var view := _level.camera.visible_rect()
 	var distance := absf(_b.global_position.x - _a.global_position.x)
@@ -67,6 +65,7 @@ func _test_team_respawns_at_checkpoint() -> void:
 	var checkpoint := _level.active_checkpoint
 	_check(checkpoint != null and checkpoint.active, "контрольная точка загорается, когда герой до неё дошёл")
 	_a.global_position = Vector2(1000, GROUND_Y)
+	_level.snap_camera()
 	await _frames(3)
 	_a.kill()
 	_b.kill()
@@ -90,6 +89,7 @@ func _test_late_joiner_appears_next_to_partner() -> void:
 	_extra_inputs = [input_a]
 	_a = _level.spawn_player(0, input_a, Heroes.Id.SHOOTER)
 	_a.global_position = Vector2(2000, GROUND_Y)
+	_level.snap_camera()
 	await _frames(10)
 	var input_b := PlayerInput.scripted()
 	_extra_inputs.append(input_b)
@@ -110,6 +110,8 @@ func _pair(at_a: Vector2, at_b: Vector2) -> void:
 	for pair in [[_a, at_a], [_b, at_b]]:
 		pair[0].global_position = pair[1]
 		pair[0].last_safe_position = pair[1]
+	# Heroes were teleported: move the camera at once, or the screen edges would pull them back.
+	_level.snap_camera()
 	await _frames(3)
 
 
