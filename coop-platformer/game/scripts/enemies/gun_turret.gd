@@ -3,7 +3,7 @@ extends Enemy
 ## Robot turret: stays put; when a hero is in range it charges up (warning)
 ## and fires a slow bullet at them.
 
-const BULLET_COLOR := Color(1.0, 0.18, 0.53)
+const BULLET_COLOR := Color(0.55, 1.0, 0.25)
 
 @export var fire_range := 900.0
 @export var windup_time := 0.6
@@ -22,6 +22,9 @@ func _init() -> void:
 	color = ROBOT_COLOR
 	contact_damage = 0
 	knockback_resistance = 1.0
+	# In world 1 the turret is a mutant spitter rooted in the ground.
+	art = "spitter"
+	art_height = 120.0
 
 
 func _think(delta: float) -> void:
@@ -43,6 +46,7 @@ func _think(delta: float) -> void:
 	if hero == null:
 		return
 	var bullet := Projectile.new()
-	bullet.setup(Layers.Team.ENEMIES, global_position + Vector2(0, -10), hero.global_position - global_position,
+	var mouth := global_position + (Vector2(facing * 42.0, -50.0) if _sprite != null else Vector2(0, -10))
+	bullet.setup(Layers.Team.ENEMIES, mouth, hero.global_position - mouth,
 		bullet_speed, bullet_damage, bullet_knockback, Vector2(20, 20), BULLET_COLOR, 0, 3.0)
 	get_parent().add_child(bullet)

@@ -28,6 +28,9 @@ func _init() -> void:
 	color = ROBOT_COLOR
 	contact_damage = 2
 	uses_gravity = false
+	art = "flyer"
+	art_height = 95.0
+	art_centered = true
 
 
 func _ready() -> void:

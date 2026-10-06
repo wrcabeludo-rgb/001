@@ -26,8 +26,10 @@ func _run_all() -> void:
 	var x := (_spot.x + 0.5) * 60.0
 	await _spawn(Heroes.Id.SHOOTER, Vector2(x, floor_y - 48))
 	var partner := _spawn_extra(Heroes.Id.SWORDSMAN, Vector2(x + 160, floor_y - 48))
-	for letter in ["w", "c"]:
-		level.spawn_enemy(letter, Vector2(x + 400 + (0 if letter == "w" else 220), floor_y))
+	var lineup := ["w", "c", "h", "g"]
+	for i in lineup.size():
+		level.spawn_enemy(lineup[i], Vector2(x + 380 + i * 200, floor_y))
+	level.spawn_enemy("f", Vector2(x + 560, floor_y - 320))
 	var hanging := level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))
 	var _keep := [partner, hanging]
 	level.camera.follow([_player, partner], 0.0, true)

@@ -28,6 +28,8 @@ const ROBOT_COLOR := Color(0.5, 0.58, 0.7)
 ## where the enemy can be hit grows to the picture's size.
 @export var art := ""
 @export var art_height := 100.0
+## Flyers have the picture centred on the body; walkers stand it on the floor.
+@export var art_centered := false
 @export_group("Добыча")
 @export var health_drop_chance := 0.25
 @export var ammo_drop_chance := 0.3
@@ -99,15 +101,15 @@ func _ready() -> void:
 		_sprite.scale = Vector2(factor, factor)
 		var drawn := _sprite.texture.get_size() * factor
 		# Standing on the same floor as the body.
-		_sprite_rest = Vector2(0, body_size.y / 2.0 - drawn.y / 2.0)
+		_sprite_rest = Vector2.ZERO if art_centered else Vector2(0, body_size.y / 2.0 - drawn.y / 2.0)
 		_sprite.position = _sprite_rest
 		_sprite.material = Flash.material()
 		add_child(_sprite)
 		move_child(_sprite, _body.get_index())
 		_body.visible = false
 		_eye.visible = false
-		hurt_size = Vector2(maxf(body_size.x, drawn.x * 0.6), maxf(body_size.y, drawn.y * 0.95))
-		_hurtbox.position = Vector2(0, body_size.y / 2.0 - hurt_size.y / 2.0)
+		hurt_size = Vector2(maxf(body_size.x, drawn.x * 0.6), maxf(body_size.y, drawn.y * (0.6 if art_centered else 0.95)))
+		_hurtbox.position = Vector2.ZERO if art_centered else Vector2(0, body_size.y / 2.0 - hurt_size.y / 2.0)
 		_alert.position.y = body_size.y / 2.0 - drawn.y - 50.0
 	_hurtbox.setup(Layers.Team.ENEMIES, hurt_size, self)
 

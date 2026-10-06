@@ -26,6 +26,8 @@ func _init() -> void:
 	color = ROBOT_COLOR.darkened(0.15)
 	contact_damage = 2
 	knockback_resistance = 0.85
+	art = "brute"
+	art_height = 150.0
 	scrap_min = 3
 	scrap_max = 5
 	health_drop_chance = 0.5

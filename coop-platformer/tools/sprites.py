@@ -73,6 +73,10 @@ ENEMIES = {
     "enemies/walker.png": ("enemies/enemy_walker_original.png", 220),
     "enemies/charger.png": ("enemies/enemy_charger_original.png", 200),
     "enemies/ambusher.png": ("enemies/enemy_ambusher_original.png", 180),
+    "enemies/brute.png": ("enemies/enemy_brute_original.png", 300),
+    "enemies/flyer.png": ("enemies/enemy_flyer_original.png", 200),
+    # The spit stream of the original picture is cut off: in the game it is a projectile.
+    "enemies/spitter.png": ("enemies/enemy_spitter_original.png", 200),
 }
 
 
