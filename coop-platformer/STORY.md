@@ -84,12 +84,16 @@ No text, no speech bubbles, no captions, no watermark. Landscape 3:2.
 
 ### После мира 2
 
+Готово: кадр 1 — `art_source/comics/world2_end_01.png` (встроится вместе с миром 2).
+
 | # | Подпись | Промпт |
 |---|---|---|
 | 1 | В ночь Вспышки он стоял на посту у «Сердца». | `Flashback, desaturated: a corporate security guard in a full exosuit standing at a reactor door as a white-magenta blast erupts behind it.` |
 | 2 | Осталась последняя дорога — наверх. | `Low-angle shot of the colossal tower piercing the smog, searchlights, corporate guards on platforms, the two heroes small at its base.` |
 
 ### Финалы
+
+Готово: «Погасить» — `art_source/comics/ending_off.png`, «Оставить» — `art_source/comics/ending_keep.png`.
 
 | Концовка | Подпись | Промпт |
 |---|---|---|
