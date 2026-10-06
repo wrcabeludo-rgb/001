@@ -80,3 +80,20 @@ static func prop_sprite(prop: String, size: Vector2) -> Sprite2D:
 	sprite.position = Vector2(0, size.y / 2.0 - sprite.texture.get_height() * 0.25)
 	sprite.material = Flash.material()
 	return sprite
+
+
+## A picture from assets/art/props repeated over an area (spikes along a pit,
+## rungs up a ladder). The art is drawn at twice the game size.
+static func tiled_prop(prop: String, at: Vector2, size: Vector2) -> TextureRect:
+	var path := "res://assets/art/props/%s.png" % prop
+	if not ResourceLoader.exists(path):
+		return null
+	var strip := TextureRect.new()
+	strip.texture = load(path)
+	strip.stretch_mode = TextureRect.STRETCH_TILE
+	strip.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	strip.position = at
+	strip.scale = Vector2(0.5, 0.5)
+	strip.size = size * 2.0
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return strip

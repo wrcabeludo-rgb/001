@@ -35,7 +35,15 @@ func setup(nozzle: Vector2, p_direction: int, reach: float, phase := 0.0) -> voi
 
 
 func _ready() -> void:
-	add_child(Harm.box(Vector2(-30 if direction > 0 else -10, -24), Vector2(40, 48), Color(0.36, 0.3, 0.3)))
+	var art := Harm.prop_sprite("flamethrower", Vector2.ZERO)
+	if art != null:
+		# Mounted on the wall, nozzle where the flame starts; drawn behind the walls.
+		art.flip_h = direction < 0
+		art.position = Vector2(direction * -16.0, 26.0)
+		art.z_index = -1
+		add_child(art)
+	else:
+		add_child(Harm.box(Vector2(-30 if direction > 0 else -10, -24), Vector2(40, 48), Color(0.36, 0.3, 0.3)))
 	_flame = Harm.box(rect.position - position, rect.size, FLAME_COLOR)
 	_flame.visible = false
 	add_child(_flame)

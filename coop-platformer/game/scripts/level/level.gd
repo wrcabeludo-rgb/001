@@ -51,8 +51,12 @@ var zone_id := ""
 ## Secrets of this level and how many were found on this run.
 var secrets_total := 0
 var secrets_found := 0
-## Parallax layers behind the level: [texture, scroll factor, tint], far first.
+## Parallax layers behind the level, far first: [texture, scroll factor, tint]
+## plus an optional drift in pixels per second (clouds and fog move by themselves).
 var backgrounds: Array = []
+## Ash falling over the background, and now and then a flash of lightning.
+var ash := false
+var lightning := false
 ## Colour of walls and floors (used when there is no texture).
 var wall_color := COLOR_WALL
 ## Seamless textures of the zone: the inside of walls, and the walkable top
@@ -86,6 +90,11 @@ var _respawn_timers := {}
 var _team_respawn_timer := -1.0
 var _huds: Array[HeroHud] = []
 var _toast: Label
+## [ParallaxLayer, drift] of the layers that move by themselves.
+var _drifting: Array = []
+var _sky_layers: Array[CanvasItem] = []
+var _lightning_timer := 6.0
+var _flash := 0.0
 var _boss_bar: BossBar
 var _toast_time := 0.0
 
@@ -111,6 +120,8 @@ func _ready() -> void:
 	# Runs after the heroes have moved, so screen edges and falls see final positions.
 	process_priority = 10
 	_build_background()
+	if ash:
+		_build_ash()
 	_build_level()
 	_build_hud()
 	if use_coop_camera:
@@ -187,6 +198,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_atmosphere(delta)
 	if not completed:
 		elapsed += delta
 	for slot in PlayerManager.MAX_PLAYERS:
@@ -751,6 +763,10 @@ func _build_background() -> void:
 		layer.motion_scale = Vector2(layer_info[1], 0.0)
 		layer.motion_mirroring = Vector2(width * 2.0, 0)
 		parallax.add_child(layer)
+		if layer_info.size() > 3 and layer_info[3] != 0.0:
+			_drifting.append([layer, layer_info[3]])
+		if layer_info[1] <= 0.1:
+			_sky_layers.append(layer)
 		for copy in 2:
 			var sprite := Sprite2D.new()
 			sprite.texture = texture
@@ -759,6 +775,61 @@ func _build_background() -> void:
 			sprite.position = Vector2(width * copy, -30)
 			sprite.modulate = layer_info[2]
 			layer.add_child(sprite)
+
+
+## Ash drifting down over the background (behind the level itself).
+func _build_ash() -> void:
+	var canvas := CanvasLayer.new()
+	canvas.layer = -1
+	add_child(canvas)
+	var flakes := CPUParticles2D.new()
+	flakes.position = Vector2(960, -40)
+	flakes.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	flakes.emission_rect_extents = Vector2(1200, 10)
+	flakes.amount = 140
+	flakes.lifetime = 16.0
+	flakes.preprocess = 16.0
+	flakes.direction = Vector2(0.3, 1)
+	flakes.spread = 25.0
+	flakes.initial_velocity_min = 25.0
+	flakes.initial_velocity_max = 60.0
+	flakes.gravity = Vector2(6, 12)
+	flakes.scale_amount_min = 1.5
+	flakes.scale_amount_max = 4.0
+	var colors := Gradient.new()
+	colors.set_color(0, Color(0.7, 0.68, 0.7, 0.0))
+	colors.add_point(0.15, Color(0.7, 0.68, 0.7, 0.55))
+	colors.add_point(0.85, Color(0.6, 0.55, 0.55, 0.45))
+	colors.set_color(colors.get_point_count() - 1, Color(0.6, 0.55, 0.55, 0.0))
+	flakes.color_ramp = colors
+	canvas.add_child(flakes)
+	# A few glowing embers among the ash.
+	var embers := flakes.duplicate() as CPUParticles2D
+	embers.amount = 18
+	var glow := Gradient.new()
+	glow.set_color(0, Color(1.0, 0.5, 0.15, 0.0))
+	glow.add_point(0.2, Color(1.0, 0.55, 0.2, 0.9))
+	glow.set_color(glow.get_point_count() - 1, Color(1.0, 0.3, 0.1, 0.0))
+	embers.color_ramp = glow
+	embers.scale_amount_max = 3.0
+	canvas.add_child(embers)
+
+
+func _update_atmosphere(delta: float) -> void:
+	for entry in _drifting:
+		var layer: ParallaxLayer = entry[0]
+		layer.motion_offset.x = wrapf(layer.motion_offset.x - entry[1] * delta, -layer.motion_mirroring.x, 0.0)
+	if not lightning or _sky_layers.is_empty():
+		return
+	_lightning_timer -= delta
+	if _lightning_timer <= 0.0:
+		_lightning_timer = randf_range(7.0, 16.0)
+		_flash = 1.0
+	# A double flicker that fades.
+	_flash = maxf(_flash - delta * 2.5, 0.0)
+	var strength := _flash * (1.0 if fmod(_flash, 0.4) > 0.15 else 0.4)
+	for layer in _sky_layers:
+		layer.modulate = Color(1, 1, 1).lerp(Color(1.8, 1.7, 2.1), strength)
 
 
 func _add_object(object: Node2D, at: Vector2) -> void:

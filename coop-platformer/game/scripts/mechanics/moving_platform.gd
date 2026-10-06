@@ -48,6 +48,15 @@ func _ready() -> void:
 	collision.position = Vector2(0, THICKNESS / 2.0)
 	collision.one_way_collision = true
 	add_child(collision)
+	var lift_art := Harm.prop_sprite("lift", Vector2.ZERO) if mode == Mode.LIFT else null
+	if lift_art != null:
+		# Stretched to the lift's width; its deck is a little below the picture's top.
+		var drawn := lift_art.texture.get_size()
+		var factor := width / drawn.x
+		lift_art.scale = Vector2(factor, factor)
+		lift_art.position = Vector2(0, drawn.y * factor / 2.0 - drawn.y * factor * 0.3)
+		add_child(lift_art)
+		return
 	add_child(Harm.plank(Vector2(-width / 2.0, 0), width, COLOR))
 	if mode == Mode.LIFT:
 		# A lift has a yellow warning edge.

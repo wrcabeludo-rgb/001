@@ -7,7 +7,10 @@ extends Level
 ## with shanty tiers up to a high walkway; a bridge over the abyss; a junkyard;
 ## a lift up to the rooftops and the exit. Two secret cellars.
 
-const BG_FAR := preload("res://assets/art/backgrounds/bg_far_world1_01.png")
+const SKY := preload("res://assets/art/backgrounds/sky_world1_1.png")
+const CLOUDS := preload("res://assets/art/backgrounds/clouds_world1_1.png")
+const SKYLINE := preload("res://assets/art/backgrounds/skyline_world1_1.png")
+const FOG := preload("res://assets/art/backgrounds/fog_world1_1.png")
 const BG_MID := preload("res://assets/art/backgrounds/bg_mid_world1_01.png")
 
 ## 540 x 30 tiles (legend in Level), written by tools/levels/slums.py.
@@ -71,7 +74,16 @@ func _init() -> void:
 	zone_id = "1-1"
 	level_title = "Мир 1-1 · Трущобы"
 	music_track = "zone_1_1"
-	backgrounds = [[BG_FAR, 0.1, Color(0.3, 0.3, 0.38)], [BG_MID, 0.3, Color(0.4, 0.4, 0.48)]]
+	# The sky and clouds move by themselves; fog drifts in front of the slums.
+	backgrounds = [
+		[SKY, 0.02, Color(0.42, 0.42, 0.5), 8.0],
+		[CLOUDS, 0.05, Color(1, 1, 1, 0.9), 22.0],
+		[SKYLINE, 0.1, Color(0.38, 0.38, 0.46)],
+		[BG_MID, 0.3, Color(0.4, 0.4, 0.48)],
+		[FOG, 0.45, Color(1, 1, 1, 0.75), 40.0],
+	]
+	ash = true
+	lightning = true
 	wall_texture = load("res://assets/art/tiles/1-1_wall.png")
 	ground_texture = load("res://assets/art/tiles/1-1_ground.png")
 	other_scene = "res://scenes/test_room.tscn"

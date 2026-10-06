@@ -54,6 +54,15 @@ func _ready() -> void:
 	box.color = LOOKS[kind][0] if kind != Kind.POWER else Player.POWER_COLORS.get(power, Color.WHITE)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
+	var art := "res://assets/art/props/pickup_health.png"
+	if kind == Kind.HEALTH and ResourceLoader.exists(art):
+		var picture := Sprite2D.new()
+		picture.texture = load(art)
+		picture.scale = Vector2(0.5, 0.5)
+		picture.position = Vector2(0, -6)
+		add_child(picture)
+		box.visible = false
+		return
 	var sign_label := Label.new()
 	sign_label.text = LOOKS[kind][1] if kind != Kind.POWER else POWER_GLYPHS.get(power, "?")
 	sign_label.size = SIZE

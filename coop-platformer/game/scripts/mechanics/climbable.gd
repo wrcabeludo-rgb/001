@@ -37,6 +37,14 @@ func _ready() -> void:
 	if kind == Kind.ROPE:
 		_bar(Vector2(middle - 3, _cells.position.y), Vector2(6, _cells.size.y), ROPE_COLOR)
 		return
+	var picture := Harm.tiled_prop("ladder", Vector2.ZERO, Vector2(1, _cells.size.y))
+	if picture != null:
+		# One ladder wide, as tall as the rungs on the map.
+		var width := picture.texture.get_width() * 0.5
+		picture.size.x = picture.texture.get_width()
+		picture.position = Vector2(middle - width / 2.0, _cells.position.y)
+		add_child(picture)
+		return
 	for side in [-1, 1]:
 		_bar(Vector2(middle + side * 18 - 3, _cells.position.y), Vector2(6, _cells.size.y), LADDER_COLOR)
 	var y := _cells.position.y + 10

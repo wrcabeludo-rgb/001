@@ -24,16 +24,8 @@ func _ready() -> void:
 	add_child(background)
 	add_child(Harm.box(Vector2.ZERO, Vector2(1920, 1080), Color(0, 0, 0, 0.35)))
 
-	var title := Label.new()
-	title.text = "НЕОН И ПЕПЕЛ"
+	var title := TitleLogo.new()
 	title.position = Vector2(0, 110)
-	title.size = Vector2(1920, 180)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", TITLE_FONT)
-	title.add_theme_font_size_override("font_size", 140)
-	title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.9))
-	title.add_theme_color_override("font_outline_color", Color(1.0, 0.35, 0.55))
-	title.add_theme_constant_override("outline_size", 10)
 	add_child(title)
 
 	_menu = MenuList.new()

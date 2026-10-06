@@ -20,8 +20,9 @@ SRC = os.path.join(HERE, "..", "art_source")
 OUT = os.path.join(HERE, "..", "game", "assets", "art")
 
 
-def remove_background(img, threshold=232):
-    """RGBA picture with the near-white background (connected to the border) made transparent."""
+def remove_background(img, threshold=232, holes=False):
+    """RGBA picture with the near-white background (connected to the border) made transparent.
+    With `holes`, near-white areas enclosed by the object (between ladder rungs) go too."""
     rgb = np.asarray(img.convert("RGB")).astype(np.int16)
     near_white = rgb.min(axis=2) >= threshold
     pure_white = rgb.min(axis=2) >= 250
@@ -42,6 +43,15 @@ def remove_background(img, threshold=232):
             break
         background = grown
     background |= pure_white
+    if holes:
+        background |= near_white
+        # Eat the light fringe around the holes as well.
+        grown = background.copy()
+        grown[1:, :] |= background[:-1, :]
+        grown[:-1, :] |= background[1:, :]
+        grown[:, 1:] |= background[:, :-1]
+        grown[:, :-1] |= background[:, 1:]
+        background = grown & (rgb.min(axis=2) >= 190) | background
     alpha = np.where(background, 0, 255).astype(np.uint8)
     # Soft edge: a slight blur of the mask, then pull the light fringe toward the inside colour.
     soft = np.asarray(Image.fromarray(alpha).filter(ImageFilter.GaussianBlur(0.8))).astype(np.float32)
@@ -221,16 +231,24 @@ PROPS = {
     "props/gate.png": ("props/prop_gate_original.png", (940, 0, 1160, 1230), 600),
     "props/door.png": ("props/prop_door_original.png", (1010, 110, 1180, 1230), 600),
     "props/exit.png": ("props/prop_exit_original.png", (0, 0, 1254, 1254), 420),
+    "props/spikes.png": ("props/prop_spikes_original.png", (0, 300, 1254, 940), 80, True),
+    # Only whole rung periods, so the ladder tiles upward without seams.
+    "props/ladder.png": ("props/prop_ladder_original.png", (440, 355, 800, 1093), 240, True),
+    "props/lift.png": ("props/prop_lift_original.png", (150, 510, 1390, 880), 104, True),
+    "props/flamethrower.png": ("props/prop_flamethrower_original.png", (40, 140, 990, 930), 140),
+    "props/pickup_health.png": ("props/pickup_health_original.png", (0, 100, 1254, 1100), 80),
 }
 
 
 def build_props():
     """Props: the picture often shows several variants; one is picked by its box."""
-    for name, (source, box, height) in PROPS.items():
+    for name, spec in PROPS.items():
+        source, box, height = spec[:3]
+        holes = len(spec) > 3 and spec[3]
         path = os.path.join(SRC, source)
         if not os.path.exists(path):
             continue
-        img, _ = crop(remove_background(Image.open(path).crop(box)))
+        img, _ = crop(remove_background(Image.open(path).crop(box), holes=holes))
         img, _ = scaled(img, height)
         save(img, name)
 
@@ -271,7 +289,52 @@ def build_backgrounds():
         save(img, name)
 
 
+# ---------------------------------------------------------------- moving sky of zone 1-1
+
+def _periodic_noise(width, height, smooth, seed):
+    """Soft noise that repeats seamlessly in both directions (white noise blurred in the FFT)."""
+    rng = np.random.default_rng(seed)
+    spec = np.fft.rfft2(rng.standard_normal((height, width)))
+    fy = np.fft.fftfreq(height)[:, None]
+    fx = np.fft.rfftfreq(width)[None, :]
+    spec *= np.exp(-((fx * width / smooth) ** 2 + (fy * height / smooth * 2.5) ** 2))
+    noise = np.fft.irfft2(spec, (height, width))
+    return (noise - noise.min()) / (noise.max() - noise.min())
+
+
+def _cloud_layer(width, height, seeds, band, color, strength):
+    """Clouds: a few octaves of noise, kept inside a vertical band (fractions of the height)."""
+    noise = sum(_periodic_noise(width, height, s, seed) * w for s, seed, w in seeds)
+    noise /= sum(w for _, _, w in seeds)
+    y = np.linspace(0, 1, height)[:, None]
+    lo, hi = band
+    profile = np.clip((y - lo) / 0.12, 0, 1) * np.clip((hi - y) / 0.12, 0, 1)
+    alpha = np.clip((noise - 0.45) * 3.2, 0, 1) * profile * strength
+    shade = 0.6 + 0.4 * noise
+    rgb = np.stack([np.full_like(noise, c) * shade for c in color], axis=2)
+    return Image.fromarray((np.dstack([np.clip(rgb, 0, 1), alpha]) * 255).astype(np.uint8), "RGBA")
+
+
+def build_sky_1_1():
+    sky = os.path.join(SRC, "backgrounds", "bg_sky_only_seamless.png")
+    far = os.path.join(OUT, "backgrounds", "bg_far_world1_01.png")
+    if os.path.exists(sky):
+        save(Image.open(sky).convert("RGB"), "backgrounds/sky_world1_1.png")
+    if os.path.exists(far):
+        # The far layer keeps only its skyline; the moving sky shows above it.
+        img = Image.open(far).convert("RGBA")
+        a = np.asarray(img).astype(np.float32)
+        y = np.linspace(0, 1, img.height)[:, None]
+        a[..., 3] *= np.clip((y - 0.42) / 0.16, 0, 1)
+        save(Image.fromarray(a.astype(np.uint8), "RGBA"), "backgrounds/skyline_world1_1.png")
+    save(_cloud_layer(2048, 1024, [(14, 1, 0.6), (40, 2, 0.4)], (-0.2, 0.5), (0.16, 0.12, 0.22), 0.85),
+         "backgrounds/clouds_world1_1.png")
+    save(_cloud_layer(2048, 1024, [(10, 3, 0.5), (30, 4, 0.5)], (0.6, 1.1), (0.22, 0.18, 0.26), 0.7),
+         "backgrounds/fog_world1_1.png")
+
+
 if __name__ == "__main__":
+    build_sky_1_1()
     build_platform()
     build_backgrounds()
     build_props()

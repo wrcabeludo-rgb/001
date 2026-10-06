@@ -31,6 +31,10 @@ func setup(p_kind: Kind, cells: Rect2) -> void:
 
 func _ready() -> void:
 	if kind == Kind.SPIKES:
+		var picture := Harm.tiled_prop("spikes", Vector2(rect.position.x, rect.end.y - 40.0), Vector2(rect.size.x, 40.0))
+		if picture != null:
+			add_child(picture)
+			return
 		var x := rect.position.x
 		while x < rect.end.x - 1.0:
 			add_child(Harm.spike(Vector2(x, rect.end.y), 20.0, SPIKE_HEIGHT, SPIKE_COLOR))
