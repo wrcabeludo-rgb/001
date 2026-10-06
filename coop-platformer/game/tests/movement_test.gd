@@ -20,7 +20,7 @@ func _run_all() -> void:
 ## Every gap between a floor and an overhang must fit the hero with room to spare.
 func _test_room_has_no_low_ceilings() -> void:
 	var map: Array = ROOM_SCRIPT.MAP
-	var tile: float = ROOM_SCRIPT.TILE
+	var tile: float = Level.TILE
 	var low := PackedStringArray()
 	for col in range(1, map[0].length() - 1):
 		var row := 1

@@ -37,8 +37,9 @@ func _ready() -> void:
 	add_child(_ammo)
 
 
-## Shows `player`, or hides the panel when the slot is empty.
-func show_player(player: Player) -> void:
+## Shows `player`, or hides the panel when the slot is empty. While the hero is
+## down, `respawn_left` is the number of seconds until they return.
+func show_player(player: Player, respawn_left := -1.0) -> void:
 	visible = player != null and player.health != null
 	if not visible:
 		return
@@ -48,6 +49,10 @@ func show_player(player: Player) -> void:
 	_bar_fill.color = color
 	_bar_fill.size.x = BAR_SIZE.x * player.health.ratio()
 	_health_text.text = "%d / %d" % [player.health.current, player.health.maximum]
+	if not player.is_alive():
+		_ammo.visible = true
+		_ammo.text = "Вернётся через %.1f с" % respawn_left if respawn_left >= 0.0 else "Ждёт напарника"
+		return
 	var shooter := player.combat as ShooterCombat
 	_ammo.visible = shooter != null
 	if shooter != null:

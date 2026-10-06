@@ -22,6 +22,8 @@ var combat_stats: CombatStats
 var facing := 1
 var health: Health
 var combat: HeroCombat
+## Where the hero last stood safely on the ground (partners respawn here).
+var last_safe_position := Vector2.ZERO
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
@@ -37,6 +39,7 @@ var _jump_rising := false
 var _stun_timer := 0.0
 var _invulnerable_timer := 0.0
 var _hurtbox: Hurtbox
+var _collision: CollisionShape2D
 
 var _body: ColorRect
 var _eye: ColorRect
@@ -70,6 +73,24 @@ func is_invulnerable() -> bool:
 	return _invulnerable_timer > 0.0
 
 
+func is_alive() -> bool:
+	return health != null and not health.is_dead()
+
+
+## Instant death (falling out of the screen or into a pit).
+func kill() -> void:
+	if is_alive():
+		health.damage(health.current)
+
+
+## A dead hero is hidden and takes no part in the game until revived.
+func set_active(active: bool) -> void:
+	visible = active
+	set_physics_process(active)
+	_collision.set_deferred("disabled", not active)
+	_hurtbox.set_deferred("monitorable", active)
+
+
 ## Called by a Hurtbox when an enemy attack lands. Returns true if it counted.
 func receive_hit(hit: Hit) -> bool:
 	if is_invulnerable() or health.is_dead():
@@ -87,7 +108,9 @@ func receive_hit(hit: Hit) -> bool:
 
 ## Back to full health and control (respawn).
 func revive(at: Vector2, invulnerable_time := 1.0) -> void:
+	set_active(true)
 	global_position = at
+	last_safe_position = at
 	velocity = Vector2.ZERO
 	_stun_timer = 0.0
 	_invulnerable_timer = invulnerable_time
@@ -107,9 +130,10 @@ func _ready() -> void:
 
 	var shape := RectangleShape2D.new()
 	shape.size = SIZE
-	var collision := CollisionShape2D.new()
-	collision.shape = shape
-	add_child(collision)
+	_collision = CollisionShape2D.new()
+	_collision.shape = shape
+	add_child(_collision)
+	last_safe_position = position
 
 	_body = ColorRect.new()
 	_body.size = SIZE
@@ -190,6 +214,8 @@ func _physics_process(delta: float) -> void:
 		_jump_rising = false
 
 	move_and_slide()
+	if is_on_floor():
+		last_safe_position = global_position
 	combat.update(delta)
 	_update_look(sliding)
 

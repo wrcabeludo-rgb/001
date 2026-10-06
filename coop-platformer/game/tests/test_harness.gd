@@ -10,6 +10,8 @@ const FLOOR_Y := 1020.0 - Player.SIZE.y / 2
 ## Open space with no platforms above (columns 24..28 of the room).
 const OPEN_X := 1560.0
 
+## The level the test runs in; a test can pick another one in _init().
+var room_scene: PackedScene = ROOM
 var _room: Node
 ## The main hero under test and its input device.
 var _input: PlayerInput
@@ -21,7 +23,7 @@ var _checks := 0
 
 func _ready() -> void:
 	process_priority = -50
-	_room = ROOM.instantiate()
+	_room = room_scene.instantiate()
 	_room.spawn_targets = false
 	add_child(_room)
 	await _run_all()
