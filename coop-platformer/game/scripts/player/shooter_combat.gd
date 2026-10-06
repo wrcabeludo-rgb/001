@@ -54,17 +54,20 @@ func update(delta: float) -> void:
 			_fire_cooldown = SHOTGUN_COOLDOWN
 			ammo -= 1
 			_shotgun()
+			if ammo == 0:
+				_out_of_shells()
 		else:
 			_fire_cooldown = stats.fire_cooldown
 			_shoot(stats.shot_damage, stats.shot_knockback, Vector2(18, 8), SHOT_COLOR, 0)
 			Sound.play("shoot")
-	if input.is_held("attack"):
+	# Only the rifle charges: with the shotgun every press is just a blast.
+	if input.is_held("attack") and weapon == "rifle":
 		var was_charged := is_charged()
 		_charge += delta
 		if is_charged() and not was_charged:
 			Sound.play("charge_ready", 0.0)
 	if input.just_released("attack"):
-		if is_charged():
+		if is_charged() and weapon == "rifle":
 			ammo -= stats.charged_cost
 			_shoot(stats.charged_damage, stats.charged_knockback, Vector2(46, 22), CHARGED_COLOR,
 				stats.charged_pierce)
@@ -134,10 +137,20 @@ func _shotgun() -> void:
 	Sound.play("shoot_charged", 0.08, -4.0)
 
 
+## The shotgun ran dry: back to the rifle (which never runs out).
+func _out_of_shells() -> void:
+	weapon = "rifle"
+	_charge = 0.0
+	var level := player.get_parent() as Level
+	if level != null:
+		level.show_toast("P%d: патроны кончились — винтовка" % (player.slot + 1))
+
+
 func _switch_weapon() -> void:
 	var owned := ShopItems.owned_weapons(player.hero)
 	if owned.size() < 2:
 		return
 	weapon = owned[(owned.find(weapon) + 1) % owned.size()]
+	_charge = 0.0
 	SaveGame.set_weapon(player.hero, weapon)
 	Sound.play("menu_move", 0.0)

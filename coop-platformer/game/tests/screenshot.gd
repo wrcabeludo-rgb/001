@@ -30,6 +30,23 @@ func _run_all() -> void:
 	for i in lineup.size():
 		level.spawn_enemy(lineup[i], Vector2(x + 380 + i * 200, floor_y))
 	level.spawn_enemy("f", Vector2(x + 560, floor_y - 320))
+	if OS.get_cmdline_user_args().has("props"):
+		for i in 3:
+			var post := Checkpoint.new()
+			post.position = Vector2(x - 200 + i * 40, floor_y)
+			level.add_child(post)
+		var exit := LevelExit.new()
+		exit.position = Vector2(x - 420, floor_y)
+		level.add_child(exit)
+		var lever := Lever.new()
+		lever.position = Vector2(x + 90, floor_y)
+		level.add_child(lever)
+		var door := Door.new()
+		door.setup(Rect2(x - 560, floor_y - 240, 60, 240))
+		level.add_child(door)
+		var gate := Door.new()
+		gate.setup(Rect2(x - 640, floor_y - 240, 60, 240), true)
+		level.add_child(gate)
 	if OS.get_cmdline_user_args().has("boss"):
 		level.spawn_enemy("B", Vector2(x + 900, floor_y))
 	var hanging := level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))

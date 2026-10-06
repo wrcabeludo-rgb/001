@@ -25,6 +25,13 @@ func _ready() -> void:
 	add_child(Harm.box(Vector2(-SIZE.x / 2.0 - 10, -SIZE.y - 10), SIZE + Vector2(20, 10), Color(0.25, 0.28, 0.32)))
 	_glow = Harm.box(Vector2(-SIZE.x / 2.0, -SIZE.y), SIZE, COLOR)
 	add_child(_glow)
+	# A ruined doorway with a neon frame; the glow shows through its opening.
+	var art := Harm.prop_sprite("exit", Vector2.ZERO)
+	if art != null:
+		get_child(get_child_count() - 2).visible = false
+		_glow.position = Vector2(-27, -145)
+		_glow.size = Vector2(54, 112)
+		add_child(art)
 	var label := Label.new()
 	label.text = "ВЫХОД"
 	label.position = Vector2(-60, -SIZE.y - 50)

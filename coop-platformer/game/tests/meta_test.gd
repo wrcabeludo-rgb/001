@@ -58,6 +58,20 @@ func _test_shotgun() -> void:
 	await _frames(1)
 	_check(_projectiles() == 5 and gun.ammo == ammo - 1, "дробовик: веер из 5 дробин за 1 патрон (%d)" % _projectiles())
 	_clear_projectiles()
+	# Holding attack with the shotgun must not also fire a charged shot.
+	SaveGame.add_item(Heroes.Id.SHOOTER, "quick_charge")
+	await _frames(40)
+	ammo = gun.ammo
+	await _press("attack", 50)
+	await _frames(2)
+	_check(gun.ammo == ammo - 1, "дробовик не тратит патроны на заряженный выстрел (%d → %d)" % [ammo, gun.ammo])
+	_clear_projectiles()
+	gun.ammo = 1
+	await _frames(40)
+	await _press("attack")
+	await _frames(2)
+	_check(gun.weapon == "rifle" and gun.ammo == 0, "кончились патроны — в руках снова винтовка")
+	_clear_projectiles()
 
 
 func _test_heavy_blade() -> void:

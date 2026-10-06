@@ -215,6 +215,12 @@ PROPS = {
     "props/barrel.png": ("props/prop_barrel_original.png", (20, 90, 630, 1120), 170),
     "props/cover.png": ("props/prop_cover_original.png", (380, 650, 960, 1120), 170),
     "props/crate.png": ("props/prop_crate_original.png", (10, 290, 650, 920), 130),
+    "props/checkpoint.png": ("props/prop_checkpoint_lever_original.png", (50, 10, 650, 1200), 340),
+    "props/lever.png": ("props/prop_lever_original.png", (770, 0, 1190, 1200), 200),
+    # Doors and gates are narrow in the game: their side views fit.
+    "props/gate.png": ("props/prop_gate_original.png", (940, 0, 1160, 1230), 600),
+    "props/door.png": ("props/prop_door_original.png", (1010, 110, 1180, 1230), 600),
+    "props/exit.png": ("props/prop_exit_original.png", (0, 0, 1254, 1254), 420),
 }
 
 

@@ -12,6 +12,7 @@ const ON_COLOR := Color(0.55, 1.0, 0.75)
 var active := false
 
 var _light: ColorRect
+var _art: Sprite2D
 
 
 func _ready() -> void:
@@ -36,6 +37,12 @@ func _ready() -> void:
 	_light.position = Vector2(-15, -POLE_SIZE.y - 24)
 	_light.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_light)
+	# A street lamp: dim until a hero reaches it, then its green lamp lights up.
+	_art = Harm.prop_sprite("checkpoint", Vector2.ZERO)
+	if _art != null:
+		pole.visible = false
+		_light.visible = false
+		add_child(_art)
 	set_active(false)
 
 	body_entered.connect(_on_body_entered)
@@ -44,6 +51,8 @@ func _ready() -> void:
 func set_active(value: bool) -> void:
 	active = value
 	_light.color = ON_COLOR if active else OFF_COLOR
+	if _art != null:
+		_art.modulate = Color.WHITE if active else Color(0.4, 0.4, 0.45)
 
 
 ## Where a hero of `slot` reappears: player 1 a bit left of the post, player 2 a bit right.

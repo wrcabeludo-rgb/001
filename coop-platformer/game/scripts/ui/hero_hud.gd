@@ -58,7 +58,7 @@ func show_player(player: Player, respawn_left := -1.0) -> void:
 	var parts := PackedStringArray()
 	if shooter != null:
 		parts.append(ShopItems.weapon_name(player.hero, shooter.weapon))
-		parts.append("Патроны: %d" % shooter.ammo)
+		parts.append("Патроны: %d" % shooter.ammo + ("  (мало для заряда)" if shooter.ammo < shooter.stats.charged_cost else ""))
 	parts.append("Лом: %d" % player.total_scrap())
 	for power in player.powers:
 		parts.append("%s %d" % [Player.POWER_NAMES[power], ceili(player.powers[power])])
