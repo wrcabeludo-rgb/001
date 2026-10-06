@@ -28,7 +28,8 @@ func _ready() -> void:
 
 ## Shakes the picture (explosions); `strength` is the starting offset in pixels.
 func shake(strength: float) -> void:
-	_shake = maxf(_shake, strength)
+	if SaveGame.setting("shake"):
+		_shake = maxf(_shake, strength)
 
 
 func _process(delta: float) -> void:

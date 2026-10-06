@@ -121,7 +121,8 @@ func _show_next() -> void:
 	if _index >= panels.size():
 		_finish()
 		return
-	_image.texture = panels[_index]["image"]
+	# A panel without a picture (art not drawn yet) shows only its caption.
+	_image.texture = panels[_index].get("image")
 	_image.pivot_offset = _image.size / 2.0
 	_image.scale = Vector2.ONE * (SHAKE_OVERSCAN if panels[_index].get("shake", false) else 1.0)
 	_caption.text = panels[_index]["caption"]

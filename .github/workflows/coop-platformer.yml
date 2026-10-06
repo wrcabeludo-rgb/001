@@ -44,7 +44,9 @@ jobs:
           godot --headless --path game res://scenes/coop_level.tscn --quit-after 300 2>&1 | tee -a run.log
           godot --headless --path game res://scenes/mechanics_level.tscn --quit-after 300 2>&1 | tee -a run.log
           godot --headless --path game res://scenes/intro_comic.tscn --quit-after 300 2>&1 | tee -a run.log
-          godot --headless --path game res://scenes/slums_level.tscn --quit-after 300 2>&1 | tee -a run.log
+          for scene in slums_level metro_level drain_level shop world1_ending; do
+            godot --headless --path game res://scenes/$scene.tscn --quit-after 300 2>&1 | tee -a run.log
+          done
           if grep -E "SCRIPT ERROR|ERROR:" run.log; then
             echo "::error::The game printed errors while running"
             exit 1
@@ -110,7 +112,19 @@ jobs:
           fi
           exit $status
 
-      - name: Vertical slice tests (difficulty, boss, level exit)
+      - name: Meta game tests (saves, shop, weapons, power-ups, secrets, pause)
+        run: |
+          set +e
+          timeout 300 godot --headless --path game res://tests/meta_test.tscn 2>&1 | tee meta.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR" meta.log; then
+            echo "::error::Script errors during tests"
+            exit 1
+          fi
+          exit $status
+
+      - name: World 1 boss tests (difficulty, boss, zone exit)
         run: |
           set +e
           timeout 300 godot --headless --path game res://tests/boss_test.tscn 2>&1 | tee boss.log

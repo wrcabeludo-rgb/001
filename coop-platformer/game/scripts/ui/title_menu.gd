@@ -1,25 +1,18 @@
 extends Control
-## Title screen: play (difficulty choice → intro comic → level 1), the test
-## levels, or quit. Works with any keyboard half, any gamepad and the mouse:
-## up / down to choose, jump or attack to confirm, skill to go back.
+## Title screen. Main page: continue, new game, zone select, shop, settings,
+## test levels, quit. New game asks for the difficulty and plays the intro comic.
 ## Pressing a button on a device also joins it as a player (PlayerManager).
 
 const BACKGROUND := preload("res://assets/art/ui/menu_bg_01.png")
 const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
-const SELECTED_COLOR := Color(0.35, 0.95, 1.0)
-const NORMAL_COLOR := Color(0.85, 0.85, 0.9)
 
 const COMIC_SCENE := "res://scenes/intro_comic.tscn"
+const SHOP_SCENE := "res://scenes/shop.tscn"
 const TEST_SCENE := "res://scenes/test_room.tscn"
 
-enum Page { MAIN, DIFFICULTY }
-
-var page := Page.MAIN
-var selected := 0
-
-var _items: VBoxContainer
+var _menu: MenuList
 var _hint: Label
-var _entries: Array = []
+var _on_back := Callable()
 
 
 func _ready() -> void:
@@ -33,7 +26,7 @@ func _ready() -> void:
 
 	var title := Label.new()
 	title.text = "НЕОН И ПЕПЕЛ"
-	title.position = Vector2(0, 150)
+	title.position = Vector2(0, 110)
 	title.size = Vector2(1920, 180)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_override("font", TITLE_FONT)
@@ -43,19 +36,23 @@ func _ready() -> void:
 	title.add_theme_constant_override("outline_size", 10)
 	add_child(title)
 
-	_items = VBoxContainer.new()
-	_items.position = Vector2(660, 480)
-	_items.size = Vector2(600, 400)
-	_items.add_theme_constant_override("separation", 14)
-	add_child(_items)
+	_menu = MenuList.new()
+	_menu.position = Vector2(560, 380)
+	_menu.size = Vector2(800, 500)
+	_menu.font_size = 46
+	add_child(_menu)
+	_menu.back.connect(func() -> void:
+		if _on_back.is_valid():
+			_on_back.call())
 
 	_hint = Label.new()
-	_hint.position = Vector2(0, 900)
+	_hint.position = Vector2(0, 930)
 	_hint.size = Vector2(1920, 40)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.add_theme_font_size_override("font_size", 26)
 	_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
 	add_child(_hint)
+	_menu.selection_changed.connect(func(_index: int) -> void: _hint.text = _menu.hint())
 
 	var help := Label.new()
 	help.text = "Вверх / вниз — выбор, прыжок или атака — подтвердить, навык — назад. Второй игрок подключается кнопкой Start прямо в игре"
@@ -66,89 +63,65 @@ func _ready() -> void:
 	help.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
 	add_child(help)
 
-	_show_page(Page.MAIN)
+	show_main()
 	Sound.music("menu")
 
 
-## Menu entries of the current page: [text, Callable].
-func _page_entries(which: Page) -> Array:
-	if which == Page.MAIN:
-		return [
-			["Играть", func() -> void: _show_page(Page.DIFFICULTY)],
-			["Тестовые уровни", func() -> void: get_tree().change_scene_to_file(TEST_SCENE)],
-			["Выход", func() -> void: get_tree().quit()],
-		]
+func show_main() -> void:
+	var progress := SaveGame.has_progress()
+	var entries: Array = []
+	if progress:
+		var next: Dictionary = SaveGame.ZONES[int(SaveGame.data["next_zone"])]
+		entries.append({"text": "Продолжить", "action": func() -> void: _open(next["scene"]),
+			"hint": "%s · сложность: %s" % [next["title"], GameSettings.NAMES[GameSettings.difficulty]]})
+	entries.append({"text": "Новая игра", "action": show_difficulty,
+		"hint": "Прогресс и покупки будут сброшены" if progress else ""})
+	if progress:
+		entries.append({"text": "Выбор зоны", "action": show_zones})
+		entries.append({"text": "Магазин", "action": func() -> void: _open(SHOP_SCENE),
+			"hint": "Потратить лом на оружие и улучшения"})
+	entries.append({"text": "Настройки", "action": show_settings})
+	entries.append({"text": "Тестовые уровни", "action": func() -> void: _open(TEST_SCENE),
+		"hint": "Тестовая комната, «Полигон» и «Мастерская» (F2 — следующая)"})
+	entries.append({"text": "Выход", "action": func() -> void: get_tree().quit()})
+	_on_back = Callable()
+	_menu.set_entries(entries)
+
+
+func show_difficulty() -> void:
 	var entries: Array = []
 	for difficulty in [GameSettings.Difficulty.EASY, GameSettings.Difficulty.NORMAL, GameSettings.Difficulty.HARD]:
-		entries.append([GameSettings.NAMES[difficulty], _start_game.bind(difficulty)])
-	entries.append(["Назад", func() -> void: _show_page(Page.MAIN)])
-	return entries
+		entries.append({"text": GameSettings.NAMES[difficulty], "hint": GameSettings.HINTS[difficulty],
+			"action": func() -> void:
+				SaveGame.new_game(difficulty)
+				_open(COMIC_SCENE)})
+	entries.append({"text": "Назад", "action": show_main})
+	_on_back = show_main
+	_menu.set_entries(entries, 1)
 
 
-func _show_page(which: Page) -> void:
-	page = which
-	for child in _items.get_children():
-		_items.remove_child(child)
-		child.queue_free()
-	_entries = _page_entries(which)
-	for i in _entries.size():
-		var label := Label.new()
-		label.text = _entries[i][0]
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_override("font", TITLE_FONT)
-		label.add_theme_font_size_override("font_size", 52)
-		label.mouse_filter = Control.MOUSE_FILTER_STOP
-		label.mouse_entered.connect(_select.bind(i))
-		label.gui_input.connect(_on_item_input.bind(i))
-		_items.add_child(label)
-	_select(1 if which == Page.DIFFICULTY else 0)
+func show_zones() -> void:
+	var entries: Array = []
+	var unlocked := int(SaveGame.data["unlocked"])
+	for i in SaveGame.ZONES.size():
+		var zone: Dictionary = SaveGame.ZONES[i]
+		var open := i < unlocked
+		var best: float = SaveGame.data["best_times"].get(zone["id"], -1.0)
+		entries.append({
+			"text": zone["title"] if open else "%s — закрыто" % zone["id"],
+			"enabled": open,
+			"hint": ("Лучшее время: %d:%02d" % [int(best) / 60, int(best) % 60]) if best >= 0.0 else "",
+			"action": func() -> void: _open(zone["scene"]),
+		})
+	entries.append({"text": "Назад", "action": show_main})
+	_on_back = show_main
+	_menu.set_entries(entries)
 
 
-func _select(index: int) -> void:
-	selected = wrapi(index, 0, _entries.size())
-	for i in _items.get_child_count():
-		var label := _items.get_child(i) as Label
-		var is_selected := i == selected
-		label.text = ("▶  %s  ◀" if is_selected else "%s") % _entries[i][0]
-		label.add_theme_color_override("font_color", SELECTED_COLOR if is_selected else NORMAL_COLOR)
-	_hint.text = ""
-	if page == Page.DIFFICULTY and selected < 3:
-		_hint.text = GameSettings.HINTS[selected]
+func show_settings() -> void:
+	_on_back = show_main
+	_menu.set_entries(SettingsEntries.build(show_main))
 
 
-func _activate() -> void:
-	_entries[selected][1].call()
-
-
-func _start_game(difficulty: GameSettings.Difficulty) -> void:
-	GameSettings.difficulty = difficulty
-	get_tree().change_scene_to_file(COMIC_SCENE)
-
-
-func _on_item_input(event: InputEvent, index: int) -> void:
-	var click := event as InputEventMouseButton
-	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-		_select(index)
-		Sound.play("menu_select", 0.0)
-		_activate()
-
-
-func _physics_process(_delta: float) -> void:
-	var move := 0
-	var confirm := Input.is_action_just_pressed("ui_accept")
-	var back := false
-	for device in PlayerManager.all_devices():
-		if device.just_pressed("up"):
-			move = -1
-		elif device.just_pressed("down"):
-			move = 1
-		confirm = confirm or device.just_pressed("jump") or device.just_pressed("attack")
-		back = back or device.just_pressed("skill")
-	if move != 0:
-		_select(selected + move)
-		Sound.play("menu_move", 0.0)
-	elif confirm:
-		Sound.play("menu_select", 0.0)
-		_activate()
-	elif back and page == Page.DIFFICULTY:
-		_show_page(Page.MAIN)
+func _open(scene: String) -> void:
+	get_tree().change_scene_to_file(scene)

@@ -23,6 +23,9 @@ var _checks := 0
 
 func _ready() -> void:
 	process_priority = -50
+	# Tests never touch the real save: a fresh in-memory one, written elsewhere.
+	SaveGame.path = "user://test_save.json"
+	SaveGame.data = SaveGame.defaults()
 	_room = room_scene.instantiate()
 	_room.spawn_targets = false
 	add_child(_room)

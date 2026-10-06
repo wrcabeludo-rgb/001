@@ -1,20 +1,20 @@
 extends "res://tests/test_harness.gd"
-## Headless checks of the vertical slice (level 1-1 "Трущобы"): difficulty,
-## the boss and its phases, finishing the level. Run by CI:
+## Headless checks of zone 1-3 "Главный сток": difficulty, the world 1 boss
+## and its phases, finishing the zone. Run by CI:
 ##   godot --headless --path game res://tests/boss_test.tscn
 
 ## The level's floor top (surface row 26) and where a hero stands on it.
 const SURFACE := 1560.0
 const STAND_Y := SURFACE - Player.SIZE.y / 2.0
-## Boss arena: gates at columns 320 and 350.
-const ARENA_LEFT := 320 * 60.0
-const ARENA_RIGHT := 351 * 60.0
+## Boss arena: gates at columns 386 and 416.
+const ARENA_LEFT := 386 * 60.0
+const ARENA_RIGHT := 417 * 60.0
 
 var _level: Level
 
 
 func _init() -> void:
-	room_scene = preload("res://scenes/slums_level.tscn")
+	room_scene = preload("res://scenes/drain_level.tscn")
 
 
 func _run_all() -> void:
@@ -36,7 +36,7 @@ func _test_difficulty() -> void:
 	_check(easy_damage < 4 and hard_damage > 4, "сложность меняет урон по героям (%d / 4 / %d)" % [easy_damage, hard_damage])
 	_check(easy_health < 20 and hard_health > 20, "сложность меняет здоровье врагов (%d / 20 / %d)" % [easy_health, hard_health])
 	GameSettings.difficulty = GameSettings.Difficulty.EASY
-	await _spawn(Heroes.Id.SWORDSMAN, Vector2(40 * 60, 25 * 60 - 48))
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(20 * 60, STAND_Y))
 	_player.receive_hit(Hit.make(4, Vector2.ZERO, _player.global_position + Vector2(0, 10)))
 	_check(_player.health.maximum - _player.health.current == 2, "на лёгкой сложности удар в 4 снимает 2")
 	GameSettings.difficulty = GameSettings.Difficulty.NORMAL
@@ -129,7 +129,7 @@ func _test_boss_fight() -> void:
 
 
 func _test_exit_finishes_level() -> void:
-	await _spawn(Heroes.Id.SHOOTER, Vector2(357 * 60.0, STAND_Y))
+	await _spawn(Heroes.Id.SHOOTER, Vector2(426 * 60.0, STAND_Y))
 	_input.set_virtual("right", true)
 	await _wait_for(func() -> bool: return _level.completed, 180)
 	_input.set_virtual("right", false)
@@ -137,6 +137,8 @@ func _test_exit_finishes_level() -> void:
 	for child in _level.hud.get_children():
 		panel = panel or child is ResultsPanel
 	_check(_level.completed and panel, "выход завершает уровень и показывает итоги")
+	_check(int(SaveGame.data["unlocked"]) == 3 and _level.next_scene.ends_with("world1_ending.tscn"),
+		"после последней зоны мира — концовка мира, прогресс сохранён")
 
 
 func _boss() -> SludgeBoss:

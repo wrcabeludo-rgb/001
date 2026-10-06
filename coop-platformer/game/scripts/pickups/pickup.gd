@@ -4,7 +4,7 @@ extends Area2D
 ## the floor and is taken by the first hero who can use it (ammo only by the
 ## Gunner, a health kit only by a hurt hero). It blinks and vanishes after a while.
 
-enum Kind { HEALTH, AMMO, SCRAP }
+enum Kind { HEALTH, AMMO, SCRAP, POWER }
 
 const SIZE := Vector2(26, 26)
 const LIFETIME := 15.0
@@ -13,9 +13,14 @@ const LOOKS := {
 	Kind.HEALTH: [Color(0.95, 0.25, 0.3), "+"],
 	Kind.AMMO: [Color(0.3, 0.9, 1.0), "П"],
 	Kind.SCRAP: [Color(0.7, 0.7, 0.75), "Л"],
+	Kind.POWER: [Color.WHITE, "?"],
 }
 
 var kind: Kind = Kind.SCRAP
+## For a power-up: "rage", "shield" or "haste" (see Player.POWER_TIME).
+var power := ""
+
+const POWER_GLYPHS := {"rage": "Я", "shield": "Щ", "haste": "С"}
 var amount := 1
 var velocity := Vector2.ZERO
 ## Placed on the map by the level designer: never blinks out.
@@ -46,11 +51,11 @@ func _ready() -> void:
 	var box := ColorRect.new()
 	box.size = SIZE
 	box.position = -SIZE / 2
-	box.color = LOOKS[kind][0]
+	box.color = LOOKS[kind][0] if kind != Kind.POWER else Player.POWER_COLORS.get(power, Color.WHITE)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 	var sign_label := Label.new()
-	sign_label.text = LOOKS[kind][1]
+	sign_label.text = LOOKS[kind][1] if kind != Kind.POWER else POWER_GLYPHS.get(power, "?")
 	sign_label.size = SIZE
 	sign_label.position = -SIZE / 2 + Vector2(0, -4)
 	sign_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -71,7 +76,7 @@ func _physics_process(delta: float) -> void:
 	for body in get_overlapping_bodies():
 		var hero := body as Player
 		if hero != null and hero.is_alive() and _give_to(hero):
-			Sound.play(["pickup_health", "pickup_ammo", "pickup_scrap"][kind], 0.0)
+			Sound.play(["pickup_health", "pickup_ammo", "pickup_scrap", "charge_ready"][kind], 0.0)
 			queue_free()
 			return
 
@@ -108,9 +113,14 @@ func _give_to(hero: Player) -> bool:
 			hero.health.heal(amount)
 		Kind.AMMO:
 			var shooter := hero.combat as ShooterCombat
-			if shooter == null or shooter.ammo >= shooter.stats.max_ammo:
+			if shooter == null or shooter.ammo >= shooter.max_ammo():
 				return false
 			shooter.add_ammo(amount)
 		Kind.SCRAP:
 			hero.scrap += amount
+		Kind.POWER:
+			hero.give_power(power)
+			var level := get_parent() as Level
+			if level != null:
+				level.show_toast("P%d: %s" % [hero.slot + 1, Player.POWER_NAMES.get(power, power)])
 	return true

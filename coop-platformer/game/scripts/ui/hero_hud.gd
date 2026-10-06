@@ -55,6 +55,11 @@ func show_player(player: Player, respawn_left := -1.0) -> void:
 		return
 	var shooter := player.combat as ShooterCombat
 	_ammo.visible = true
-	_ammo.text = "Лом: %d" % player.scrap
+	var parts := PackedStringArray()
 	if shooter != null:
-		_ammo.text = "Патроны: %d   Лом: %d" % [shooter.ammo, player.scrap]
+		parts.append(ShopItems.weapon_name(player.hero, shooter.weapon))
+		parts.append("Патроны: %d" % shooter.ammo)
+	parts.append("Лом: %d" % player.total_scrap())
+	for power in player.powers:
+		parts.append("%s %d" % [Player.POWER_NAMES[power], ceili(player.powers[power])])
+	_ammo.text = "   ".join(parts)

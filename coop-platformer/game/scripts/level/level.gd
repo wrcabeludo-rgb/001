@@ -21,6 +21,8 @@ extends Node2D
 ##   'b' explosive barrel   'k' cover   'd' door (down to the floor) + '/' lever
 ##   '[' ... ']' arena gates; the waves come from get_arena_waves()
 ##   '+' health kit, 'p' ammo lying on the floor   'E' level exit
+##   'U' power-up (rage / shield / haste by column)   '$' cache of 10 scrap
+##   's' false wall: looks solid, hides a secret room
 ## Bosses only appear in arena waves: 'B' the Sludge Master.
 
 const TILE := 60
@@ -43,6 +45,15 @@ var other_scene := ""
 var allow_hero_swap := true
 ## Shown when the level starts and on the results screen.
 var level_title := ""
+## Zone id from SaveGame.ZONES ("1-1"...), empty for test levels.
+var zone_id := ""
+## Secrets of this level and how many were found on this run.
+var secrets_total := 0
+var secrets_found := 0
+## Parallax layers behind the level: [texture, scroll factor, tint], far first.
+var backgrounds: Array = []
+## Colour of walls and floors.
+var wall_color := COLOR_WALL
 ## Music loop of this level (empty = silence).
 var music_track := ""
 ## Scene opened after the results screen.
@@ -91,6 +102,7 @@ func get_signs() -> Array:
 func _ready() -> void:
 	# Runs after the heroes have moved, so screen edges and falls see final positions.
 	process_priority = 10
+	_build_background()
 	_build_level()
 	_build_hud()
 	if use_coop_camera:
@@ -156,6 +168,7 @@ func respawn_time_left(slot: int) -> float:
 
 
 func _physics_process(delta: float) -> void:
+	_check_pause()
 	_update_respawns(delta)
 	if allow_hero_swap:
 		_check_hero_swap()
@@ -206,6 +219,20 @@ func _on_hero_changed(slot: int) -> void:
 	if players.has(slot):
 		players[slot].set_hero(PlayerManager.heroes[slot])
 		show_toast("P%d: %s" % [slot + 1, Heroes.NAMES[PlayerManager.heroes[slot]]])
+
+
+## Start on a joined player's device stops the game and opens the pause menu.
+func _check_pause() -> void:
+	if completed or get_tree().paused:
+		return
+	for slot in players:
+		var device: PlayerInput = PlayerManager.players[slot]
+		if device != null and device.just_pressed("start"):
+			var menu := PauseMenu.new()
+			menu.setup(self, slot)
+			add_child(menu)
+			get_tree().paused = true
+			return
 
 
 ## Down + extra: switch to the other hero (only a living hero, so a fallen
@@ -356,13 +383,34 @@ func complete_level() -> void:
 	var lines := PackedStringArray()
 	lines.append("Время: %d:%02d" % [int(elapsed) / 60, int(elapsed) % 60])
 	lines.append("Сложность: %s" % GameSettings.NAMES[GameSettings.difficulty])
+	if secrets_total > 0:
+		lines.append("Тайники: %d из %d" % [secrets_found, secrets_total])
 	for slot in players:
 		var player: Player = players[slot]
-		lines.append("P%d %s — лом: %d, падений: %d" % [slot + 1, Heroes.NAMES[player.hero], player.scrap, deaths.get(slot, 0)])
+		lines.append("P%d %s — лом: +%d (всего %d), падений: %d" % [slot + 1, Heroes.NAMES[player.hero],
+			player.scrap, player.total_scrap(), deaths.get(slot, 0)])
+	# Collected scrap joins each hero's wallet, the next zone opens.
+	for player in players.values():
+		SaveGame.set_scrap(player.hero, player.total_scrap())
+		player.scrap = 0
+	if zone_id != "":
+		SaveGame.complete_zone(zone_id, elapsed)
+		next_scene = after_zone_scene()
+	else:
+		SaveGame.save()
 	var panel := ResultsPanel.new()
 	hud.add_child(panel)
 	panel.setup("Уровень пройден!", lines)
 	panel.closed.connect(func() -> void: get_tree().change_scene_to_file(next_scene))
+
+
+## Where the game goes after this zone: the shop before the next zone, or
+## the world's ending after the last one.
+func after_zone_scene() -> String:
+	var index := SaveGame.zone_index(zone_id)
+	if index >= SaveGame.ZONES.size() - 1:
+		return "res://scenes/world1_ending.tscn"
+	return "res://scenes/shop.tscn"
 
 
 func show_toast(text: String, seconds := 2.0) -> void:
@@ -406,6 +454,13 @@ func _build_level() -> void:
 					item.setup(kind, 3 if cell == "+" else 10, floor_point - Vector2(0, Pickup.SIZE.y / 2.0 + 2.0), Vector2.ZERO)
 					item.permanent = true
 					add_child(item)
+				"U", "$":
+					var item := Pickup.new()
+					var kind := Pickup.Kind.POWER if cell == "U" else Pickup.Kind.SCRAP
+					item.setup(kind, 1 if cell == "U" else 10, floor_point - Vector2(0, Pickup.SIZE.y / 2.0 + 2.0), Vector2.ZERO)
+					item.power = ["rage", "shield", "haste"][col % 3]
+					item.permanent = true
+					add_child(item)
 				"E":
 					var exit := LevelExit.new()
 					exit.position = floor_point
@@ -420,6 +475,7 @@ func _build_level() -> void:
 				col += 1
 			_add_wall(walls, Rect2(start * TILE, row * TILE, (col - start) * TILE, TILE))
 	_build_mechanics(map)
+	_build_secrets(map)
 	for sign_info in get_signs():
 		var label := Label.new()
 		label.text = sign_info[2]
@@ -543,6 +599,39 @@ func _build_mechanics(map: Array) -> void:
 		add_child(arena)
 
 
+## Each group of touching 's' tiles is one secret room behind a false wall.
+func _build_secrets(map: Array) -> void:
+	var seen := {}
+	for row in map.size():
+		for col in map[row].length():
+			if map[row][col] != "s" or seen.has(Vector2i(col, row)):
+				continue
+			var cells: Array[Rect2] = []
+			var queue: Array[Vector2i] = [Vector2i(col, row)]
+			seen[Vector2i(col, row)] = true
+			while not queue.is_empty():
+				var cell: Vector2i = queue.pop_back()
+				cells.append(Level.cell_rect(cell.x, cell.y))
+				for step in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					var next: Vector2i = cell + step
+					if _at(map, next.x, next.y) == "s" and not seen.has(next):
+						seen[next] = true
+						queue.append(next)
+			var secret := SecretArea.new()
+			secret.setup("%s#%d" % [zone_id if zone_id != "" else name, secrets_total], cells)
+			secret.color = wall_color
+			secret.found.connect(_on_secret_found)
+			add_child(secret)
+			secrets_total += 1
+
+
+func _on_secret_found(secret: SecretArea) -> void:
+	secrets_found += 1
+	SaveGame.find_secret(secret.secret_id)
+	Sound.play("checkpoint", 0.0)
+	show_toast("Тайник найден! (%d из %d)" % [secrets_found, secrets_total], 3.0)
+
+
 ## Adds a one-way platform along the top of `cells` to `body`.
 func add_one_way(body: StaticBody2D, cells: Rect2) -> void:
 	var shape := RectangleShape2D.new()
@@ -595,9 +684,36 @@ func _add_wall(walls: StaticBody2D, rect: Rect2) -> void:
 	var visual := ColorRect.new()
 	visual.position = rect.position
 	visual.size = rect.size
-	visual.color = COLOR_WALL
+	visual.color = wall_color
 	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	walls.add_child(visual)
+
+
+## Parallax layers from `backgrounds`, scaled to the screen height.
+func _build_background() -> void:
+	if backgrounds.is_empty():
+		return
+	var parallax := ParallaxBackground.new()
+	parallax.scroll_ignore_camera_zoom = true
+	add_child(parallax)
+	for layer_info in backgrounds:
+		var texture: Texture2D = layer_info[0]
+		var factor := 1080.0 / texture.get_height() * 1.06
+		var width := texture.get_width() * factor
+		# The picture is narrower than the screen, and a layer repeats only its
+		# own width: two copies side by side keep the screen covered at any scroll.
+		var layer := ParallaxLayer.new()
+		layer.motion_scale = Vector2(layer_info[1], 0.0)
+		layer.motion_mirroring = Vector2(width * 2.0, 0)
+		parallax.add_child(layer)
+		for copy in 2:
+			var sprite := Sprite2D.new()
+			sprite.texture = texture
+			sprite.centered = false
+			sprite.scale = Vector2(factor, factor)
+			sprite.position = Vector2(width * copy, -30)
+			sprite.modulate = layer_info[2]
+			layer.add_child(sprite)
 
 
 func _add_object(object: Node2D, at: Vector2) -> void:

@@ -2,14 +2,13 @@ extends Node
 ## Knows which input device and which hero belong to which player.
 ##
 ## Drop-in / drop-out: an unused device joins by pressing jump or Start,
-## a player leaves by holding Start. Registered as the PlayerManager autoload.
+## a player leaves through the pause menu (Start). Registered as the PlayerManager autoload.
 
 signal player_joined(slot: int)
 signal player_left(slot: int)
 signal hero_changed(slot: int)
 
 const MAX_PLAYERS := 2
-const LEAVE_HOLD_TIME := 1.5
 
 ## PlayerInput for each slot, or null when the slot is free.
 var players: Array = []
@@ -18,16 +17,14 @@ var heroes: Array = []
 
 var _keyboards: Array[PlayerInput] = []
 var _gamepads := {}
-var _leave_timers: Array[float] = []
 
 
 func _ready() -> void:
 	# Poll devices before any player reads them in the same physics frame.
 	process_priority = -100
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	players.resize(MAX_PLAYERS)
 	heroes.resize(MAX_PLAYERS)
-	_leave_timers.resize(MAX_PLAYERS)
-	_leave_timers.fill(0.0)
 	_keyboards = [
 		PlayerInput.keyboard("Клавиатура (левая)", PlayerInput.KEYBOARD_LEFT),
 		PlayerInput.keyboard("Клавиатура (правая)", PlayerInput.KEYBOARD_RIGHT),
@@ -37,11 +34,12 @@ func _ready() -> void:
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	for device in all_devices():
 		device.poll()
-	_handle_joining()
-	_handle_leaving(delta)
+	# Menus keep working while the game is paused, but nobody joins then.
+	if not get_tree().paused:
+		_handle_joining()
 
 
 func all_devices() -> Array[PlayerInput]:
@@ -83,7 +81,6 @@ func remove_player(slot: int) -> void:
 	if players[slot] == null:
 		return
 	players[slot] = null
-	_leave_timers[slot] = 0.0
 	player_left.emit(slot)
 
 
@@ -107,19 +104,6 @@ func _hero_taken(hero: Heroes.Id, except_slot: int) -> bool:
 		if slot != except_slot and players[slot] != null and heroes[slot] == hero:
 			return true
 	return false
-
-
-func _handle_leaving(delta: float) -> void:
-	for slot in MAX_PLAYERS:
-		var device: PlayerInput = players[slot]
-		if device == null:
-			continue
-		if not device.is_held("start"):
-			_leave_timers[slot] = 0.0
-			continue
-		_leave_timers[slot] += delta
-		if _leave_timers[slot] >= LEAVE_HOLD_TIME:
-			remove_player(slot)
 
 
 func _on_joy_connection_changed(device_id: int, connected: bool) -> void:

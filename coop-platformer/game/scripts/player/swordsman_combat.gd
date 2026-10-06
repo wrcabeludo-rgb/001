@@ -3,11 +3,17 @@ extends HeroCombat
 ## The Swordsman. Attack: a combo of three slashes (the third is stronger and
 ## knocks back hard); up + attack: a slash above. Extra (hold): block, which
 ## cuts damage and knockback from the front but slows the hero down.
+## The heavy blade (bought in the shop, chosen there) hits harder and further
+## but swings slower.
 
 const SLASH_COLOR := Color(1.0, 0.55, 0.2)
 const SHIELD_COLOR := Color(1.0, 0.65, 0.3, 0.85)
 
 var blocking := false
+var heavy := false
+
+const HEAVY_DAMAGE := 1.6
+const HEAVY_SWING := 1.35
 
 var _step := 0
 var _swing_timer := 0.0
@@ -20,9 +26,13 @@ var _shield: ColorRect
 
 func setup(p_player: Player) -> void:
 	super.setup(p_player)
+	heavy = SaveGame.weapon(player.hero) == "heavy" and SaveGame.has_item(player.hero, "heavy_blade")
 	_slash = Hitbox.new()
 	add_child(_slash)
-	_slash.setup(Layers.Team.PLAYERS, Vector2(96, 76), Vector2(62, -6), SLASH_COLOR)
+	if heavy:
+		_slash.setup(Layers.Team.PLAYERS, Vector2(124, 86), Vector2(76, -6), SLASH_COLOR)
+	else:
+		_slash.setup(Layers.Team.PLAYERS, Vector2(96, 76), Vector2(62, -6), SLASH_COLOR)
 	_up_slash = Hitbox.new()
 	add_child(_up_slash)
 	_up_slash.setup(Layers.Team.PLAYERS, Vector2(84, 80), Vector2(0, -88), SLASH_COLOR)
@@ -68,16 +78,22 @@ func speed_multiplier() -> float:
 func modify_hit(hit: Hit) -> Hit:
 	var from_front := signf(hit.source_position.x - player.global_position.x) == float(player.facing)
 	if blocking and from_front:
-		hit.damage = roundi(hit.damage * stats.block_damage_multiplier)
+		var guard := 0.1 if SaveGame.has_item(player.hero, "iron_block") else stats.block_damage_multiplier
+		hit.damage = roundi(hit.damage * guard)
 		hit.knockback *= stats.block_knockback_multiplier
 		hit.blocked = true
 	return hit
 
 
+func _damage(base: int) -> int:
+	return roundi(base * (HEAVY_DAMAGE if heavy else 1.0) * player.damage_multiplier())
+
+
 func _swing() -> void:
-	_swing_timer = stats.swing_time
+	var swing_time := stats.swing_time * (HEAVY_SWING if heavy else 1.0)
+	_swing_timer = swing_time
 	if player.input.is_held("up"):
-		_up_slash.activate(stats.swing_time, stats.up_slash_damage, Vector2(0, -stats.slash_knockback), 1)
+		_up_slash.activate(swing_time, _damage(stats.up_slash_damage), Vector2(0, -stats.slash_knockback), 1)
 		Sound.play("slash")
 		return
 	if _combo_timer <= 0.0:
@@ -85,10 +101,10 @@ func _swing() -> void:
 	var damages := [stats.slash1_damage, stats.slash2_damage, stats.slash3_damage]
 	var finisher := _step == 2
 	var push := Vector2(stats.finisher_knockback, -320) if finisher else Vector2(stats.slash_knockback, -150)
-	_slash.activate(stats.swing_time, damages[_step], push, player.facing)
+	_slash.activate(swing_time, _damage(damages[_step]), push, player.facing)
 	Sound.play("slash_heavy" if finisher else "slash")
 	_step = (_step + 1) % 3
-	_combo_timer = stats.swing_time + stats.combo_window
+	_combo_timer = swing_time + stats.combo_window
 
 
 func _update_shield() -> void:

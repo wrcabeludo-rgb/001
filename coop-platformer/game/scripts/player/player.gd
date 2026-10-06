@@ -29,8 +29,16 @@ var health: Health
 var combat: HeroCombat
 ## Where the hero last stood safely on the ground (partners respawn here).
 var last_safe_position := Vector2.ZERO
-## Scrap (money) collected by this hero; each hero has their own wallet.
+## Scrap (money) collected in this zone; it joins the hero's saved wallet
+## when the zone is finished.
 var scrap := 0
+## Temporary power-ups: name -> seconds left ("rage", "shield", "haste").
+var powers := {}
+
+## How long each power-up lasts and how it shows on the hero.
+const POWER_TIME := {"rage": 12.0, "shield": 10.0, "haste": 12.0}
+const POWER_NAMES := {"rage": "Ярость ×2", "shield": "Щит", "haste": "Скорость"}
+const POWER_COLORS := {"rage": Color(1.0, 0.3, 0.3), "shield": Color(0.5, 0.8, 1.0), "haste": Color(1.0, 0.95, 0.4)}
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
@@ -53,6 +61,7 @@ var _regrab_timer := 0.0
 var _drop_timer := 0.0
 
 var _body: ColorRect
+var _aura: ColorRect
 var _eye: ColorRect
 var _tag: Label
 
@@ -84,6 +93,29 @@ func is_invulnerable() -> bool:
 	return _invulnerable_timer > 0.0
 
 
+## Health with the armour bought in the shop.
+func max_health() -> int:
+	return combat_stats.max_health + 2 * SaveGame.count_items(hero, ["armor1", "armor2"])
+
+
+func has_power(power: String) -> bool:
+	return powers.get(power, 0.0) > 0.0
+
+
+func give_power(power: String) -> void:
+	powers[power] = POWER_TIME.get(power, 10.0)
+
+
+## Hero attacks deal this many times their damage ("rage" doubles it).
+func damage_multiplier() -> float:
+	return 2.0 if has_power("rage") else 1.0
+
+
+## Scrap the hero has in total: saved plus collected in this zone.
+func total_scrap() -> int:
+	return SaveGame.scrap(hero) + scrap
+
+
 func is_climbing() -> bool:
 	return _climb != null
 
@@ -109,7 +141,7 @@ func set_active(active: bool) -> void:
 ## Called by a Hurtbox when an enemy attack lands. Returns true if it counted.
 func receive_hit(hit: Hit) -> bool:
 	# The Swordsman's dash passes through enemies and their attacks.
-	if is_invulnerable() or is_dashing() or health.is_dead():
+	if is_invulnerable() or is_dashing() or health.is_dead() or has_power("shield"):
 		return false
 	hit.damage = GameSettings.damage_to_heroes(hit.damage)
 	hit = combat.modify_hit(hit)
@@ -134,7 +166,7 @@ func revive(at: Vector2, invulnerable_time := 1.0) -> void:
 	_stun_timer = 0.0
 	_release_climb()
 	_invulnerable_timer = invulnerable_time
-	health.reset(combat_stats.max_health)
+	health.reset(max_health())
 
 
 ## A tiny freeze of the whole game when a melee hit lands, so it feels heavy.
@@ -154,6 +186,10 @@ func _ready() -> void:
 	_collision.shape = shape
 	add_child(_collision)
 	last_safe_position = position
+
+	# A glow around the hero while a power-up is active.
+	_aura = Harm.box(-SIZE / 2 - Vector2(8, 8), SIZE + Vector2(16, 16), Color.TRANSPARENT)
+	add_child(_aura)
 
 	_body = ColorRect.new()
 	_body.size = SIZE
@@ -271,7 +307,7 @@ func _build_combat() -> void:
 			combat = SwordsmanCombat.new()
 	add_child(combat)
 	combat.setup(self)
-	health.reset(combat_stats.max_health)
+	health.reset(max_health())
 
 
 func _tick_timers(delta: float) -> void:
@@ -283,6 +319,10 @@ func _tick_timers(delta: float) -> void:
 	_wall_jump_lock_timer -= delta
 	_dash_cooldown_timer -= delta
 	_regrab_timer -= delta
+	for power in powers.keys():
+		powers[power] -= delta
+		if powers[power] <= 0.0:
+			powers.erase(power)
 	if _drop_timer > 0.0:
 		_drop_timer -= delta
 		if _drop_timer <= 0.0 and _climb == null:
@@ -297,7 +337,8 @@ func _apply_horizontal(direction: float, on_floor: bool, delta: float) -> void:
 		accel = stats.ground_accel if direction != 0.0 else stats.ground_decel
 	else:
 		accel = stats.air_accel if direction != 0.0 else stats.air_decel
-	var target := direction * stats.run_speed * combat.speed_multiplier()
+	var haste := 1.3 if has_power("haste") else 1.0
+	var target := direction * stats.run_speed * combat.speed_multiplier() * haste
 	velocity.x = move_toward(velocity.x, target, accel * delta)
 
 
@@ -431,7 +472,7 @@ func _start_dash(move: Vector2, on_floor: bool) -> void:
 	if not on_floor:
 		_air_dashes_left -= 1
 	_dash_timer = stats.dash_time
-	_dash_cooldown_timer = stats.dash_cooldown
+	_dash_cooldown_timer = stats.dash_cooldown * (0.5 if SaveGame.has_item(hero, "quick_dash") else 1.0)
 	Sound.play("dash")
 	_jump_rising = false
 
@@ -471,6 +512,10 @@ func _update_look(sliding: bool) -> void:
 	elif sliding:
 		color = color.darkened(0.3)
 	_body.color = color
+	_aura.visible = not powers.is_empty()
+	if _aura.visible:
+		var power: String = powers.keys()[0]
+		_aura.color = Color(POWER_COLORS[power], 0.35 + 0.2 * sin(Time.get_ticks_msec() * 0.012))
 	# Blink while invulnerable after a hit.
 	modulate.a = 0.35 if is_invulnerable() and (Time.get_ticks_msec() / 70) % 2 == 0 else 1.0
 	_eye.position = Vector2(facing * (SIZE.x / 2 - 14) - 5, -SIZE.y / 2 + 14)

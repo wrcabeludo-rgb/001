@@ -236,6 +236,9 @@ func _drop_loot() -> void:
 		drops.append([Pickup.Kind.HEALTH, 3])
 	if randf() < ammo_drop_chance:
 		drops.append([Pickup.Kind.AMMO, 5])
+	# A rare temporary power-up, Contra style.
+	if randf() < 0.03:
+		drops.append([Pickup.Kind.POWER, 1])
 	var scrap := randi_range(scrap_min, scrap_max)
 	if scrap > 0:
 		drops.append([Pickup.Kind.SCRAP, scrap])
@@ -243,4 +246,6 @@ func _drop_loot() -> void:
 		var pickup := Pickup.new()
 		var launch := Vector2(randf_range(-160.0, 160.0), randf_range(-520.0, -380.0))
 		pickup.setup(drops[i][0], drops[i][1], global_position, launch)
+		if drops[i][0] == Pickup.Kind.POWER:
+			pickup.power = ["rage", "shield", "haste"].pick_random()
 		parent.add_child.call_deferred(pickup)
