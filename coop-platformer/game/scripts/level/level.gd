@@ -656,11 +656,7 @@ func add_one_way(body: StaticBody2D, cells: Rect2) -> void:
 	collision.one_way_collision = true
 	collision.position = cells.position + Vector2(cells.size.x / 2.0, MovingPlatform.THICKNESS / 2.0)
 	body.add_child(collision)
-	var plank := Harm.box(cells.position, Vector2(cells.size.x, MovingPlatform.THICKNESS), Color(0.5, 0.55, 0.62))
-	if ground_material != null:
-		plank.color = Color.WHITE
-		plank.material = ground_material
-	body.add_child(plank)
+	body.add_child(Harm.plank(cells.position, cells.size.x, Color(0.5, 0.55, 0.62)))
 	body.add_child(Harm.box(cells.position, Vector2(cells.size.x, 3), Color(1, 1, 1, 0.25)))
 
 

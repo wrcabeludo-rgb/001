@@ -48,7 +48,10 @@ func _ready() -> void:
 	collision.position = Vector2(0, THICKNESS / 2.0)
 	collision.one_way_collision = true
 	add_child(collision)
-	add_child(Harm.box(Vector2(-width / 2.0, 0), Vector2(width, THICKNESS), LIFT_COLOR if mode == Mode.LIFT else COLOR))
+	add_child(Harm.plank(Vector2(-width / 2.0, 0), width, COLOR))
+	if mode == Mode.LIFT:
+		# A lift has a yellow warning edge.
+		add_child(Harm.box(Vector2(-width / 2.0, 0), Vector2(width, 5), LIFT_COLOR))
 	if mode == Mode.LIFT:
 		add_child(Harm.box(Vector2(-6, THICKNESS), Vector2(12, 14), Color(0.3, 0.3, 0.35)))
 

@@ -49,3 +49,19 @@ static func box(at: Vector2, size: Vector2, color: Color) -> ColorRect:
 	rect.color = color
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rect
+
+
+const PLATFORM_TEXTURE := "res://assets/art/tiles/platform.png"
+
+
+## The look of a platform plank: the catwalk strip tiled sideways, or a plain bar.
+static func plank(at: Vector2, width: float, fallback: Color) -> Control:
+	if not ResourceLoader.exists(PLATFORM_TEXTURE):
+		return box(at, Vector2(width, 20), fallback)
+	var strip := TextureRect.new()
+	strip.texture = load(PLATFORM_TEXTURE)
+	strip.stretch_mode = TextureRect.STRETCH_TILE
+	strip.position = at
+	strip.size = Vector2(width, strip.texture.get_height())
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return strip

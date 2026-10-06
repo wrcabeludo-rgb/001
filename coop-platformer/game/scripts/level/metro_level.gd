@@ -7,8 +7,8 @@ extends Level
 ## hidden room); an upper service tunnel with debris, spikes and gas flames; a
 ## flooded hall with islands; a collapsing train bridge; the far station exit.
 
-const BG_FAR := preload("res://assets/art/backgrounds/bg_far_world1_01.png")
-const BG_MID := preload("res://assets/art/backgrounds/bg_mid_world1_01.png")
+const BG_FAR := preload("res://assets/art/backgrounds/bg_far_world1_2.png")
+const BG_MID := preload("res://assets/art/backgrounds/bg_mid_world1_2.png")
 
 ## 520 x 30 tiles (legend in Level), written by tools/levels/metro.py.
 const MAP := [
@@ -68,8 +68,7 @@ func _init() -> void:
 	level_title = "Мир 1-2 · Затопленное метро"
 	music_track = "zone_1_2"
 	wall_color = Color(0.3, 0.33, 0.36)
-	# Until the metro's own backgrounds are drawn: the slum layers, colder and darker.
-	backgrounds = [[BG_FAR, 0.1, Color(0.18, 0.22, 0.28)], [BG_MID, 0.3, Color(0.24, 0.28, 0.34)]]
+	backgrounds = [[BG_FAR, 0.1, Color(0.42, 0.42, 0.46)], [BG_MID, 0.3, Color(0.55, 0.55, 0.6)]]
 	wall_texture = load("res://assets/art/tiles/1-2_wall.png")
 	ground_texture = load("res://assets/art/tiles/1-2_ground.png")
 	other_scene = "res://scenes/test_room.tscn"

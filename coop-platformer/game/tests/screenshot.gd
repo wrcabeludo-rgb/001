@@ -30,6 +30,8 @@ func _run_all() -> void:
 	for i in lineup.size():
 		level.spawn_enemy(lineup[i], Vector2(x + 380 + i * 200, floor_y))
 	level.spawn_enemy("f", Vector2(x + 560, floor_y - 320))
+	if OS.get_cmdline_user_args().has("boss"):
+		level.spawn_enemy("B", Vector2(x + 900, floor_y))
 	var hanging := level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))
 	var _keep := [partner, hanging]
 	level.camera.follow([_player, partner], 0.0, true)

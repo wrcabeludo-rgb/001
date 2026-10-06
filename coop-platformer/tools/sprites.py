@@ -13,6 +13,8 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
+from bgtools import make_seamless, white_to_alpha
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "art_source")
 OUT = os.path.join(HERE, "..", "game", "assets", "art")
@@ -77,6 +79,7 @@ ENEMIES = {
     "enemies/flyer.png": ("enemies/enemy_flyer_original.png", 200),
     # The spit stream of the original picture is cut off: in the game it is a projectile.
     "enemies/spitter.png": ("enemies/enemy_spitter_original.png", 200),
+    "enemies/boss.png": ("enemies/boss_sludge_master_original.png", 600),
 }
 
 
@@ -205,7 +208,45 @@ def build_tiles():
         save(img, "tiles/" + file.replace("_original", "").replace("tile_", ""))
 
 
+PLATFORM_HEIGHT = 30
+
+
+def build_platform():
+    """A strip of the catwalk texture: one walkway band, tiled sideways under one-way platforms."""
+    path = os.path.join(SRC, "tiles", "tile_platform_source.png")
+    if not os.path.exists(path):
+        return
+    band = Image.open(path).convert("RGB").crop((0, 100, 1254, 335))
+    factor = PLATFORM_HEIGHT / band.height
+    save(band.resize((round(band.width * factor), PLATFORM_HEIGHT), Image.LANCZOS), "tiles/platform.png")
+
+
+# ---------------------------------------------------------------- backgrounds
+
+BACKGROUNDS = {
+    # output: (source, has a white sky to remove, seam overlap)
+    "backgrounds/bg_far_world1_2.png": ("backgrounds/bg_far_world1_2_original.png", False, 400),
+    "backgrounds/bg_mid_world1_2.png": ("backgrounds/bg_mid_world1_2_original.png", True, 360),
+    "backgrounds/bg_far_world1_3.png": ("backgrounds/bg_far_world1_3_original.png", False, 400),
+    "backgrounds/bg_mid_world1_3.png": ("backgrounds/bg_mid_world1_3_original.png", True, 360),
+}
+
+
+def build_backgrounds():
+    """Parallax layers: white sky made transparent (mid layers), then seamless sideways."""
+    for name, (source, white_sky, overlap) in BACKGROUNDS.items():
+        path = os.path.join(SRC, source)
+        if not os.path.exists(path):
+            continue
+        img = Image.open(path)
+        img = white_to_alpha(img) if white_sky else img.convert("RGBA")
+        img, _ = make_seamless(img, overlap)
+        save(img, name)
+
+
 if __name__ == "__main__":
+    build_platform()
+    build_backgrounds()
     build_enemies()
     build_heroes()
     build_tiles()

@@ -49,6 +49,8 @@ func _init() -> void:
 	ammo_drop_chance = 1.0
 	scrap_min = 12
 	scrap_max = 16
+	art = "boss"
+	art_height = 300.0
 
 
 func _ready() -> void:
@@ -279,6 +281,8 @@ func _update_look() -> void:
 	super._update_look()
 	if is_dazed() and _flash_timer <= 0.0:
 		_body.color = DAZED_COLOR
+		if _sprite != null:
+			Flash.set_flash(_sprite, DAZED_COLOR, 0.45)
 
 
 func _on_died() -> void:
