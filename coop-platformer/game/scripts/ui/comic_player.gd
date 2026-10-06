@@ -1,6 +1,7 @@
 extends Control
 ## Plays a comic: full-screen panels with fades and a caption at the bottom.
-## A panel can ask for a screen shake ("shake": true) — used for the explosion.
+## A panel can ask for a screen shake ("shake": true) — used for the explosion —
+## or for a slow camera move: "zoom": "in" (slowly closer) or "out" (slowly back).
 ## Jump / attack on any device shows the next panel, Start skips the whole comic.
 
 signal finished
@@ -11,8 +12,11 @@ const SHAKE_STRENGTH := 18.0
 const SHAKE_TIME := 1.6
 ## Shaking panels are drawn slightly larger so the edges never show.
 const SHAKE_OVERSCAN := 1.04
+## How much closer a slow zoom gets over the whole panel.
+const ZOOM_AMOUNT := 0.15
 
-## Each entry: {"image": Texture2D, "caption": String, "shake": bool (optional)}
+## Each entry: {"image": Texture2D, "caption": String,
+##   "shake": bool (optional), "zoom": "in" / "out" (optional)}
 var panels: Array = []
 ## Scene to open when the comic ends; empty means only emit `finished`.
 var next_scene := ""
@@ -98,6 +102,14 @@ func _process(delta: float) -> void:
 	_fade.color.a = alpha
 
 	_image.position = Vector2.ZERO
+	var progress := clampf(_time / total, 0.0, 1.0)
+	# Ease in and out so the move starts and stops gently.
+	var eased := progress * progress * (3.0 - 2.0 * progress)
+	match panels[_index].get("zoom", ""):
+		"in":
+			_image.scale = Vector2.ONE * (1.0 + ZOOM_AMOUNT * eased)
+		"out":
+			_image.scale = Vector2.ONE * (1.0 + ZOOM_AMOUNT * (1.0 - eased))
 	if panels[_index].get("shake", false) and _time < SHAKE_TIME:
 		var strength := SHAKE_STRENGTH * pow(1.0 - _time / SHAKE_TIME, 2.0)
 		_image.position = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * strength

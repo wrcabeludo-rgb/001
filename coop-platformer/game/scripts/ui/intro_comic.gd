@@ -6,6 +6,7 @@ func _init() -> void:
 	panels = [
 		{
 			"image": preload("res://assets/art/comics/intro_01.png"),
+			"zoom": "in",
 			"caption": "Двадцать лет назад «Люмен» зажёг «Сердце». Город сиял ярче звёзд.",
 		},
 		{
@@ -15,6 +16,7 @@ func _init() -> void:
 		},
 		{
 			"image": preload("res://assets/art/comics/intro_03.png"),
+			"zoom": "out",
 			"caption": "Город сгорел. Но свет не погас. И вместе со светом пришла жижа.",
 		},
 		{

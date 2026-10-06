@@ -99,14 +99,18 @@ func _build_background() -> void:
 	for layer_info in [[BG_FAR, 0.1, Color(0.45, 0.45, 0.55)], [BG_MID, 0.3, Color(0.6, 0.6, 0.68)]]:
 		var texture: Texture2D = layer_info[0]
 		var factor := 1080.0 / texture.get_height() * 1.06
+		var width := texture.get_width() * factor
+		# The picture is narrower than the screen, and a layer repeats only its
+		# own width: two copies side by side keep the screen covered at any scroll.
 		var layer := ParallaxLayer.new()
 		layer.motion_scale = Vector2(layer_info[1], 0.0)
-		layer.motion_mirroring = Vector2(texture.get_width() * factor, 0)
+		layer.motion_mirroring = Vector2(width * 2.0, 0)
 		parallax.add_child(layer)
-		var sprite := Sprite2D.new()
-		sprite.texture = texture
-		sprite.centered = false
-		sprite.scale = Vector2(factor, factor)
-		sprite.position = Vector2(0, -30)
-		sprite.modulate = layer_info[2]
-		layer.add_child(sprite)
+		for copy in 2:
+			var sprite := Sprite2D.new()
+			sprite.texture = texture
+			sprite.centered = false
+			sprite.scale = Vector2(factor, factor)
+			sprite.position = Vector2(width * copy, -30)
+			sprite.modulate = layer_info[2]
+			layer.add_child(sprite)
