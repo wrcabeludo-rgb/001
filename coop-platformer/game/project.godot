@@ -12,12 +12,13 @@ config_version=5
 
 config/name="Неон и пепел"
 config/description="Кооперативный платформер: стрелок и мечник"
-run/main_scene="res://scenes/intro_comic.tscn"
+run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 
 [autoload]
 
 PlayerManager="*res://scripts/core/player_manager.gd"
+GameSettings="*res://scripts/core/game_settings.gd"
 
 [display]
 

@@ -20,6 +20,8 @@ extends Node2D
 ##   'v' falling debris (under a ceiling)   'F' flamethrower on a wall
 ##   'b' explosive barrel   'k' cover   'd' door (down to the floor) + '/' lever
 ##   '[' ... ']' arena gates; the waves come from get_arena_waves()
+##   '+' health kit, 'p' ammo lying on the floor   'E' level exit
+## Bosses only appear in arena waves: 'B' the Sludge Master.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -39,6 +41,15 @@ var other_scene := ""
 ## While the game is being tested, down + extra switches heroes on any level
 ## (with two players, they trade heroes). Turn off for the release.
 var allow_hero_swap := true
+## Shown when the level starts and on the results screen.
+var level_title := ""
+## Scene opened after the results screen.
+var next_scene := "res://scenes/title.tscn"
+## Seconds since the level started (stops at the exit).
+var elapsed := 0.0
+## How many times the hero of each slot fell.
+var deaths := {}
+var completed := false
 
 ## Hero of each joined slot.
 var players := {}
@@ -54,6 +65,7 @@ var _respawn_timers := {}
 var _team_respawn_timer := -1.0
 var _huds: Array[HeroHud] = []
 var _toast: Label
+var _boss_bar: BossBar
 var _toast_time := 0.0
 
 
@@ -63,7 +75,7 @@ func get_map() -> Array:
 
 
 ## Overridden by levels with arenas: the waves of arena number `index`
-## (counted left to right, top to bottom). Each wave is an Array of
+## (in map reading order: row by row, left to right). Each wave is an Array of
 ## [enemy letter, column, row] — the enemy stands on the bottom of that cell.
 func get_arena_waves(_index: int) -> Array:
 	return []
@@ -91,6 +103,8 @@ func _ready() -> void:
 		if PlayerManager.players[slot] != null:
 			_on_player_joined(slot)
 	snap_camera()
+	if level_title != "":
+		show_toast(level_title, 4.0)
 
 
 func level_rect() -> Rect2:
@@ -146,8 +160,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if not completed:
+		elapsed += delta
 	for slot in PlayerManager.MAX_PLAYERS:
 		_huds[slot].show_player(players.get(slot), respawn_time_left(slot))
+	_boss_bar.refresh()
 	_toast_time -= delta
 	_toast.modulate.a = clampf(_toast_time, 0.0, 1.0)
 
@@ -198,6 +215,7 @@ func _check_hero_swap() -> void:
 
 func _on_player_died(player: Player) -> void:
 	player.set_active(false)
+	deaths[player.slot] = deaths.get(player.slot, 0) + 1
 	_respawn_timers[player.slot] = RESPAWN_DELAY
 	if alive_players().is_empty():
 		_team_respawn_timer = TEAM_RESPAWN_DELAY
@@ -259,7 +277,7 @@ func _check_falls() -> void:
 ## Removes all enemies and loot and puts every enemy from the map back in place.
 func reset_enemies() -> void:
 	for node in get_tree().get_nodes_in_group("enemies") + get_tree().get_nodes_in_group("pickups"):
-		if is_ancestor_of(node):
+		if is_ancestor_of(node) and not (node is Pickup and node.permanent):
 			node.queue_free()
 	for spot in _enemy_spots:
 		spawn_enemy(spot[0], spot[1])
@@ -291,6 +309,7 @@ func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 		"h": enemy = Heavy.new()
 		"c": enemy = Charger.new()
 		"a": enemy = Ambusher.new()
+		"B": enemy = SludgeBoss.new()
 		_: return null
 	var half_height := enemy.body_size.y / 2.0
 	match letter:
@@ -318,9 +337,29 @@ func _on_checkpoint_reached(checkpoint: Checkpoint) -> void:
 	show_toast("Контрольная точка")
 
 
-func show_toast(text: String) -> void:
+## The team reached the exit: freeze the heroes and show the results.
+func complete_level() -> void:
+	if completed:
+		return
+	completed = true
+	for player in players.values():
+		player.set_physics_process(false)
+		player.velocity = Vector2.ZERO
+	var lines := PackedStringArray()
+	lines.append("Время: %d:%02d" % [int(elapsed) / 60, int(elapsed) % 60])
+	lines.append("Сложность: %s" % GameSettings.NAMES[GameSettings.difficulty])
+	for slot in players:
+		var player: Player = players[slot]
+		lines.append("P%d %s — лом: %d, падений: %d" % [slot + 1, Heroes.NAMES[player.hero], player.scrap, deaths.get(slot, 0)])
+	var panel := ResultsPanel.new()
+	hud.add_child(panel)
+	panel.setup("Уровень пройден!", lines)
+	panel.closed.connect(func() -> void: get_tree().change_scene_to_file(next_scene))
+
+
+func show_toast(text: String, seconds := 2.0) -> void:
 	_toast.text = text
-	_toast_time = 2.0
+	_toast_time = seconds
 
 
 func _build_level() -> void:
@@ -353,6 +392,17 @@ func _build_level() -> void:
 					if spawn_targets:
 						_enemy_spots.append([cell, floor_point])
 						spawn_enemy(cell, floor_point)
+				"+", "p":
+					var item := Pickup.new()
+					var kind := Pickup.Kind.HEALTH if cell == "+" else Pickup.Kind.AMMO
+					item.setup(kind, 3 if cell == "+" else 10, floor_point - Vector2(0, Pickup.SIZE.y / 2.0 + 2.0), Vector2.ZERO)
+					item.permanent = true
+					add_child(item)
+				"E":
+					var exit := LevelExit.new()
+					exit.position = floor_point
+					add_child(exit)
+					exit.reached.connect(complete_level)
 			if cell != "#":
 				col += 1
 				continue
@@ -564,3 +614,5 @@ func _build_hud() -> void:
 	_toast.add_theme_color_override("font_color", Checkpoint.ON_COLOR)
 	_toast.modulate.a = 0.0
 	hud.add_child(_toast)
+	_boss_bar = BossBar.new()
+	hud.add_child(_boss_bar)

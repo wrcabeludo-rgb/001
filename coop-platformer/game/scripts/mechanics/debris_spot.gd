@@ -13,7 +13,7 @@ const GRAVITY := 2200.0
 @export var trigger_width := 80.0
 @export var warning_time := 0.6
 @export var reform_time := 2.5
-@export var damage := 3
+@export var damage := 2
 @export var knockback := Vector2(320, -380)
 
 var state := State.READY

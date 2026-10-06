@@ -18,6 +18,8 @@ const LOOKS := {
 var kind: Kind = Kind.SCRAP
 var amount := 1
 var velocity := Vector2.ZERO
+## Placed on the map by the level designer: never blinks out.
+var permanent := false
 
 var _age := 0.0
 var _landed := false
@@ -58,7 +60,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_age += delta
+	if not permanent:
+		_age += delta
 	if _age > LIFETIME:
 		queue_free()
 		return

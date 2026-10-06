@@ -76,7 +76,7 @@ func _ready() -> void:
 
 	health = Health.new()
 	add_child(health)
-	health.reset(max_health)
+	health.reset(GameSettings.enemy_health(max_health))
 	health.died.connect(_on_died)
 
 	_hurtbox = Hurtbox.new()
@@ -228,7 +228,7 @@ func _drop_loot() -> void:
 	if parent == null:
 		return
 	var drops: Array = []
-	if randf() < health_drop_chance:
+	if randf() < GameSettings.health_drop_chance(health_drop_chance):
 		drops.append([Pickup.Kind.HEALTH, 3])
 	if randf() < ammo_drop_chance:
 		drops.append([Pickup.Kind.AMMO, 5])

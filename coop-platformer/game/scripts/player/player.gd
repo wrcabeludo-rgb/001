@@ -111,6 +111,7 @@ func receive_hit(hit: Hit) -> bool:
 	# The Swordsman's dash passes through enemies and their attacks.
 	if is_invulnerable() or is_dashing() or health.is_dead():
 		return false
+	hit.damage = GameSettings.damage_to_heroes(hit.damage)
 	hit = combat.modify_hit(hit)
 	health.damage(hit.damage)
 	velocity = hit.knockback
