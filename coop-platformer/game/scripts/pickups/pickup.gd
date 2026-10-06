@@ -71,6 +71,7 @@ func _physics_process(delta: float) -> void:
 	for body in get_overlapping_bodies():
 		var hero := body as Player
 		if hero != null and hero.is_alive() and _give_to(hero):
+			Sound.play(["pickup_health", "pickup_ammo", "pickup_scrap"][kind], 0.0)
 			queue_free()
 			return
 

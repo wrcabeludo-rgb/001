@@ -104,6 +104,8 @@ func receive_hit(hit: Hit) -> bool:
 		return false
 	health.damage(hit.damage)
 	_flash_timer = 0.1
+	if is_alive():
+		Sound.play("hit")
 	if not super_armor and is_alive():
 		velocity = hit.knockback * (1.0 - knockback_resistance)
 		stun_timer = hit_stun
@@ -118,6 +120,7 @@ func is_telegraphing() -> bool:
 ## Starts the warning before an attack: the enemy blinks and shows "!".
 func telegraph(duration: float) -> void:
 	_telegraph_timer = duration
+	Sound.play("telegraph", 0.0)
 
 
 func _physics_process(delta: float) -> void:
@@ -218,6 +221,7 @@ func _update_look() -> void:
 
 
 func _on_died() -> void:
+	Sound.play("enemy_die")
 	_drop_loot()
 	died.emit(self)
 	queue_free()

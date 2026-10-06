@@ -55,6 +55,7 @@ func _ready() -> void:
 	super._ready()
 	add_to_group("bosses")
 	super_armor = true
+	Sound.music("boss")
 	var heroes := 0
 	for node in get_tree().get_nodes_in_group("players"):
 		if node is Player and node.is_alive():
@@ -152,6 +153,7 @@ func _enter_phase(new_phase: int) -> void:
 	state = State.ROAR
 	_timer = 1.2
 	telegraph(1.2)
+	Sound.play("boss_roar", 0.0)
 	get_tree().call_group("cameras", "shake", 10.0)
 	if phase == 2:
 		_summon_walkers()
@@ -197,6 +199,7 @@ func feet() -> Vector2:
 
 func _slam() -> void:
 	get_tree().call_group("cameras", "shake", 12.0)
+	Sound.play("boss_slam")
 	var speed := 520.0 if phase < 3 else 650.0
 	for side in [-1, 1]:
 		var wave := BossAttacks.Shockwave.new()
@@ -212,6 +215,7 @@ func _spit() -> void:
 	var hero := nearest_hero(4000.0)
 	if hero == null:
 		return
+	Sound.play("boss_spit")
 	var count := 3 if phase < 3 else 5
 	var start := global_position + Vector2(facing * body_size.x * 0.3, -body_size.y * 0.35)
 	var flight_time := 0.9
@@ -282,4 +286,7 @@ func _on_died() -> void:
 		if is_instance_valid(minion) and not minion.is_queued_for_deletion() and minion.is_alive():
 			minion.health.damage(minion.health.current)
 	get_tree().call_group("cameras", "shake", 20.0)
+	var level := get_parent() as Level
+	if level != null and level.music_track != "":
+		Sound.music(level.music_track)
 	super._on_died()

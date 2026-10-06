@@ -87,6 +87,7 @@ func explode() -> void:
 		var push := Vector2(signf(away.x) if away.x != 0.0 else 1.0, 0.0) * blast_knockback + Vector2(0, -420)
 		hurtbox.take_hit(Hit.make(damage, push, global_position))
 	_show_blast()
+	Sound.play("explosion")
 	get_tree().call_group("cameras", "shake", 16.0)
 
 

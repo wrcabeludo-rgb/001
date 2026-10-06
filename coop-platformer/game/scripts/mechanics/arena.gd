@@ -93,6 +93,7 @@ func reset() -> void:
 func _start(hero: Player) -> void:
 	state = State.FIGHT
 	wave = -1
+	Sound.play("arena", 0.0)
 	for gate in _gates:
 		gate.close()
 	for other in _heroes():

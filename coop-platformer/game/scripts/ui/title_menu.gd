@@ -67,6 +67,7 @@ func _ready() -> void:
 	add_child(help)
 
 	_show_page(Page.MAIN)
+	Sound.music("menu")
 
 
 ## Menu entries of the current page: [text, Callable].
@@ -128,6 +129,7 @@ func _on_item_input(event: InputEvent, index: int) -> void:
 	var click := event as InputEventMouseButton
 	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 		_select(index)
+		Sound.play("menu_select", 0.0)
 		_activate()
 
 
@@ -144,7 +146,9 @@ func _physics_process(_delta: float) -> void:
 		back = back or device.just_pressed("skill")
 	if move != 0:
 		_select(selected + move)
+		Sound.play("menu_move", 0.0)
 	elif confirm:
+		Sound.play("menu_select", 0.0)
 		_activate()
 	elif back and page == Page.DIFFICULTY:
 		_show_page(Page.MAIN)

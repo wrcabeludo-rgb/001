@@ -57,5 +57,7 @@ func _set_open(value: bool) -> void:
 		return
 	is_open = value
 	_collision.set_deferred("disabled", value)
+	if is_inside_tree():
+		Sound.play("door")
 	var tween := create_tween()
 	tween.tween_property(_look, "scale:y", 0.0 if value else 1.0, SLIDE_TIME)

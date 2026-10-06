@@ -49,6 +49,8 @@ func _physics_process(delta: float) -> void:
 				_timer += warning_time
 			State.WARNING:
 				state = State.ON
+				if _hero_near():
+					Sound.play("laser")
 				_timer += on_time
 			State.ON:
 				state = State.OFF
@@ -59,6 +61,14 @@ func _physics_process(delta: float) -> void:
 	for hurtbox in Harm.hurtboxes_in_rect(get_world_2d(), rect, Harm.HEROES):
 		var side := 1.0 if hurtbox.global_position.x >= rect.get_center().x else -1.0
 		hurtbox.take_hit(Hit.make(damage, Vector2(side * knockback.x, knockback.y), hurtbox.global_position))
+
+
+## Only lasers on screen make noise (roughly: a hero within a screen's width).
+func _hero_near() -> bool:
+	for node in get_tree().get_nodes_in_group("players"):
+		if node is Player and node.is_alive() and absf(node.global_position.x - rect.get_center().x) < 1100.0:
+			return true
+	return false
 
 
 func _update_look() -> void:

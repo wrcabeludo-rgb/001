@@ -78,6 +78,7 @@ func _swing() -> void:
 	_swing_timer = stats.swing_time
 	if player.input.is_held("up"):
 		_up_slash.activate(stats.swing_time, stats.up_slash_damage, Vector2(0, -stats.slash_knockback), 1)
+		Sound.play("slash")
 		return
 	if _combo_timer <= 0.0:
 		_step = 0
@@ -85,6 +86,7 @@ func _swing() -> void:
 	var finisher := _step == 2
 	var push := Vector2(stats.finisher_knockback, -320) if finisher else Vector2(stats.slash_knockback, -150)
 	_slash.activate(stats.swing_time, damages[_step], push, player.facing)
+	Sound.play("slash_heavy" if finisher else "slash")
 	_step = (_step + 1) % 3
 	_combo_timer = stats.swing_time + stats.combo_window
 

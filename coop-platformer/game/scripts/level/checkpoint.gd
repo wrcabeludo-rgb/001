@@ -53,4 +53,5 @@ func respawn_point(slot: int) -> Vector2:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body is Player and not active:
+		Sound.play("checkpoint", 0.0)
 		reached.emit(self)

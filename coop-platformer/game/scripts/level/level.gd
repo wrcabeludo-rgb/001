@@ -43,6 +43,8 @@ var other_scene := ""
 var allow_hero_swap := true
 ## Shown when the level starts and on the results screen.
 var level_title := ""
+## Music loop of this level (empty = silence).
+var music_track := ""
 ## Scene opened after the results screen.
 var next_scene := "res://scenes/title.tscn"
 ## Seconds since the level started (stops at the exit).
@@ -105,6 +107,10 @@ func _ready() -> void:
 	snap_camera()
 	if level_title != "":
 		show_toast(level_title, 4.0)
+	if music_track != "":
+		Sound.music(music_track)
+	else:
+		Sound.stop_music()
 
 
 func level_rect() -> Rect2:
@@ -342,6 +348,8 @@ func complete_level() -> void:
 	if completed:
 		return
 	completed = true
+	Sound.stop_music()
+	Sound.play("level_complete", 0.0)
 	for player in players.values():
 		player.set_physics_process(false)
 		player.velocity = Vector2.ZERO

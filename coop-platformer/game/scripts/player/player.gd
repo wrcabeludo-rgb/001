@@ -114,6 +114,7 @@ func receive_hit(hit: Hit) -> bool:
 	hit.damage = GameSettings.damage_to_heroes(hit.damage)
 	hit = combat.modify_hit(hit)
 	health.damage(hit.damage)
+	Sound.play("block" if hit.blocked else ("death" if health.is_dead() else "hurt"))
 	velocity = hit.knockback
 	_dash_timer = 0.0
 	_jump_rising = false
@@ -241,9 +242,12 @@ func _physics_process(delta: float) -> void:
 	if velocity.y >= 0.0:
 		_jump_rising = false
 
+	var falling_speed := velocity.y
 	move_and_slide()
 	if is_on_floor():
 		last_safe_position = global_position
+		if not on_floor and falling_speed > 500.0:
+			Sound.play("land")
 	combat.update(delta)
 	_update_look(sliding)
 
@@ -319,14 +323,17 @@ func _try_jump(on_floor: bool) -> void:
 		return
 	if on_floor or _coyote_timer > 0.0:
 		_jump(stats.velocity_for_height(stats.jump_height))
+		Sound.play("jump")
 	elif stats.wall_jump_enabled and _wall_coyote_timer > 0.0:
 		_jump(stats.velocity_for_height(stats.wall_jump_height))
+		Sound.play("jump")
 		velocity.x = -_last_wall_dir * stats.wall_jump_speed_x
 		facing = -_last_wall_dir
 		_wall_jump_lock_timer = stats.wall_jump_lock_time
 	elif _air_jumps_left > 0:
 		_air_jumps_left -= 1
 		_jump(stats.velocity_for_height(stats.air_jump_height))
+		Sound.play("double_jump")
 
 
 func _jump(vertical_velocity: float) -> void:
@@ -425,6 +432,7 @@ func _start_dash(move: Vector2, on_floor: bool) -> void:
 		_air_dashes_left -= 1
 	_dash_timer = stats.dash_time
 	_dash_cooldown_timer = stats.dash_cooldown
+	Sound.play("dash")
 	_jump_rising = false
 
 

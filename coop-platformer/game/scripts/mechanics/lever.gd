@@ -35,6 +35,7 @@ func receive_hit(_hit: Hit) -> bool:
 
 func pull() -> void:
 	is_pulled = true
+	Sound.play("lever")
 	_handle.color = ON_COLOR
 	_handle.rotation = 0.5
 	if door != null:

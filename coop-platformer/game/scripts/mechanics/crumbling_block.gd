@@ -42,6 +42,7 @@ func _physics_process(delta: float) -> void:
 		State.SOLID:
 			if _hero_on_top():
 				state = State.SHAKING
+				Sound.play("crumble")
 				_timer = shake_time
 		State.SHAKING:
 			_timer -= delta

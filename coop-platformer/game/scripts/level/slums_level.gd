@@ -70,6 +70,7 @@ const SIGNS := [
 
 func _init() -> void:
 	level_title = "Мир 1-1 · Трущобы"
+	music_track = "zone_1_1"
 	other_scene = "res://scenes/test_room.tscn"
 
 

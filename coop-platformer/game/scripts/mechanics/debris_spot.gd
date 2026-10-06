@@ -84,6 +84,7 @@ func _fall(delta: float) -> void:
 
 func _break() -> void:
 	state = State.REFORMING
+	Sound.play("crumble")
 	_timer = reform_time
 	_rock.visible = false
 	var dust := Harm.box(rock_rect().position - global_position - Vector2(10, 0), ROCK_SIZE + Vector2(20, 0), Color(0.6, 0.55, 0.5, 0.7))

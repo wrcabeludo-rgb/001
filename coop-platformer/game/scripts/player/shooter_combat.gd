@@ -38,18 +38,24 @@ func update(delta: float) -> void:
 	if input.just_pressed("attack") and _fire_cooldown <= 0.0:
 		_fire_cooldown = stats.fire_cooldown
 		_shoot(stats.shot_damage, stats.shot_knockback, Vector2(18, 8), SHOT_COLOR, 0)
+		Sound.play("shoot")
 	if input.is_held("attack"):
+		var was_charged := is_charged()
 		_charge += delta
+		if is_charged() and not was_charged:
+			Sound.play("charge_ready", 0.0)
 	if input.just_released("attack"):
 		if is_charged():
 			ammo -= stats.charged_cost
 			_shoot(stats.charged_damage, stats.charged_knockback, Vector2(46, 22), CHARGED_COLOR,
 				stats.charged_pierce)
+			Sound.play("shoot_charged")
 		_charge = 0.0
 
 	if input.just_pressed("skill") and _kick_cooldown <= 0.0:
 		_kick_cooldown = stats.kick_cooldown
 		_kick.activate(0.12, stats.kick_damage, Vector2(stats.kick_knockback, -320), player.facing)
+		Sound.play("kick")
 
 
 func is_charged() -> bool:
