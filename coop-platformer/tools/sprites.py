@@ -268,6 +268,10 @@ POSE_SOURCES = {
     "swordsman_slash_finisher": [("swordsman_finisher_a", None), ("swordsman_finisher_b", None)],
     "swordsman_slash_overhead": [("swordsman_slash_overhead", None)],
     "swordsman_wall": [("swordsman_wall", (0, 0, 874, 1536))],
+    "swordsman_jump": [("swordsman_jump", None)],
+    "swordsman_fall": [("swordsman_fall", None)],
+    # A long low lunge drawn on a wide canvas: its own scale (height compared with standing).
+    "swordsman_dash": [("swordsman_dash", None, 0.72)],
     # Back view with a hand raised above the head.
     "swordsman_climb": [("swordsman_climb", (0, 0, 724, 1086), 1.12), ("swordsman_climb", (724, 0, 1448, 1086), 1.12)],
 }
@@ -318,8 +322,9 @@ def _sheet_frames(name):
     """The figures of a sheet drawn in a row. Overlapping figures (a cape over
     the next one's boots) are told apart by connected pieces of drawing: each
     piece goes to the figure whose slot holds its middle."""
+    # Small gaps (between a blade and a leg) are background too.
     img = remove_background(Image.open(os.path.join(SRC, "heroes/poses/originals", name + "_original.png")),
-                            holes=400)
+                            holes=60)
     alpha = np.asarray(img)[:, :, 3]
     marks = Image.fromarray(np.where(alpha > 0, 255, 0).astype(np.uint8)).copy()
     owner = np.full(alpha.shape, -1, np.int8)
@@ -371,7 +376,7 @@ def build_poses():
                 width = alpha.shape[1]
                 if pose == "wall":
                     anchor = (width - WALL_GAP) / width
-                elif pose == "run":
+                elif pose in ("run", "jump", "fall", "dash"):
                     # Steady between frames: the middle of the body, not a foot.
                     torso = alpha[int(alpha.shape[0] * 0.35):int(alpha.shape[0] * 0.6)]
                     anchor = np.nonzero(torso > 128)[1].mean() / width
