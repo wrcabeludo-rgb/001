@@ -79,7 +79,9 @@ white background, nothing cropped, no motion lines, no effects. Pose: ...
 Если ChatGPT всё равно рисует лестницу, допиши: `If you draw a ladder, make it pure flat bright green (#00FF00).`
 Стену в позе у стены рисовать можно (справа) — её я отрезаю.
 
-Готово: `gunner_crouch_1`, `gunner_kick_1`, `gunner_wall_1`.
+Готово: стрелок — присед, пинок, стена; мечник — присед, блок, три удара серии (добивающий из двух кадров),
+стена (удар вверх пока использует рисунок восходящего удара).
+Ещё нужно: `gunner_climb_1/2`, `swordsman_climb_1/2` (без лестницы!) и, по желанию, `swordsman_slash_overhead_1`.
 
 ---
 

@@ -242,21 +242,30 @@ def build_tiles():
 
 # ---------------------------------------------------------------- hero poses
 
-# A pose drawing's height compared with the standing hero (the drawings are
-# scaled so the hero keeps the same size in every pose).
-POSE_HEIGHT = {
-    "crouch": 0.72, "wall": 1.0, "climb": 1.05, "block": 0.95, "kick": 1.0,
-    "slash_down": 1.0, "slash_rising": 1.05, "slash_finisher": 0.95, "slash_overhead": 1.15,
+# The drawings come from ChatGPT at about the same scale, so each hero gets one
+# scale for all poses, measured on one figure: (picture, box, its height compared
+# with the standing hero).
+POSE_REFERENCE = {
+    "gunner": ("gunner_kick", None, 1.0),
+    "swordsman": ("swordsman_block", None, 0.95),
 }
 
-
-# Where each pose comes from: art_source/heroes/poses/originals/<hero>_<pose>_original.png,
-# cut into frames by boxes (None = the whole picture). The wall pose has the wall
-# drawn on the right: the box stops just before it.
+# Where each pose's frames come from: (picture in art_source/heroes/poses/originals
+# without "_original.png", box or None for the whole picture). The wall poses have
+# the wall drawn on the right: the box stops just before it. A picture with two
+# figures is drawn smaller: a third item, the box of an upright figure in the same
+# picture, gives its own scale.
 POSE_SOURCES = {
-    "gunner_crouch": [None],
-    "gunner_kick": [None],
-    "gunner_wall": [(0, 0, 926, 1536)],
+    "gunner_crouch": [("gunner_crouch", None)],
+    "gunner_kick": [("gunner_kick", None)],
+    "gunner_wall": [("gunner_wall", (0, 0, 926, 1536))],
+    "swordsman_crouch": [("swordsman_crouch", (0, 880, 1024, 1536), (0, 0, 1024, 875))],
+    "swordsman_block": [("swordsman_block", None)],
+    "swordsman_slash_down": [("swordsman_slash_down", None)],
+    "swordsman_slash_rising": [("swordsman_slash_rising", None)],
+    "swordsman_slash_finisher": [("swordsman_finisher_a", None), ("swordsman_finisher_b", None)],
+    "swordsman_slash_overhead": [("swordsman_slash_rising", None)],
+    "swordsman_wall": [("swordsman_wall", (0, 0, 874, 1536))],
 }
 # How far the wall is from the hero's middle in the wall pose (art pixels).
 WALL_GAP = 48
@@ -271,36 +280,54 @@ def _green_to_white(img):
     return Image.fromarray(rgb)
 
 
+def _pose_cutout(name, box):
+    """One figure from an original: background, a drawn green prop and stray specks removed, cropped."""
+    path = os.path.join(SRC, "heroes/poses/originals", name + "_original.png")
+    if not os.path.exists(path):
+        return None
+    img = Image.open(path)
+    if box:
+        img = img.crop(box)
+    img = remove_background(_green_to_white(img), holes=400)
+    alpha = np.asarray(img)[:, :, 3]
+    keep = _big_regions(alpha > 0, 3000)
+    img.putalpha(Image.fromarray(np.where(keep, alpha, 0).astype(np.uint8)))
+    img, _ = crop(img)
+    return img
+
+
 def build_poses():
-    """Action poses -> <hero>_pose_<pose>_<n>.png and poses.json, where the feet
-    are across each picture (0..1), so the game stands the drawing on the hero's
-    spot. Stray specks (dust, debris) are dropped."""
-    folder = os.path.join(SRC, "heroes/poses/originals")
+    """Action poses -> <hero>_pose_<pose>_<n>.png and poses.json: for each frame,
+    where the feet are across the picture (0..1), so the game stands the drawing
+    on the hero's spot (the wall pose: against the wall)."""
     anchors = {}
-    for key, boxes in POSE_SOURCES.items():
-        path = os.path.join(folder, key + "_original.png")
-        if not os.path.exists(path):
+    for hero, (name, box, share) in POSE_REFERENCE.items():
+        reference = _pose_cutout(name, box)
+        if reference is None:
             continue
-        hero, pose = key.split("_", 1)
-        for n, box in enumerate(boxes, 1):
-            img = Image.open(path)
-            if box:
-                img = img.crop(box)
-            img = _green_to_white(img)
-            img = remove_background(img, holes=400)
-            alpha = np.asarray(img)[:, :, 3]
-            keep = _big_regions(alpha > 0, 3000)
-            img.putalpha(Image.fromarray(np.where(keep, alpha, 0).astype(np.uint8)))
-            img, _ = crop(img)
-            img, _ = scaled(img, round(HEROES[hero]["height"] * POSE_HEIGHT[pose]))
-            alpha = np.asarray(img)[:, :, 3]
-            width = alpha.shape[1]
-            if pose == "wall":
-                anchors[key] = round((width - WALL_GAP) / width, 3)
-            else:
-                feet = np.nonzero(alpha[int(alpha.shape[0] * 0.92):].max(axis=0) > 128)[0]
-                anchors[key] = round(float(feet.mean()) / width, 3) if len(feet) else 0.5
-            save(img, "heroes/%s_pose_%s_%d.png" % (hero, pose, n))
+        hero_factor = HEROES[hero]["height"] * share / reference.size[1]
+        for key, frames in POSE_SOURCES.items():
+            if not key.startswith(hero + "_"):
+                continue
+            pose = key[len(hero) + 1:]
+            for n, (source, frame_box, *upright) in enumerate(frames, 1):
+                img = _pose_cutout(source, frame_box)
+                if img is None:
+                    continue
+                factor = hero_factor
+                if upright:
+                    factor = HEROES[hero]["height"] / _pose_cutout(source, upright[0]).size[1]
+                img = img.resize((max(1, round(img.size[0] * factor)), max(1, round(img.size[1] * factor))),
+                                 Image.LANCZOS)
+                alpha = np.asarray(img)[:, :, 3]
+                width = alpha.shape[1]
+                if pose == "wall":
+                    anchor = (width - WALL_GAP) / width
+                else:
+                    soles = np.nonzero(alpha[int(alpha.shape[0] * 0.86):].max(axis=0) > 128)[0]
+                    anchor = (soles.min() + soles.max()) / 2.0 / width if len(soles) else 0.5
+                anchors["%s_%d" % (key, n)] = round(float(anchor), 3)
+                save(img, "heroes/%s_pose_%s_%d.png" % (hero, pose, n))
     with open(os.path.join(OUT, "heroes/poses.json"), "w") as f:
         json.dump(anchors, f, indent=1)
 

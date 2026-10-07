@@ -48,7 +48,7 @@ var _squash := 1.0
 var _action := ""
 var _action_length := 0.0
 var _action_time := 0.0
-## Drawn poses: name -> [textures], and where the feet are in each (0..1 across).
+## Drawn poses: name -> [textures], and where the feet are in each frame (0..1 across).
 var _pose_art := {}
 var _pose_anchor := {}
 var _pose_sprite: Sprite2D
@@ -110,8 +110,11 @@ func _load_poses() -> void:
 			frames.append(load(path))
 		if not frames.is_empty():
 			_pose_art[pose_name] = frames
-			var key: String = art_name + "_" + pose_name
-			_pose_anchor[pose_name] = anchors.get(key, 0.5) if anchors is Dictionary else 0.5
+			var feet: Array[float] = []
+			for n in frames.size():
+				var key := "%s_%s_%d" % [art_name, pose_name, n + 1]
+				feet.append(float(anchors.get(key, 0.5)) if anchors is Dictionary else 0.5)
+			_pose_anchor[pose_name] = feet
 	_pose_sprite = Sprite2D.new()
 	_pose_sprite.centered = false
 	_pose_sprite.material = Flash.material()
@@ -299,13 +302,15 @@ func _show_drawing(pose_name: String) -> bool:
 	var index := 0
 	if pose_name == "climb":
 		index = int(_phase / PI) % frames.size()
-	elif _acting():
-		index = mini(int(_action_time / _action_length * frames.size()), frames.size() - 1)
+	elif _acting() and frames.size() > 1:
+		# The first frame is the windup, a short third of the action; the rest is the strike.
+		var t := _action_time / _action_length
+		index = 0 if t < 0.35 else mini(1 + int((t - 0.35) / 0.65 * (frames.size() - 1)), frames.size() - 1)
 	else:
 		index = int(_clock * 8.0) % frames.size()
 	var texture: Texture2D = frames[index]
 	_pose_sprite.texture = texture
-	_pose_sprite.offset = Vector2(-texture.get_width() * float(_pose_anchor[pose_name]), -texture.get_height())
+	_pose_sprite.offset = Vector2(-texture.get_width() * float(_pose_anchor[pose_name][index]), -texture.get_height())
 	return true
 
 

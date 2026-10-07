@@ -1,5 +1,13 @@
 {
- "gunner_crouch": 0.385,
- "gunner_kick": 0.356,
- "gunner_wall": 0.733
+ "gunner_crouch_1": 0.394,
+ "gunner_kick_1": 0.257,
+ "gunner_wall_1": 0.719,
+ "swordsman_crouch_1": 0.396,
+ "swordsman_block_1": 0.497,
+ "swordsman_slash_down_1": 0.497,
+ "swordsman_slash_rising_1": 0.497,
+ "swordsman_slash_finisher_1": 0.535,
+ "swordsman_slash_finisher_2": 0.497,
+ "swordsman_slash_overhead_1": 0.497,
+ "swordsman_wall_1": 0.69
 }
