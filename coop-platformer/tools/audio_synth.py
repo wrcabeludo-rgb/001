@@ -1,13 +1,16 @@
-"""Synthesizes all sound effects and music loops of the game (no samples, no
-licences to worry about). Re-run after changing anything here:
+"""Synthesizes the game's sound effects (no samples, no licences to worry
+about). Re-run after changing anything here:
 
     python3 tools/audio_synth.py
 
-Writes game/assets/audio/sfx/*.wav and game/assets/audio/music/*.ogg
-(the .ogg files need ffmpeg with libvorbis).
+Writes game/assets/audio/sfx/*.wav. The game's music now comes from
+tools/music_import.py; the old synthesized loops are still here and are
+written to game/assets/audio/music/*.ogg only with --music (needs ffmpeg
+with libvorbis) — that replaces the imported music.
 """
 import os
 import subprocess
+import sys
 import wave
 
 import numpy as np
@@ -332,4 +335,5 @@ def music():
 
 if __name__ == "__main__":
     print("sfx:", ", ".join(sfx()))
-    print("music:", ", ".join(music()))
+    if "--music" in sys.argv:
+        print("music:", ", ".join(music()))

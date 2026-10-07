@@ -1,6 +1,6 @@
 extends Control
 ## Title screen. Main page: continue, new game, zone select, shop, settings,
-## test levels, quit. New game asks for the difficulty and plays the intro comic.
+## test levels, credits, quit. New game asks for the difficulty and plays the intro comic.
 ## Pressing a button on a device also joins it as a player (PlayerManager).
 
 const BACKGROUND := preload("res://assets/art/ui/menu_bg_01.png")
@@ -12,6 +12,7 @@ const TEST_SCENE := "res://scenes/test_room.tscn"
 
 var _menu: MenuList
 var _hint: Label
+var _credits: Label
 var _on_back := Callable()
 
 
@@ -27,6 +28,15 @@ func _ready() -> void:
 	var title := TitleLogo.new()
 	title.position = Vector2(0, 110)
 	add_child(title)
+
+	_credits = Label.new()
+	_credits.text = Credits.text()
+	_credits.position = Vector2(260, 300)
+	_credits.size = Vector2(1400, 560)
+	_credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_credits.add_theme_font_size_override("font_size", 26)
+	_credits.visible = false
+	add_child(_credits)
 
 	_menu = MenuList.new()
 	_menu.position = Vector2(560, 380)
@@ -75,9 +85,27 @@ func show_main() -> void:
 	entries.append({"text": "Настройки", "action": show_settings})
 	entries.append({"text": "Тестовые уровни", "action": func() -> void: _open(TEST_SCENE),
 		"hint": "Тестовая комната, «Полигон» и «Мастерская» (F2 — следующая)"})
+	entries.append({"text": "Авторы", "action": show_credits, "hint": "Музыка, звуки, шрифты"})
 	entries.append({"text": "Выход", "action": func() -> void: get_tree().quit()})
 	_on_back = Callable()
-	_menu.set_entries(entries)
+	_show_page(entries)
+
+
+## The credits text with one "Назад" under it.
+func show_credits() -> void:
+	_on_back = show_main
+	_credits.visible = true
+	_menu.position.y = 830
+	_menu.size.y = 120
+	_menu.set_entries([{"text": "Назад", "action": show_main}])
+
+
+## Any page but the credits: the menu back in its place.
+func _show_page(entries: Array, select := 0) -> void:
+	_credits.visible = false
+	_menu.position.y = 380
+	_menu.size.y = 500
+	_menu.set_entries(entries, select)
 
 
 func show_difficulty() -> void:
@@ -89,7 +117,7 @@ func show_difficulty() -> void:
 				_open(COMIC_SCENE)})
 	entries.append({"text": "Назад", "action": show_main})
 	_on_back = show_main
-	_menu.set_entries(entries, 1)
+	_show_page(entries, 1)
 
 
 func show_zones() -> void:
@@ -107,12 +135,12 @@ func show_zones() -> void:
 		})
 	entries.append({"text": "Назад", "action": show_main})
 	_on_back = show_main
-	_menu.set_entries(entries)
+	_show_page(entries)
 
 
 func show_settings() -> void:
 	_on_back = show_main
-	_menu.set_entries(SettingsEntries.build(show_main))
+	_show_page(SettingsEntries.build(show_main))
 
 
 func _open(scene: String) -> void:
