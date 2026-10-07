@@ -70,11 +70,8 @@ var _wall_dust: CPUParticles2D
 var _body: ColorRect
 var _aura: ColorRect
 var _eye: ColorRect
-var _tag: Label
 ## The drawn puppet (null until the hero has art; then the box is hidden).
 var _rig: HeroRig
-## Holds the puppet so it gets one rim in the hero's colour (Outline).
-var _rig_group: CanvasGroup
 
 
 func setup(p_slot: int, p_input: PlayerInput, p_hero: Heroes.Id) -> void:
@@ -219,12 +216,6 @@ func _ready() -> void:
 	_eye.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_eye)
 
-	_tag = Label.new()
-	_tag.add_theme_font_size_override("font_size", 20)
-	_tag.position = Vector2(-50, -SIZE.y / 2 - 32)
-	_tag.size = Vector2(100, 28)
-	_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(_tag)
 
 	health = Health.new()
 	add_child(health)
@@ -528,20 +519,15 @@ func _get_wall_dir() -> int:
 
 
 func _apply_look() -> void:
-	_tag.text = "P%d %s" % [slot + 1, Heroes.NAMES[hero]]
-	if _rig_group != null:
-		_rig_group.queue_free()
-		_rig_group = null
+	if _rig != null:
+		_rig.queue_free()
 	_rig = HeroRig.create("gunner" if hero == Heroes.Id.SHOOTER else "swordsman")
 	if _rig != null:
 		_rig.position = Vector2(0, SIZE.y / 2.0)
-		_rig_group = Outline.group(Color(Heroes.COLORS[hero], 0.9))
-		_rig_group.add_child(_rig)
-		add_child(_rig_group)
-		move_child(_rig_group, _aura.get_index() + 1)
+		add_child(_rig)
+		move_child(_rig, _aura.get_index() + 1)
 		_aura.position = Vector2(-40, SIZE.y / 2.0 - 156)
 		_aura.size = Vector2(80, 160)
-		_tag.position.y = SIZE.y / 2.0 - 180
 	_body.visible = _rig == null
 	_eye.visible = _rig == null
 	_update_look(false)

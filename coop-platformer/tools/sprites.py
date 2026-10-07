@@ -11,7 +11,7 @@ import json
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter
 
 from bgtools import make_seamless, white_to_alpha
 
@@ -115,11 +115,6 @@ ENEMIES = {
 }
 
 
-# Clear margin around monster pictures: room for the rim the game draws around
-# them (Enemy.ART_BORDER must match).
-ENEMY_BORDER = 12
-
-
 def build_enemies():
     for name, (source, height) in ENEMIES.items():
         path = os.path.join(SRC, source)
@@ -127,7 +122,7 @@ def build_enemies():
             continue
         img, _ = crop(remove_background(Image.open(path)))
         img, _ = scaled(img, height)
-        save(ImageOps.expand(img, ENEMY_BORDER, (0, 0, 0, 0)), name)
+        save(img, name)
 
 
 # ---------------------------------------------------------------- heroes
