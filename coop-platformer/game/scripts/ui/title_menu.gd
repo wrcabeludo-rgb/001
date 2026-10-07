@@ -31,7 +31,7 @@ func _ready() -> void:
 
 	_credits = Label.new()
 	_credits.text = Credits.text()
-	_credits.position = Vector2(260, 300)
+	_credits.position = Vector2(260, 290)
 	_credits.size = Vector2(1400, 560)
 	_credits.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_credits.add_theme_font_size_override("font_size", 26)

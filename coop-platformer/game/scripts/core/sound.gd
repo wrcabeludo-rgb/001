@@ -1,6 +1,7 @@
 extends Node
-## Sound effects and music (autoload Sound). Sounds live in assets/audio/sfx,
-## music loops in assets/audio/music; both are made by tools/audio_synth.py.
+## Sound effects and music (autoload Sound). Sounds live in assets/audio/sfx
+## (tools/sfx_import.py, a couple from tools/audio_synth.py), music loops in
+## assets/audio/music (tools/music_import.py).
 ##   Sound.play("jump")        — a sound effect (slight random pitch)
 ##   Sound.music("zone_1_1")   — crossfade to a music loop
 ## Music and effects have their own volume buses ("Music", "SFX").

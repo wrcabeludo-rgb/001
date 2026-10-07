@@ -145,7 +145,7 @@ func _shotgun() -> void:
 		var angle := (float(i) / (SHOTGUN_PELLETS - 1) - 0.5) * SHOTGUN_SPREAD
 		_fire(start, direction.rotated(angle), stats.shot_damage, stats.shot_knockback * 2.0,
 			Vector2(14, 8), SHOT_COLOR, 0, SHOTGUN_LIFETIME)
-	Sound.play("shoot_charged", 0.08, -4.0)
+	Sound.play("shotgun", 0.08)
 
 
 ## The shotgun ran dry: back to the rifle (which never runs out).

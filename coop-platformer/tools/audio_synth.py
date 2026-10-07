@@ -3,7 +3,8 @@ about). Re-run after changing anything here:
 
     python3 tools/audio_synth.py
 
-Writes game/assets/audio/sfx/*.wav. The game's music now comes from
+Writes game/assets/audio/sfx/*.wav, except the sounds that now come from
+recordings (tools/sfx_import.py). The game's music now comes from
 tools/music_import.py; the old synthesized loops are still here and are
 written to game/assets/audio/music/*.ogg only with --music (needs ffmpeg
 with libvorbis) — that replaces the imported music.
@@ -14,6 +15,9 @@ import sys
 import wave
 
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sfx_import import SOUNDS as RECORDED  # noqa: E402
 
 RATE = 44100
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "game", "assets", "audio")
@@ -204,9 +208,11 @@ def sfx():
     d = 1.4
     s["coin_shop"] = sum(np.concatenate([np.zeros(int(i * 0.07 * RATE)), osc("tri", midi_hz(n), d - i * 0.07) * env(d - i * 0.07, 0.002, 0.2)])
                          for i, n in enumerate([84, 88, 91]))[: int(0.6 * RATE)]
-    for name, x in s.items():
-        write_wav(os.path.join(ROOT, "sfx", name + ".wav"), normalize(x, 0.85))
-    return list(s)
+    # Sounds taken from recordings (tools/sfx_import.py) are not overwritten.
+    made = [name for name in s if name not in RECORDED]
+    for name in made:
+        write_wav(os.path.join(ROOT, "sfx", name + ".wav"), normalize(s[name], 0.85))
+    return made
 
 
 # ---------------------------------------------------------------- music
