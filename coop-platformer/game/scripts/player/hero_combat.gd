@@ -27,5 +27,10 @@ func modify_hit(hit: Hit) -> Hit:
 
 
 ## True while the hero should glow (e.g. a ready charged shot).
+## True while the hero holds a guard (the rig shows the block pose).
+func is_blocking() -> bool:
+	return false
+
+
 func is_glowing() -> bool:
 	return false

@@ -10,18 +10,21 @@ var damage := 1
 var knockback := Vector2.ZERO
 var direction := 1
 
-var _offset := Vector2.ZERO
+## Where the area sits for an attack facing right (x is mirrored).
+var offset := Vector2.ZERO
+## False when the attack draws its own effect (a slash arc) instead of the flash.
+var show_flash := true
 var _active_time := 0.0
 var _already_hit := {}
 var _shape: CollisionShape2D
 var _flash: ColorRect
 
 
-func setup(team: Layers.Team, size: Vector2, offset: Vector2, color: Color) -> void:
+func setup(team: Layers.Team, size: Vector2, p_offset: Vector2, color: Color) -> void:
 	collision_layer = 0
 	collision_mask = Layers.target_hurtboxes(team)
 	monitorable = false
-	_offset = offset
+	offset = p_offset
 
 	var rect := RectangleShape2D.new()
 	rect.size = size
@@ -45,7 +48,7 @@ func activate(duration: float, p_damage: int, p_knockback: Vector2, p_direction:
 	_already_hit.clear()
 	_active_time = duration
 	_place()
-	_flash.visible = true
+	_flash.visible = show_flash
 
 
 func is_active() -> bool:
@@ -69,6 +72,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _place() -> void:
-	var position_offset := Vector2(_offset.x * direction, _offset.y)
+	var position_offset := Vector2(offset.x * direction, offset.y)
 	_shape.position = position_offset
 	_flash.position = position_offset - _flash.size / 2.0

@@ -44,6 +44,39 @@ the legs. Flat even lighting, white background, nothing cropped. Portrait 2:3.
 
 Если ChatGPT упорно перекрывает руки и ноги — пришли как есть, я скажу, что поправить.
 
+### 1.3 Позы действий (рисунки вместо «куклы»)
+
+Сейчас эти позы игра собирает из «куклы»: присед, пинок, три разных удара мечом, удар вверх, блок,
+скольжение по стене, лестница. Нарисованная поза сразу заменит кукольную — это заметно красивее.
+Каждая поза — **отдельная картинка**. Прикладывай вид героя сбоку из игры
+(`art_source/heroes/gunner_side_original.png` или `swordsman_side_original.png`) и начинай так:
+
+```
+[Блок стиля]
+Keep exactly the same character design, colours and proportions as the attached image.
+Full body, side view facing right, the same scale as the attached image, flat even lighting,
+white background, nothing cropped, no motion lines, no effects. Pose: ...
+```
+
+Дальше — одна строка позы. Присылай с именем, например «gunner_kick_1».
+
+| Имя | Поза |
+|---|---|
+| `gunner_crouch_1` | `Crouching low on one knee, aiming the rifle forward at knee height.` |
+| `gunner_kick_1` | `A strong front kick: the near leg kicked straight forward at waist height, leaning back, the rifle held up in both hands.` |
+| `gunner_wall_1` | `Sliding down a wall that is on the right: one hand and one boot pressed against the wall, the coat flying up, looking down.` |
+| `gunner_climb_1`, `gunner_climb_2` | `Back view climbing a ladder, the rifle on his back; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
+| `swordsman_crouch_1` | `Crouching low in a wide stance, the blade held low and forward, ready to strike.` |
+| `swordsman_block_1` | `Defensive stance: the mechanical arm raised in front of the face and chest like a shield, the blade held back, knees bent.` |
+| `swordsman_slash_down_1` | `Mid-swing of a quick downward diagonal cut, the blade low in front, the body turning into the cut.` |
+| `swordsman_slash_rising_1` | `Mid-swing of a quick rising cut, the blade swept up in front above the head, weight on the back leg.` |
+| `swordsman_slash_finisher_1`, `swordsman_slash_finisher_2` | `A heavy two-handed finishing blow; frame 1: the blade raised high behind the head, leaning back; frame 2: a deep lunge, the blade slammed down low in front.` |
+| `swordsman_slash_overhead_1` | `Sweeping the blade in an arc above the head, looking up.` |
+| `swordsman_wall_1` | `Sliding down a wall that is on the right: the mechanical hand gripping the wall, one boot against it.` |
+| `swordsman_climb_1`, `swordsman_climb_2` | `Back view climbing a ladder, the blade on his back; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
+
+Начни с удара-добивания, блока и лестницы — там разница с «куклой» больше всего.
+
 ---
 
 ## 2. Враги мира 1 (все — мутанты)

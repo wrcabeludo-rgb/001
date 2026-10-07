@@ -21,6 +21,10 @@ func _run_all() -> void:
 	await _test_block_front_and_back()
 	await _test_invulnerability()
 	await _test_no_friendly_fire()
+	await _test_crouch_stops_and_shoots_low()
+	await _test_crouch_ducks_under_shot()
+	await _test_crouch_slash_hits()
+	await _test_action_poses()
 	await _test_time_scale_restored()
 
 
@@ -153,6 +157,92 @@ func _test_no_friendly_fire() -> void:
 func _test_time_scale_restored() -> void:
 	await _frames(30)
 	_check(is_equal_approx(Engine.time_scale, 1.0), "после замираний при ударе время идёт нормально")
+
+
+func _test_crouch_stops_and_shoots_low() -> void:
+	await _spawn(Heroes.Id.SHOOTER, Vector2(OPEN_X, FLOOR_Y))
+	await _press("attack")
+	var standing_y := _newest_projectile().position.y
+	await _frames(20)
+	var start_x := _player.position.x
+	_input.set_virtual("down", true)
+	_input.set_virtual("right", true)
+	await _frames(20)
+	var crouched := _player.crouching
+	var moved := absf(_player.position.x - start_x)
+	await _press("attack")
+	var low_shot := _newest_projectile()
+	_input.set_virtual("right", false)
+	_input.set_virtual("down", false)
+	await _frames(2)
+	_check(crouched and moved < 2.0, "вниз на земле — герой приседает и стоит на месте (сдвиг %.0f)" % moved)
+	_check(low_shot != null and low_shot.velocity.y == 0.0 and low_shot.position.y > standing_y + 30.0,
+		"из приседа стрелок стреляет низко и прямо")
+	_check(not _player.crouching, "отпустил вниз — герой встаёт")
+
+
+func _test_crouch_ducks_under_shot() -> void:
+	var results := []
+	for duck in [false, true]:
+		await _spawn(Heroes.Id.SHOOTER, Vector2(OPEN_X, FLOOR_Y))
+		_input.set_virtual("down", duck)
+		await _frames(3)
+		var bullet := Projectile.new()
+		var from := Vector2(OPEN_X + 400, FLOOR_Y - 30)
+		bullet.setup(Layers.Team.ENEMIES, from, Vector2.LEFT, 900.0, 2, 100.0, Vector2(20, 20), Color.GREEN, 0, 1.5)
+		_room.add_child(bullet)
+		await _frames(50)
+		_input.set_virtual("down", false)
+		results.append(_player.health.current < _player.combat_stats.max_health)
+		if is_instance_valid(bullet):
+			bullet.queue_free()
+	_check(results[0] and not results[1], "пуля на уровне груди попадает в стоящего и пролетает над присевшим")
+
+
+func _test_crouch_slash_hits() -> void:
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(HERO_X, FLOOR_Y))
+	var dummy := await _dummy(Vector2(HERO_X + 80, 0))
+	_input.set_virtual("down", true)
+	await _frames(2)
+	await _press("attack")
+	await _frames(20)
+	_input.set_virtual("down", false)
+	_check(dummy.health.current == DUMMY_HEALTH - _player.combat_stats.slash1_damage,
+		"удар мечом из приседа попадает (здоровье %d)" % dummy.health.current)
+
+
+## Each action shows its own pose on the puppet: the kick, three different
+## combo swings, the block and the crouch.
+func _test_action_poses() -> void:
+	await _spawn(Heroes.Id.SHOOTER, Vector2(OPEN_X, FLOOR_Y))
+	if _player._rig == null:
+		_check(true, "позы: у героя нет рисунка, проверка пропущена")
+		return
+	await _press("skill")
+	await _frames(2)
+	var kick_pose := _player._rig.current_pose(_player)
+	await _frames(30)
+	_input.set_virtual("down", true)
+	await _frames(3)
+	var crouch_pose := _player._rig.current_pose(_player)
+	_input.set_virtual("down", false)
+	_check(kick_pose == "kick" and crouch_pose == "crouch", "поза пинка и приседа (%s, %s)" % [kick_pose, crouch_pose])
+
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(OPEN_X, FLOOR_Y))
+	var swings := []
+	for i in 3:
+		await _press("attack")
+		await _frames(2)
+		swings.append(_player._rig.current_pose(_player))
+		await _frames(12)
+	_check(swings == ["slash_down", "slash_rising", "slash_finisher"],
+		"три удара серии выглядят по-разному: %s" % ", ".join(swings))
+	await _frames(40)
+	_input.set_virtual("extra", true)
+	await _frames(3)
+	var block_pose := _player._rig.current_pose(_player)
+	_input.set_virtual("extra", false)
+	_check(block_pose == "block", "поза блока (%s)" % block_pose)
 
 
 ## A fresh training dummy standing on the floor (or floating at `center_y`).

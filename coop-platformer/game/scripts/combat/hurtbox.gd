@@ -5,6 +5,8 @@ extends Area2D
 
 var receiver: Node
 
+var _collision: CollisionShape2D
+
 
 func setup(team: Layers.Team, size: Vector2, p_receiver: Node) -> void:
 	receiver = p_receiver
@@ -14,9 +16,15 @@ func setup(team: Layers.Team, size: Vector2, p_receiver: Node) -> void:
 	monitorable = true
 	var shape := RectangleShape2D.new()
 	shape.size = size
-	var collision := CollisionShape2D.new()
-	collision.shape = shape
-	add_child(collision)
+	_collision = CollisionShape2D.new()
+	_collision.shape = shape
+	add_child(_collision)
+
+
+## Changes the area (a crouching hero is lower); `center` is relative to the owner.
+func resize(size: Vector2, center: Vector2) -> void:
+	(_collision.shape as RectangleShape2D).size = size
+	_collision.position = center
 
 
 func take_hit(hit: Hit) -> bool:

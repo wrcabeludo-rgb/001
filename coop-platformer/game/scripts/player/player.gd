@@ -3,7 +3,8 @@ extends CharacterBody2D
 ## Placeholder hero (a coloured box) with the full platforming movement:
 ## acceleration, coyote time, jump buffering, variable jump height,
 ## wall slide and wall jump, double jump (shooter) and dash (swordsman),
-## climbing ladders and ropes, dropping through one-way platforms (down + jump).
+## climbing ladders and ropes, dropping through one-way platforms (down + jump),
+## crouching (down on the ground: stops, ducks under shots, attacks low).
 ## Attacks live in a HeroCombat child (ShooterCombat / SwordsmanCombat).
 ## Movement numbers live in MovementStats, combat numbers in CombatStats.
 
@@ -18,6 +19,8 @@ const HITSTOP_SCALE := 0.05
 const REGRAB_TIME := 0.3
 ## How long one-way platforms are ignored after dropping through one.
 const DROP_TIME := 0.22
+## A crouching hero can be hit only this high above the floor.
+const CROUCH_HEIGHT := 56.0
 
 var slot := 0
 var input: PlayerInput
@@ -34,6 +37,8 @@ var last_safe_position := Vector2.ZERO
 var scrap := 0
 ## Temporary power-ups: name -> seconds left ("rage", "shield", "haste").
 var powers := {}
+## Down held on the ground: the hero stays put, lower, and attacks low.
+var crouching := false
 
 ## How long each power-up lasts and how it shows on the hero.
 const POWER_TIME := {"rage": 12.0, "shield": 10.0, "haste": 12.0}
@@ -59,6 +64,8 @@ var _collision: CollisionShape2D
 var _climb: Climbable
 var _regrab_timer := 0.0
 var _drop_timer := 0.0
+var _wall_sliding := false
+var _wall_dust: CPUParticles2D
 
 var _body: ColorRect
 var _aura: ColorRect
@@ -116,6 +123,10 @@ func damage_multiplier() -> float:
 ## Scrap the hero has in total: saved plus collected in this zone.
 func total_scrap() -> int:
 	return SaveGame.scrap(hero) + scrap
+
+
+func is_wall_sliding() -> bool:
+	return _wall_sliding
 
 
 func is_climbing() -> bool:
@@ -220,6 +231,20 @@ func _ready() -> void:
 	add_child(_hurtbox)
 	_hurtbox.setup(Layers.Team.PLAYERS, SIZE - Vector2(8, 8), self)
 
+	_wall_dust = CPUParticles2D.new()
+	_wall_dust.emitting = false
+	_wall_dust.amount = 14
+	_wall_dust.lifetime = 0.45
+	_wall_dust.direction = Vector2(0, -1)
+	_wall_dust.spread = 25.0
+	_wall_dust.initial_velocity_min = 40.0
+	_wall_dust.initial_velocity_max = 90.0
+	_wall_dust.gravity = Vector2(0, 120)
+	_wall_dust.scale_amount_min = 2.0
+	_wall_dust.scale_amount_max = 4.0
+	_wall_dust.color = Color(0.75, 0.7, 0.65, 0.6)
+	add_child(_wall_dust)
+
 	_build_combat()
 	_apply_look()
 
@@ -233,6 +258,7 @@ func _physics_process(delta: float) -> void:
 	var wall_dir := _get_wall_dir()
 
 	_tick_timers(delta)
+	crouching = false
 	if is_stunned():
 		_process_stun(on_floor, delta)
 		return
@@ -267,7 +293,8 @@ func _physics_process(delta: float) -> void:
 	if move.x != 0.0 and _wall_jump_lock_timer <= 0.0:
 		facing = int(signf(move.x))
 
-	_apply_horizontal(move.x, on_floor, delta)
+	crouching = on_floor and move.y > 0.5
+	_apply_horizontal(0.0 if crouching else move.x, on_floor, delta)
 	var sliding := _apply_gravity(move.x, on_floor, wall_dir, delta)
 	if on_floor and move.y > 0.5 and _jump_buffer_timer > 0.0 and _on_one_way():
 		_drop_through()
@@ -515,17 +542,33 @@ func _apply_look() -> void:
 	_update_look(false)
 
 
-## The puppet's motion for an attack: the Gunner recoils, the Swordsman lunges.
+## The puppet's motion for a shot: the Gunner recoils.
 func animate_attack() -> void:
-	if _rig == null:
-		return
-	if hero == Heroes.Id.SHOOTER:
+	if _rig != null:
 		_rig.recoil()
-	else:
-		_rig.lunge()
+
+
+## The Gunner's kick.
+func animate_kick() -> void:
+	if _rig != null:
+		_rig.kick()
+
+
+## A sword swing (HeroRig.Slash): each one moves the body differently.
+func animate_slash(kind: int, duration: float) -> void:
+	if _rig != null:
+		_rig.slash(kind, duration)
 
 
 func _update_look(sliding: bool) -> void:
+	_wall_sliding = sliding
+	_wall_dust.emitting = sliding
+	_wall_dust.position = Vector2(facing * SIZE.x / 2.0, -SIZE.y / 4.0)
+	# A crouching hero is a smaller target: only the lower part can be hit.
+	if crouching:
+		_hurtbox.resize(Vector2(SIZE.x - 8, CROUCH_HEIGHT), Vector2(0, SIZE.y / 2.0 - CROUCH_HEIGHT / 2.0))
+	else:
+		_hurtbox.resize(SIZE - Vector2(8, 8), Vector2.ZERO)
 	var color: Color = Heroes.COLORS[hero]
 	if is_dashing():
 		color = color.lightened(0.6)
@@ -536,6 +579,8 @@ func _update_look(sliding: bool) -> void:
 	elif sliding:
 		color = color.darkened(0.3)
 	_body.color = color
+	_body.size.y = CROUCH_HEIGHT + 8.0 if crouching else SIZE.y
+	_body.position.y = SIZE.y / 2.0 - _body.size.y
 	if _rig != null:
 		_rig.pose(self, get_physics_process_delta_time())
 		if is_stunned():

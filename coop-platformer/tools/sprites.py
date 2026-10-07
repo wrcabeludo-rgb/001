@@ -240,6 +240,40 @@ def build_tiles():
         save(img, "tiles/" + file.replace("_original", "").replace("tile_", ""))
 
 
+# ---------------------------------------------------------------- hero poses
+
+# A pose drawing's height compared with the standing hero (the drawings are
+# scaled so the hero keeps the same size in every pose).
+POSE_HEIGHT = {
+    "crouch": 0.72, "wall": 1.0, "climb": 1.05, "block": 0.95, "kick": 1.0,
+    "slash_down": 1.0, "slash_rising": 1.05, "slash_finisher": 0.95, "slash_overhead": 1.15,
+}
+
+
+def build_poses():
+    """Action poses: art_source/heroes/poses/<hero>_<pose>_<n>.png -> <hero>_pose_<pose>_<n>.png.
+    Writes poses.json with where the feet are across each picture (0..1), so the
+    game stands the drawing on the hero's spot."""
+    folder = os.path.join(SRC, "heroes/poses")
+    if not os.path.isdir(folder):
+        return
+    anchors = {}
+    for file in sorted(os.listdir(folder)):
+        stem, ext = os.path.splitext(file)
+        hero = stem.split("_")[0]
+        pose = "_".join(stem.split("_")[1:-1])
+        if ext != ".png" or hero not in HEROES or pose not in POSE_HEIGHT:
+            continue
+        img, _ = crop(remove_background(Image.open(os.path.join(folder, file)), holes=400))
+        img, _ = scaled(img, round(HEROES[hero]["height"] * POSE_HEIGHT[pose]))
+        alpha = np.asarray(img)[:, :, 3]
+        feet = np.nonzero(alpha[int(alpha.shape[0] * 0.92):].max(axis=0) > 128)[0]
+        anchors["%s_%s" % (hero, pose)] = round(float(feet.mean()) / alpha.shape[1], 3) if len(feet) else 0.5
+        save(img, "heroes/%s_pose_%s_%s.png" % (hero, pose, stem.split("_")[-1]))
+    with open(os.path.join(OUT, "heroes/poses.json"), "w") as f:
+        json.dump(anchors, f, indent=1)
+
+
 # ---------------------------------------------------------------- props
 
 PROPS = {
@@ -366,4 +400,5 @@ if __name__ == "__main__":
     build_props()
     build_enemies()
     build_heroes()
+    build_poses()
     build_tiles()
