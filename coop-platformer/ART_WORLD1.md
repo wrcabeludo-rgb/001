@@ -121,18 +121,200 @@ Arms swing opposite to the legs. Flat even lighting, white background, nothing c
 | `swordsman_fall_1` | `Falling: legs down ready to land, the blade held out to the side, the scarf flying up.` |
 | `swordsman_dash_1` | `A fast forward dash: body low and leaning far forward, the blade held back along the body, one leg stretched behind, the scarf streaming back.` |
 
-### 1.6 Оружие из лавки (иконки для магазина)
+### 1.6 Иконки для лавки (полные промпты)
 
-Дробовик и тяжёлый клинок в руках героя пока те же, что обычные: их отличают выстрел/взмах, звук и эффекты.
-Иконки для лавки — **отдельные предметы без героя**, вид сбоку:
+Каждый промпт — целиком. Картинку из скобок прикладывай к промпту. Имя — как в заголовке.
 
-| Имя | Промпт |
-|---|---|
-| `weapon_shotgun` | `A brutal sawed-off double-barrel shotgun made of scrap: thick barrels wrapped in wire, a pump grip of rusty pipe, red shells strapped to the stock, warm orange glow at the muzzle. Side view, pointing right.` |
-| `weapon_heavy_blade` | `A huge two-handed cleaver forged from a railway rail: wide dark steel blade with molten red cracks glowing from inside, a long wrapped grip, chains on the guard. Side view, edge pointing right.` |
-| `weapon_rifle` | `The Gunner's plasma rifle: long rusty barrel with glowing cyan energy cells, scope, leather sling. Side view, pointing right.` |
-| `weapon_blade` | `The Swordsman's glowing orange serrated blade with dash-shaped vents along it, a mechanical hilt. Side view, edge pointing right.` |
+**`weapon_rifle`** — приложить `art_source/heroes/gunner_side_original.png` (чтобы винтовка была та же)
 
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Exactly the same plasma rifle the Gunner holds in the attached image, on its own: a long rusty
+scavenged rifle, a skeletal metal stock, a scope on top, two glowing cyan energy cells along the body,
+dark-red cloth wrapped around the front of the barrel, a perforated muzzle, a brown leather sling
+hanging below. Side view, muzzle pointing right, slightly tilted up.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`weapon_shotgun`** — приложить `art_source/heroes/gunner_side_original.png` (тот же стиль и материалы)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A brutal sawed-off double-barrel shotgun built from scrap in the same rusty style as the attached
+rifle: two short thick barrels wrapped with wire, a pump grip made of a rusty pipe, a chunky wooden
+stock with three red shotgun shells strapped to it, rivets and welded plates, a warm orange glow
+inside the barrels. Side view, barrels pointing right.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`weapon_blade`** — приложить `art_source/heroes/swordsman_side_original.png` (чтобы клинок был тот же)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Exactly the same sword the Swordsman holds in the attached image, on its own: a long curved
+single-edged blade glowing hot orange with a serrated edge and a row of dash-shaped vents along it,
+a round mechanical guard ring, a ribbed metal grip and a heavy pommel. Side view, the edge facing down,
+the tip pointing right, laid diagonally from bottom-left to top-right.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`weapon_heavy_blade`** — приложить `art_source/heroes/swordsman_side_original.png` (тот же стиль и материалы)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A huge two-handed cleaver-sword forged from a piece of railway rail, in the same rusty style as the
+attached sword: a wide heavy blade of dark scorched steel with deep molten red-orange cracks glowing
+from inside, a blunt square tip, a long grip wrapped in leather straps, a chain wound around the
+guard. It must look much bigger and heavier than an ordinary sword. Side view, laid diagonally from
+bottom-left to top-right, the edge facing down.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_armor1`** — приложить `art_source/heroes/swordsman_side_original.png` (стиль брони)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A single riveted armour chest plate made of dark scrap metal with leather straps and buckles,
+a few dents and rust patches. Front view, slightly turned.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_armor2`** — приложить `art_source/heroes/swordsman_side_original.png` (стиль брони)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A heavier riveted armour chest plate made of dark scrap metal with a second layer of plates on top,
+reinforced shoulder pieces, thick leather straps and glowing orange seams between the plates.
+Front view, slightly turned. It must look clearly stronger than a simple chest plate.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_pouch`** — приложить `art_source/heroes/gunner_side_original.png` (подсумок как на поясе стрелка)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A worn leather ammo pouch on a belt strap, its flap open, three glowing cyan energy cells sticking
+out of it, brass buckles and stitched patches. Three-quarter view.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_quick_charge`** — приложить `art_source/heroes/gunner_side_original.png` (те же энергоячейки)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A single glowing cyan energy cell like the ones on the Gunner's belt, overcharged: a metal capsule
+with a bright cyan core, small cyan sparks crackling around it, a tiny lightning bolt shape on its
+side. Three-quarter view.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_quick_dash`** — приложить `art_source/heroes/swordsman_side_original.png` (сапоги мечника)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A single armoured boot like the Swordsman's, with a small mechanical piston and glowing orange vents
+on the heel, as if it can push off with a burst. Side view, toe pointing right.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
+
+**`item_iron_block`** — приложить `art_source/heroes/swordsman_side_original.png` (механическая рука мечника)
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+The Swordsman's mechanical forearm with a thick steel guard plate bolted on it, like a small
+shield on the arm, riveted, with an orange glowing joint. Side view, the guard facing right.
+
+A single game shop icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 85% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow under the object, no glow halo spreading
+onto the background, no frame, no text, no letters. Square 1:1.
+```
 
 ### 1.7 Полные промпты мечника (копировать целиком)
 
