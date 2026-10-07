@@ -136,6 +136,18 @@ jobs:
           fi
           exit $status
 
+      - name: Install rcedit (puts the game icon into the exe)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wine64 > /dev/null
+          wine_bin=$(command -v wine || command -v wine64 || echo /usr/lib/wine/wine64)
+          wget -q -O "$RUNNER_TEMP/rcedit.exe" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
+          WINEDEBUG=-all "$wine_bin" wineboot --init > /dev/null 2>&1 || true
+          mkdir -p "$HOME/.config/godot"
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/windows/rcedit = "%s"\nexport/windows/wine = "%s"\n' \
+            "$RUNNER_TEMP/rcedit.exe" "$wine_bin" > "$HOME/.config/godot/editor_settings-4.4.tres"
+          cat "$HOME/.config/godot/editor_settings-4.4.tres"
+
       - name: Export Windows build
         run: |
           mkdir -p build/windows
@@ -158,6 +170,8 @@ jobs:
                       for lang in icon.directory.entries:
                           sizes.append(lang.data.struct.Size)
           print("icon images in the exe:", len(sizes), "bytes:", sizes)
+          # Godot's own icon has a 67624-byte 128x128 image; ours has none that size.
+          assert 67624 not in sizes, "the exe still has the default Godot icon"
           PY
 
       - uses: actions/upload-artifact@v4
