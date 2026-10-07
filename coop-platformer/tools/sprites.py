@@ -413,6 +413,49 @@ def build_shop_backdrop():
     save(Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), "ui/shop_bg.png")
 
 
+# ---------------------------------------------------------------- game icon
+
+def build_icon():
+    """The game's icon: the Gunner (neon) and the Swordsman (embers) split by a
+    glowing diagonal, on a dark rounded square. Writes icon.png and icon.ico."""
+    size = 512
+    ui = os.path.join(OUT, "ui")
+    heads = [
+        (Image.open(os.path.join(ui, "avatar_gunner.png")).crop((70, 0, 330, 260)), (0.3, 0.9, 1.0)),
+        (Image.open(os.path.join(ui, "avatar_swordsman.png")).crop((95, 0, 335, 240)), (1.0, 0.5, 0.15)),
+    ]
+    y, x = np.mgrid[0:size, 0:size] / size
+    # The seam runs from the top a little right of the middle to the bottom a little left.
+    left = x < 0.58 - 0.16 * y
+    rgb = np.zeros((size, size, 3))
+    for i, (_, glow) in enumerate(heads):
+        cx = 0.25 if i == 0 else 0.75
+        light = np.clip(1.0 - np.hypot(x - cx, y - 0.45) * 1.6, 0, 1) ** 2
+        side = left if i == 0 else ~left
+        rgb += side[:, :, None] * (np.array([0.05, 0.05, 0.08]) + light[:, :, None] * np.array(glow) * 0.55)
+    canvas = Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8)).convert("RGBA")
+    for i, (head, _) in enumerate(heads):
+        head = head.resize((410, round(head.height * 410 / head.width)), Image.LANCZOS)
+        layer = Image.new("RGBA", (size, size))
+        layer.alpha_composite(head, (-55 if i == 0 else 160, 70))
+        side = left if i == 0 else ~left
+        alpha = np.asarray(layer)[:, :, 3] * side
+        layer.putalpha(Image.fromarray(alpha.astype(np.uint8)))
+        canvas.alpha_composite(layer)
+    seam = Image.new("RGBA", (size, size))
+    draw = ImageDraw.Draw(seam)
+    draw.line([(0.58 * size, 0), (0.42 * size, size)], fill=(255, 240, 210, 255), width=10)
+    canvas.alpha_composite(seam.filter(ImageFilter.GaussianBlur(8)))
+    canvas.alpha_composite(seam.filter(ImageFilter.GaussianBlur(1)))
+    mask = Image.new("L", (size, size))
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size - 1, size - 1), radius=96, fill=255)
+    canvas.putalpha(mask)
+    icon = canvas.resize((256, 256), Image.LANCZOS)
+    icon.save(os.path.join(OUT, "..", "..", "icon.png"))
+    icon.save(os.path.join(OUT, "..", "..", "icon.ico"), sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    print("wrote icon.png, icon.ico")
+
+
 # ---------------------------------------------------------------- hero select avatars
 
 # The front view from each approved concept sheet (the leftmost figure).
@@ -563,4 +606,5 @@ if __name__ == "__main__":
     build_poses()
     build_avatars()
     build_shop_backdrop()
+    build_icon()
     build_tiles()

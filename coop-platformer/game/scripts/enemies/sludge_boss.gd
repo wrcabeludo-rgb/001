@@ -28,6 +28,9 @@ const DAZED_COLOR := Color(0.55, 0.6, 0.5)
 @export var health_per_extra_hero := 0.5
 
 var state := State.IDLE
+var _windup_length := 1.0
+var _art_scale := Vector2.ONE
+var _ooze: CPUParticles2D
 var phase := 1
 
 var _timer := 1.5
@@ -58,6 +61,13 @@ func _ready() -> void:
 	add_to_group("bosses")
 	super_armor = true
 	Sound.music("boss")
+	if _sprite != null:
+		_art_scale = _sprite.scale
+	# Sludge dripping off the body all the time, more while it moves.
+	_ooze = SlimeLook.drips(14, Vector2(body_size.x * 0.7, 30), 900.0)
+	_ooze.position = Vector2(0, body_size.y * 0.1)
+	_ooze.initial_velocity_max = 90.0
+	add_child(_ooze)
 	var heroes := 0
 	for node in get_tree().get_nodes_in_group("players"):
 		if node is Player and node.is_alive():
@@ -191,6 +201,7 @@ func _start_attack(attack: Attack) -> void:
 		Attack.RAIN:
 			state = State.RAIN_WINDUP
 	_timer = windup
+	_windup_length = windup
 	telegraph(windup)
 
 
@@ -294,3 +305,59 @@ func _on_died() -> void:
 	if level != null and level.music_track != "":
 		Sound.music(level.music_track)
 	super._on_died()
+
+
+## The body moves like a heap of sludge: it rolls and sways as it crawls,
+## rears up tall before a slam and splats down after it, swells and leans back
+## before spitting, crouches and trembles before a charge and leans into it,
+## pulses before the geysers, roars stretched up, wobbles while dazed.
+func _animate_sprite() -> void:
+	super._animate_sprite()
+	var t := Time.get_ticks_msec() / 1000.0
+	var windup := 1.0 - clampf(_timer / maxf(_windup_length, 0.01), 0.0, 1.0)
+	var stretch := 0.0  # taller and thinner (+) or flatter and wider (-)
+	var lean := 0.0  # towards where it faces (+)
+	var lift := 0.0
+	var shake := 0.0
+	var swell := 0.0
+	match state:
+		State.IDLE:
+			var moving := absf(velocity.x) > 1.0
+			stretch = 0.05 * sin(t * (7.0 if moving else 2.5))
+			lean = 0.06 * sin(t * 3.5) if moving else 0.0
+		State.ROAR:
+			stretch = 0.16
+			shake = 5.0
+		State.SLAM_WINDUP:
+			stretch = 0.22 * windup
+			lift = 30.0 * windup
+			lean = -0.08 * windup
+		State.SPIT_WINDUP:
+			swell = 0.1 * windup
+			lean = -0.18 * windup
+		State.CHARGE_WINDUP:
+			stretch = -0.16 * windup
+			lean = 0.15 * windup
+			shake = 4.0 * windup
+		State.CHARGE:
+			stretch = -0.08 + 0.06 * sin(t * 22.0)
+			lean = 0.22
+		State.DAZED:
+			lean = 0.12 * sin(t * 5.0)
+			stretch = -0.1
+		State.RAIN_WINDUP:
+			swell = 0.06 * (0.5 + 0.5 * sin(t * 18.0)) * windup
+			stretch = 0.08 * windup
+		State.RECOVER:
+			# Splat after a slam, a jolt after a spit.
+			var after := clampf(_timer / 0.8, 0.0, 1.0)
+			if _last_attack == Attack.SLAM:
+				stretch = -0.22 * after
+			elif _last_attack == Attack.SPIT:
+				lean = 0.15 * after
+	_sprite.scale = _art_scale * Vector2(1.0 - stretch * 0.6 + swell, 1.0 + stretch + swell)
+	# Keep the bottom on the floor while it stretches.
+	var tall := art_drawn_size().y
+	_sprite.position += Vector2(randf_range(-shake, shake), -(stretch + swell) * tall * 0.5 - lift)
+	_sprite.rotation += facing * lean
+	_ooze.speed_scale = 1.4 if absf(velocity.x) > 1.0 or state == State.CHARGE else 0.6

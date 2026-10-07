@@ -100,7 +100,8 @@ Arms swing opposite to the legs. Flat even lighting, white background, nothing c
 ```
 
 Дополнение для **стрелка**: `The rifle is held in both hands at chest height, pointing forward; the cape and scarf flow behind.`
-Дополнение для **мечника**: `The glowing blade is held low in the right hand, pointing back and down; the free arm swings.`
+Дополнение для **мечника**: `He carries ONLY ONE sword, and it is ALWAYS in his right (mechanical) hand in every frame: the glowing blade held low, pointing back and down. There is NO sheath, NO scabbard and NO second sword on his belt, back or hip — the belt has only pouches. The free left arm swings, fist closed.`
+Если нейросеть всё равно рисует второй меч на поясе — добавь в конце: `Check every frame: exactly one sword, in the hand. Remove any sword from the belt.`
 
 Имена: `gunner_run`, `swordsman_run`. Если 4 кадра не помещаются ровно — пришли как есть, разрежу сам.
 

@@ -1,6 +1,6 @@
 class_name SlimeLook
 ## The look of the green sludge: the boss's wave running along the floor, the
-## column pouring from above and its warning mark, and acid puddles. All are
+## geysers bursting from the floor and their warning stains, and acid puddles. All are
 ## drawn and animated in code (no pictures).
 
 const DARK := Color(0.12, 0.35, 0.06)
@@ -65,56 +65,8 @@ class Wave:
 		draw_rect(Rect2(-size.x * 0.9, -4, size.x * 1.4, 4), SlimeLook.DARK)
 
 
-## Sludge pouring down onto y = 0 in a column `size` wide and high.
-class Column:
-	extends Node2D
-
-	var size := Vector2(90, 520)
-	var _time := 0.0
-
-	func _ready() -> void:
-		var splash := SlimeLook.drips(30, Vector2(size.x, 6), 1400.0)
-		splash.position = Vector2(0, -16)
-		splash.lifetime = 0.4
-		splash.initial_velocity_max = 380.0
-		splash.spread = 70.0
-		add_child(splash)
-
-	func _process(delta: float) -> void:
-		_time += delta
-		queue_redraw()
-
-	func _draw() -> void:
-		var half := size.x / 2.0
-		# The stream: edges wobbling as it pours, narrower at the top.
-		var left := PackedVector2Array()
-		var right := PackedVector2Array()
-		var steps := 16
-		for i in steps + 1:
-			var y := -size.y + size.y * float(i) / steps
-			var wobble := 6.0 * sin(_time * 22.0 + i * 1.3)
-			var width := half * (0.7 + 0.3 * float(i) / steps)
-			left.append(Vector2(-width + wobble, y))
-			right.append(Vector2(width + wobble * 0.6, y))
-		right.reverse()
-		draw_colored_polygon(left + right, Color(SlimeLook.BODY, 0.92))
-		# Streaks running down the stream.
-		for i in 5:
-			var x := lerpf(-half * 0.55, half * 0.55, float(i) / 4.0)
-			var y := maxf(fmod(_time * 1400.0 + i * 170.0, size.y + 200.0) - size.y - 100.0, -size.y)
-			var streak := minf(110.0, -y - 16.0)
-			if streak > 0.0:
-				draw_rect(Rect2(x - 3, y, 6, streak), Color(SlimeLook.LIGHT, 0.6))
-		draw_polyline(left, Color(SlimeLook.DARK, 0.7), 4.0)
-		# A heap spreading where it lands.
-		draw_set_transform(Vector2(0, -12), 0.0, Vector2(1.0, 0.4))
-		draw_circle(Vector2.ZERO, half * 1.3, SlimeLook.BODY)
-		draw_circle(Vector2(0, -6), half * 0.9, SlimeLook.LIGHT.darkened(0.15))
-		draw_set_transform(Vector2.ZERO)
-
-
-## Where the column will land: a dark stain spreading on the floor and a
-## blinking warning ring.
+## Where a geyser will come up: the floor tiles darken in a spreading stain
+## lying on the surface, sludge bubbles through, and a ring blinks as a warning.
 class Mark:
 	extends Node2D
 
@@ -122,17 +74,93 @@ class Mark:
 	var delay := 0.9
 	var _time := 0.0
 
+	func _ready() -> void:
+		var bubbles := SlimeLook.drips(10, Vector2(width * 0.8, 2), 500.0)
+		bubbles.initial_velocity_min = 40.0
+		bubbles.initial_velocity_max = 120.0
+		add_child(bubbles)
+
 	func _process(delta: float) -> void:
 		_time += delta
 		queue_redraw()
 
 	func _draw() -> void:
 		var grow := clampf(_time / delay, 0.0, 1.0)
-		draw_set_transform(Vector2(0, -4), 0.0, Vector2(1.0, 0.25))
-		draw_circle(Vector2.ZERO, width * 0.6 * grow, Color(SlimeLook.DARK, 0.7))
+		# Flat on the top of the tiles (y = 0 is the floor surface).
+		draw_set_transform(Vector2(0, 3), 0.0, Vector2(1.0, 0.18))
+		draw_circle(Vector2.ZERO, width * 0.75 * grow, Color(SlimeLook.DARK, 0.85))
+		draw_circle(Vector2.ZERO, width * 0.5 * grow, Color(SlimeLook.BODY, 0.6 * grow))
 		if int(_time * 10.0) % 2 == 0:
-			draw_arc(Vector2.ZERO, width * 0.62, 0.0, TAU, 32, Color(1.0, 0.9, 0.3, 0.9), 6.0)
+			draw_arc(Vector2.ZERO, width * 0.8, 0.0, TAU, 40, Color(1.0, 0.9, 0.3, 0.9), 10.0)
 		draw_set_transform(Vector2.ZERO)
+
+
+## A fountain of sludge shooting up out of the floor (y = 0) to `height`:
+## a wobbling jet, a frothy crown spraying drops, a splash ring on the floor.
+class Geyser:
+	extends Node2D
+
+	var width := 90.0
+	var height := 0.0
+	var _time := 0.0
+	var _spray: CPUParticles2D
+
+	func _ready() -> void:
+		var splash := SlimeLook.drips(24, Vector2(width * 1.2, 4), 1300.0)
+		splash.initial_velocity_max = 320.0
+		splash.spread = 60.0
+		add_child(splash)
+		_spray = SlimeLook.drips(30, Vector2(width * 0.8, 10), 1300.0)
+		_spray.initial_velocity_min = 120.0
+		_spray.initial_velocity_max = 380.0
+		_spray.spread = 75.0
+		add_child(_spray)
+
+	func _process(delta: float) -> void:
+		_time += delta
+		_spray.position = Vector2(0, -height)
+		_spray.emitting = height > 40.0
+		queue_redraw()
+
+	func _draw() -> void:
+		var half := width / 2.0
+		# The splash ring lying on the floor tiles.
+		draw_set_transform(Vector2(0, 2), 0.0, Vector2(1.0, 0.22))
+		draw_circle(Vector2.ZERO, half * 1.5, Color(SlimeLook.DARK, 0.8))
+		draw_circle(Vector2.ZERO, half * 1.15, SlimeLook.BODY)
+		draw_set_transform(Vector2.ZERO)
+		if height < 4.0:
+			return
+		# The jet: wider at the bottom, edges wobbling as it gushes.
+		var left := PackedVector2Array()
+		var right := PackedVector2Array()
+		var steps := 14
+		for i in steps + 1:
+			var k := float(i) / steps
+			var w := half * (1.0 - 0.35 * k) + 5.0 * sin(_time * 30.0 + k * 8.0)
+			left.append(Vector2(-w, -height * k))
+			right.append(Vector2(w, -height * k))
+		right.reverse()
+		draw_colored_polygon(left + right, SlimeLook.BODY)
+		# Light streaks rushing upwards.
+		for i in 4:
+			var x := lerpf(-half * 0.45, half * 0.45, float(i) / 3.0)
+			var bottom := minf(-fmod(_time * 1800.0 + i * 140.0, height + 120.0) + 60.0, 0.0)
+			var top := maxf(bottom - 90.0, -height)
+			if bottom > top:
+				draw_rect(Rect2(x - 3, top, 6, bottom - top), Color(SlimeLook.LIGHT, 0.65))
+		draw_polyline(left, Color(SlimeLook.DARK, 0.7), 4.0)
+		# The fountain spilling over: blobs arcing out and down to both sides.
+		for side in [-1.0, 1.0]:
+			for i in 9:
+				var k := fmod(float(i) / 9.0 + _time * 1.6, 1.0)
+				var spill := Vector2(side * half * (0.3 + 1.6 * k), -height + height * 0.4 * k * k - 30.0 * sin(k * PI))
+				draw_circle(spill, half * (0.32 - 0.18 * k), Color(SlimeLook.BODY, 1.0 - k * 0.6))
+		# The frothy crown.
+		for i in 5:
+			var angle := TAU * i / 5.0 + _time * 6.0
+			draw_circle(Vector2(cos(angle) * half * 0.45, -height + sin(angle) * 10.0), half * 0.42, SlimeLook.BODY)
+		draw_circle(Vector2(0, -height - 6.0), half * 0.4, SlimeLook.LIGHT)
 
 
 ## A pool of acid filling `size` (top-left at 0, 0): a rippling surface, a
