@@ -142,6 +142,23 @@ jobs:
           godot --headless --path game --export-release "Windows" ../build/windows/CoopPlatformer.exe 2>&1 | tee export.log
           test -f build/windows/CoopPlatformer.exe
           ls -la build/windows
+          echo "--- export warnings ---"
+          grep -iE "warning|error|rcedit" export.log | grep -v "savepack" || true
+
+      - name: Check the exe icon
+        run: |
+          pip install --quiet pefile
+          python3 - <<'PY'
+          import pefile
+          exe = pefile.PE("build/windows/CoopPlatformer.exe")
+          sizes = []
+          for entry in exe.DIRECTORY_ENTRY_RESOURCE.entries:
+              if entry.id == 3:  # RT_ICON
+                  for icon in entry.directory.entries:
+                      for lang in icon.directory.entries:
+                          sizes.append(lang.data.struct.Size)
+          print("icon images in the exe:", len(sizes), "bytes:", sizes)
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
