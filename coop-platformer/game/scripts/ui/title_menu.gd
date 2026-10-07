@@ -142,7 +142,11 @@ func show_zones() -> void:
 
 func show_settings() -> void:
 	_on_back = show_main
-	_show_page(SettingsEntries.build(show_main))
+	var entries := SettingsEntries.build(show_main)
+	entries.insert(entries.size() - 1, {"text": "Проверка геймпадов",
+		"action": func() -> void: _open("res://scenes/gamepad_check.tscn"),
+		"hint": "Какие геймпады видит игра и какие кнопки нажаты"})
+	_show_page(entries)
 
 
 ## The hero select screen first, then `scene`.

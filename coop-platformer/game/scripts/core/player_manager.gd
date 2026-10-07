@@ -35,6 +35,7 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	_sync_gamepads()
 	for device in all_devices():
 		device.poll()
 	# Menus keep working while the game is paused, but nobody joins then.
@@ -114,9 +115,25 @@ func _hero_taken(hero: Heroes.Id, except_slot: int) -> bool:
 	return false
 
 
+## Picks up gamepads whose connection signal was missed (some drivers only
+## show up a moment after start) and drops the ones that are gone.
+func _sync_gamepads() -> void:
+	var connected := Input.get_connected_joypads()
+	for device_id in connected:
+		if not _gamepads.has(device_id):
+			_on_joy_connection_changed(device_id, true)
+	for device_id in _gamepads.keys():
+		if not connected.has(device_id):
+			_on_joy_connection_changed(device_id, false)
+
+
 func _on_joy_connection_changed(device_id: int, connected: bool) -> void:
 	if connected:
-		_gamepads[device_id] = PlayerInput.gamepad(device_id)
+		# Windows may announce a gamepad again (e.g. when a second identical one
+		# is plugged in): keep the same device object, or its player would be
+		# left holding one that is no longer polled.
+		if not _gamepads.has(device_id):
+			_gamepads[device_id] = PlayerInput.gamepad(device_id)
 		return
 	var device: PlayerInput = _gamepads.get(device_id)
 	_gamepads.erase(device_id)

@@ -24,6 +24,7 @@ func _run_all() -> void:
 	await _test_team_respawns_at_checkpoint()
 	await _test_late_joiner_appears_next_to_partner()
 	await _test_heroes_swap_on_any_level()
+	_test_gamepad_announced_twice()
 
 
 func _test_camera_zooms_out() -> void:
@@ -145,3 +146,13 @@ func _pair(at_a: Vector2, at_b: Vector2) -> void:
 func _clear() -> void:
 	for slot in [0, 1]:
 		_level.remove_player(slot)
+
+
+## Windows can announce the same gamepad again; its player must keep the
+## device object that is still being read.
+func _test_gamepad_announced_twice() -> void:
+	PlayerManager._on_joy_connection_changed(7, true)
+	var first: PlayerInput = PlayerManager._gamepads[7]
+	PlayerManager._on_joy_connection_changed(7, true)
+	_check(PlayerManager._gamepads[7] == first, "повторное подключение того же геймпада не подменяет его")
+	PlayerManager._on_joy_connection_changed(7, false)
