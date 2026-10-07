@@ -1,5 +1,6 @@
 # Графика для мира 1 — что сгенерировать в ChatGPT
 
+> Начиная с раздела 1.7 промпты даются **целиком** (стиль, внешность героя, поза, технические требования) — копируй блок как есть.
 > Порядок важен: сверху — то, что сильнее всего меняет вид игры. Присылай картинки пачками, как получатся,
 > я сразу встраиваю. Перед каждым промптом вставляй **Блок стиля** из [ART_GUIDE.md](ART_GUIDE.md), раздел 2.
 > Нарезку, прозрачность, бесшовность и анимацию делаю я — от тебя только картинки.
@@ -131,6 +132,119 @@ Arms swing opposite to the legs. Flat even lighting, white background, nothing c
 | `weapon_heavy_blade` | `A huge two-handed cleaver forged from a railway rail: wide dark steel blade with molten red cracks glowing from inside, a long wrapped grip, chains on the guard. Side view, edge pointing right.` |
 | `weapon_rifle` | `The Gunner's plasma rifle: long rusty barrel with glowing cyan energy cells, scope, leather sling. Side view, pointing right.` |
 | `weapon_blade` | `The Swordsman's glowing orange serrated blade with dash-shaped vents along it, a mechanical hilt. Side view, edge pointing right.` |
+
+
+### 1.7 Полные промпты мечника (копировать целиком)
+
+Каждый промпт — целиком, ничего добавлять не нужно. К каждому прикладывай картинку, указанную над ним.
+
+**`swordsman_run`** — Attach `art_source/heroes/swordsman_side_original.png`. Landscape 16:9.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Keep exactly the same character design, colours and proportions as the attached image (the Swordsman):
+short messy brown hair, short beard, thick black knitted scarf, dark riveted plate armour with glowing
+orange seams, a mechanical right arm with an orange glowing joint, armoured boots with straps, a belt
+with leather pouches. He carries ONLY ONE sword: a long curved serrated blade glowing orange with
+dash-shaped vents, ALWAYS held in his right (mechanical) hand. There is NO sheath, NO scabbard and NO
+second sword on his belt, back or hip — the belt has only pouches.
+
+A run cycle sprite sheet: 4 frames side by side in one row, the same character in each, side view
+facing right, the same scale, all feet on the same ground line, evenly spaced with clear white space
+between the figures, nothing overlapping.
+Frame 1: contact — right leg forward, heel touching the ground, left leg stretched back.
+Frame 2: passing — right leg under the body bearing the weight, left knee lifted forward.
+Frame 3: contact — left leg forward touching the ground, right leg stretched back.
+Frame 4: passing — left leg under the body, right knee lifted forward.
+The sword hand stays low at his right side in every frame, the glowing blade pointing back and down
+along the leg; the free left arm swings opposite to the legs, fist closed. The scarf ends flow back.
+Landscape 16:9.
+
+Flat even lighting on the character, pure white background, nothing cropped by the image edge,
+no motion lines, no glow halos around the figure, no shadow on the ground, no text.
+Check every figure: exactly one sword, in his hand; remove any sword from the belt.
+```
+
+**`swordsman_jump_1`** — Attach `art_source/heroes/swordsman_side_original.png`. Portrait 2:3.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Keep exactly the same character design, colours and proportions as the attached image (the Swordsman):
+short messy brown hair, short beard, thick black knitted scarf, dark riveted plate armour with glowing
+orange seams, a mechanical right arm with an orange glowing joint, armoured boots with straps, a belt
+with leather pouches. He carries ONLY ONE sword: a long curved serrated blade glowing orange with
+dash-shaped vents, ALWAYS held in his right (mechanical) hand. There is NO sheath, NO scabbard and NO
+second sword on his belt, back or hip — the belt has only pouches.
+
+Full body, side view facing right, the same scale as the attached image.
+Pose: jumping up — both knees pulled up, the body slightly curled, the glowing blade held back and low
+in his right hand, the free left arm raised for balance, the scarf ends flying down behind. Portrait 2:3.
+
+Flat even lighting on the character, pure white background, nothing cropped by the image edge,
+no motion lines, no glow halos around the figure, no shadow on the ground, no text.
+Check every figure: exactly one sword, in his hand; remove any sword from the belt.
+```
+
+**`swordsman_fall_1`** — Attach `art_source/heroes/swordsman_side_original.png`. Portrait 2:3.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Keep exactly the same character design, colours and proportions as the attached image (the Swordsman):
+short messy brown hair, short beard, thick black knitted scarf, dark riveted plate armour with glowing
+orange seams, a mechanical right arm with an orange glowing joint, armoured boots with straps, a belt
+with leather pouches. He carries ONLY ONE sword: a long curved serrated blade glowing orange with
+dash-shaped vents, ALWAYS held in his right (mechanical) hand. There is NO sheath, NO scabbard and NO
+second sword on his belt, back or hip — the belt has only pouches.
+
+Full body, side view facing right, the same scale as the attached image.
+Pose: falling — legs stretched down and slightly apart, ready to land, the glowing blade held out to the
+side and back in his right hand, the free left arm out for balance, the scarf ends flying up. Portrait 2:3.
+
+Flat even lighting on the character, pure white background, nothing cropped by the image edge,
+no motion lines, no glow halos around the figure, no shadow on the ground, no text.
+Check every figure: exactly one sword, in his hand; remove any sword from the belt.
+```
+
+**`swordsman_dash_1`** — Attach `art_source/heroes/swordsman_side_original.png`. Landscape 3:2.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Keep exactly the same character design, colours and proportions as the attached image (the Swordsman):
+short messy brown hair, short beard, thick black knitted scarf, dark riveted plate armour with glowing
+orange seams, a mechanical right arm with an orange glowing joint, armoured boots with straps, a belt
+with leather pouches. He carries ONLY ONE sword: a long curved serrated blade glowing orange with
+dash-shaped vents, ALWAYS held in his right (mechanical) hand. There is NO sheath, NO scabbard and NO
+second sword on his belt, back or hip — the belt has only pouches.
+
+Full body, side view facing right, the same scale as the attached image.
+Pose: a very fast forward dash — the body low and leaning far forward, the right leg bent in front,
+the left leg stretched far behind, the glowing blade held back along the body in his right hand,
+the free left fist forward, the scarf streaming straight back. Landscape 3:2.
+
+Flat even lighting on the character, pure white background, nothing cropped by the image edge,
+no motion lines, no glow halos around the figure, no shadow on the ground, no text.
+Check every figure: exactly one sword, in his hand; remove any sword from the belt.
+```
 
 ---
 
