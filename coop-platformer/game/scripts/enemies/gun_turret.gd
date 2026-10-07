@@ -50,3 +50,5 @@ func _think(delta: float) -> void:
 	bullet.setup(Layers.Team.ENEMIES, mouth, hero.global_position - mouth,
 		bullet_speed, bullet_damage, bullet_knockback, Vector2(20, 20), BULLET_COLOR, 0, 3.0)
 	get_parent().add_child(bullet)
+	# The spitter jerks as it spits.
+	punch(Vector2(-0.12, 0.18))

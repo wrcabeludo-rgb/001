@@ -190,7 +190,9 @@ func pose(player: Player, delta: float) -> void:
 	_clock += delta
 	_action_time += delta
 	var current := current_pose(player)
-	_leave_afterimage(current == "dash", player, delta)
+	var hasty := player.has_power("haste") and absf(player.velocity.x) > 50.0
+	_leave_afterimage(current == "dash" or hasty, player, delta,
+		Heroes.COLORS[player.hero] if current == "dash" else PowerFx.HASTE)
 	_recoil = move_toward(_recoil, 0.0, delta * 8.0)
 	if player.is_climbing() and absf(player.velocity.y) > 1.0:
 		_phase += absf(player.velocity.y) * delta * 0.03
@@ -340,15 +342,15 @@ func _show_drawing(pose_name: String) -> bool:
 	return true
 
 
-## Dashing leaves fading copies of the hero behind, tinted in his colour.
-func _leave_afterimage(dashing: bool, player: Player, delta: float) -> void:
+## Dashing (or running with haste) leaves fading tinted copies of the hero behind.
+func _leave_afterimage(dashing: bool, player: Player, delta: float, color: Color) -> void:
 	_afterimage_timer -= delta
 	if not dashing or _afterimage_timer > 0.0 or not is_inside_tree():
 		return
 	_afterimage_timer = AFTERIMAGE_EVERY
 	var ghost := Node2D.new()
 	ghost.global_transform = global_transform
-	ghost.modulate = Color(Heroes.COLORS[player.hero], 0.55)
+	ghost.modulate = Color(color, 0.55)
 	ghost.z_index = -1
 	for part in [_pose_sprite, _back_leg, _front_leg, _body]:
 		if not part.visible:

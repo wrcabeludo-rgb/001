@@ -52,6 +52,12 @@ var _contact: Area2D
 var _sprite: Sprite2D
 var _sprite_rest := Vector2.ZERO
 var _anim_time := 0.0
+## The picture's scale at rest; the animation squashes and stretches it.
+var _base_scale := Vector2.ONE
+## A squash that springs back: x wider (+) / narrower, y taller (+) / shorter.
+var _squash := Vector2.ZERO
+var _hit_tilt := 0.0
+var _was_on_floor := true
 
 
 
@@ -106,6 +112,7 @@ func _ready() -> void:
 		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		var factor := art_height / _sprite.texture.get_height()
 		_sprite.scale = Vector2(factor, factor)
+		_base_scale = _sprite.scale
 		var drawn := art_drawn_size()
 		# Standing on the same floor as the body.
 		_sprite_rest = Vector2.ZERO if art_centered else Vector2(0, body_size.y / 2.0 - drawn.y / 2.0)
@@ -141,6 +148,9 @@ func receive_hit(hit: Hit) -> bool:
 		return false
 	health.damage(hit.damage)
 	_flash_timer = 0.1
+	# Flinch: squashed by the blow and knocked back a little.
+	_squash = Vector2(0.14, -0.16)
+	_hit_tilt = clampf(hit.knockback.x / 2000.0, -0.3, 0.3)
 	if is_alive():
 		Sound.play("hit")
 	if not super_armor and is_alive():
@@ -266,25 +276,95 @@ func _update_look() -> void:
 	_eye.position = Vector2(facing * (body_size.x / 2.0 - 14.0) - 5.0, -body_size.y / 2.0 + 12.0)
 
 
-## The picture's motion: faces the way the enemy looks, bobs while walking,
-## leans into a fast run. Enemy types can add their own touches.
+## The picture's motion, made from the one drawing: it faces the way the
+## enemy looks, steps with a bob and a squash, breathes when standing, leans
+## into a run, stretches when jumping and squashes on landing, pulls back and
+## trembles before an attack, flinches when hit; fliers flap. Enemy types add
+## their own touches on top.
 func _animate_sprite() -> void:
 	var delta := get_physics_process_delta_time()
 	var speed := absf(velocity.x)
 	_anim_time += delta * (2.0 + speed * 0.04)
 	_sprite.flip_h = facing > 0
-	var bob := absf(sin(_anim_time * 2.0)) * minf(speed, 200.0) * 0.03 if is_on_floor() or not uses_gravity else 0.0
+	var on_floor := is_on_floor() or not uses_gravity
+	var bob := absf(sin(_anim_time * 2.0)) * minf(speed, 200.0) * 0.03 if on_floor else 0.0
+	var stretch := Vector2.ZERO
+	var lean := -facing * clampf(speed / 3000.0, 0.0, 0.18)
+	var shake := Vector2.ZERO
 	if not uses_gravity:
-		bob = sin(_anim_time) * 4.0
-	_sprite.position = _sprite_rest + Vector2(0, -bob)
-	_sprite.rotation = -facing * clampf(speed / 3000.0, 0.0, 0.18)
+		# Wings beating: the body pumps up and down.
+		bob = sin(_anim_time * 1.0) * 4.0
+		var flap := sin(Time.get_ticks_msec() * 0.03)
+		stretch = Vector2(-0.04 * flap, 0.08 * flap)
+	elif not is_on_floor():
+		var rise := clampf(-velocity.y / 2200.0, -0.12, 0.16)
+		stretch = Vector2(-rise * 0.6, rise)
+	elif speed > 20.0:
+		var step := sin(_anim_time * 4.0)
+		stretch = Vector2(-0.03 * step, 0.05 * step)
+	else:
+		var breath := sin(Time.get_ticks_msec() * 0.0035 + get_instance_id())
+		stretch = Vector2(0.015 * breath, 0.025 * breath)
+	if uses_gravity and is_on_floor() and not _was_on_floor:
+		_squash = Vector2(0.16, -0.18)
+	_was_on_floor = is_on_floor()
+	if is_telegraphing():
+		# Gathering itself for the attack: rears back, crouches, trembles.
+		lean += facing * -0.12
+		stretch += Vector2(0.05, -0.07)
+		shake = Vector2(randf_range(-2, 2), 0)
+	_squash = _squash.move_toward(Vector2.ZERO, delta * 1.2)
+	_hit_tilt = move_toward(_hit_tilt, 0.0, delta * 2.0)
+	var total := stretch + _squash
+	_sprite.scale = _base_scale * (Vector2.ONE + total)
+	# Keep the feet on the floor while the picture changes height.
+	var lift := 0.0 if art_centered else total.y * art_drawn_size().y * 0.5 / (1.0 + total.y)
+	_sprite.position = _sprite_rest + Vector2(0, -bob - lift) + shake
+	_sprite.rotation = lean + _hit_tilt
+
+
+## A quick jolt of the picture (a spit, a shot): `amount` x wider, y taller.
+func punch(amount: Vector2) -> void:
+	_squash = amount
 
 
 func _on_died() -> void:
 	Sound.play("enemy_die")
+	_leave_corpse()
 	_drop_loot()
 	died.emit(self)
 	queue_free()
+
+
+## The death: the picture flashes white, topples over away from the hero
+## and sinks, fading, while slime and bits burst out. Fliers drop to the ground.
+func _leave_corpse() -> void:
+	var parent := get_parent()
+	if parent == null or _sprite == null:
+		return
+	var corpse := Sprite2D.new()
+	corpse.texture = _sprite.texture
+	corpse.flip_h = _sprite.flip_h
+	corpse.texture_filter = _sprite.texture_filter
+	corpse.global_transform = _sprite.global_transform
+	corpse.material = Flash.material()
+	Flash.set_flash(corpse, Color.WHITE, 0.9)
+	parent.add_child(corpse)
+	var fall := 1.35 * (1.0 if _hit_tilt >= 0.0 else -1.0)
+	var drop := 0.0 if uses_gravity else 260.0
+	var tween := corpse.create_tween().set_parallel()
+	tween.tween_method(func(amount: float) -> void: Flash.set_flash(corpse, Color.WHITE, amount), 0.9, 0.0, 0.25)
+	tween.tween_property(corpse, "rotation", corpse.rotation + fall, 0.45).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(corpse, "position:y", corpse.position.y + art_drawn_size().y * 0.25 + drop, 0.45) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(corpse, "modulate:a", 0.0, 0.35).set_delay(0.45)
+	tween.chain().tween_callback(corpse.queue_free)
+	var at := global_position
+	# Thrown up and out, short-lived, so they do not sink through the floor.
+	Fx.burst(parent, at, [Color(0.6, 1.0, 0.3), Color(0.3, 0.7, 0.1), Color(0.15, 0.35, 0.05, 0.0)], 22, 420.0, 6.0,
+		0.45, 1100.0, false, Vector2.UP, 75.0)
+	Fx.burst(parent, at, [Color(0.4, 0.25, 0.2), Color(0.25, 0.15, 0.12, 0.0)], 8, 360.0, 5.0, 0.5, 1300.0, false,
+		Vector2.UP, 70.0)
 
 
 func _drop_loot() -> void:

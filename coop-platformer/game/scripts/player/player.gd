@@ -69,6 +69,7 @@ var _wall_dust: CPUParticles2D
 
 var _body: ColorRect
 var _aura: ColorRect
+var _power_fx: PowerFx
 var _eye: ColorRect
 ## The drawn puppet (null until the hero has art; then the box is hidden).
 var _rig: HeroRig
@@ -153,7 +154,11 @@ func set_active(active: bool) -> void:
 ## Called by a Hurtbox when an enemy attack lands. Returns true if it counted.
 func receive_hit(hit: Hit) -> bool:
 	# The Swordsman's dash passes through enemies and their attacks.
-	if is_invulnerable() or is_dashing() or health.is_dead() or has_power("shield"):
+	if has_power("shield") and not health.is_dead():
+		_power_fx.shield_ping()
+		Sound.play("block", 0.1, -4.0, 1.4)
+		return false
+	if is_invulnerable() or is_dashing() or health.is_dead():
 		return false
 	hit.damage = GameSettings.damage_to_heroes(hit.damage)
 	hit = combat.modify_hit(hit)
@@ -199,9 +204,13 @@ func _ready() -> void:
 	add_child(_collision)
 	last_safe_position = position
 
-	# A glow around the hero while a power-up is active.
+	# A glow around the hero while a power-up is active (the box hero only;
+	# a drawn hero gets PowerFx).
 	_aura = Harm.box(-SIZE / 2 - Vector2(8, 8), SIZE + Vector2(16, 16), Color.TRANSPARENT)
 	add_child(_aura)
+	_power_fx = PowerFx.new()
+	_power_fx.setup(self)
+	add_child(_power_fx)
 
 	_body = ColorRect.new()
 	_body.size = SIZE
@@ -582,7 +591,7 @@ func _update_look(sliding: bool) -> void:
 			_rig.tint(Color.WHITE, 0.3)
 		else:
 			_rig.tint(Color.WHITE, 0.0)
-	_aura.visible = not powers.is_empty()
+	_aura.visible = not powers.is_empty() and _rig == null
 	if _aura.visible:
 		var power: String = powers.keys()[0]
 		_aura.color = Color(POWER_COLORS[power], 0.35 + 0.2 * sin(Time.get_ticks_msec() * 0.012))
