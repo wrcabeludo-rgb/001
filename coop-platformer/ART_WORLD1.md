@@ -81,6 +81,29 @@ white background, nothing cropped, no motion lines, no effects. Pose: ...
 
 Готово: все позы обоих героев.
 
+### 1.4 Бег (анимация ходьбы)
+
+Сейчас бег — это «кукла»: ноги качаются, а руки и плащ неподвижны. Нужен настоящий цикл бега:
+**4 кадра** на одной картинке, слева направо, все фигуры одного размера и на одной линии земли.
+Прикладывай вид героя сбоку (как для поз) и пиши:
+
+```
+[Блок стиля]
+Keep exactly the same character design, colours and proportions as the attached image.
+A run cycle sprite sheet: 4 frames side by side in one row, the same character in each, side view
+facing right, the same scale, all feet on the same ground line, evenly spaced, nothing overlapping.
+Frame 1: contact — right leg forward touching the ground, left leg back.
+Frame 2: passing — right leg under the body bearing weight, left knee lifted forward.
+Frame 3: contact — left leg forward touching the ground, right leg back.
+Frame 4: passing — left leg under the body, right knee lifted forward.
+Arms swing opposite to the legs. Flat even lighting, white background, nothing cropped. Landscape 16:9.
+```
+
+Дополнение для **стрелка**: `The rifle is held in both hands at chest height, pointing forward; the cape and scarf flow behind.`
+Дополнение для **мечника**: `The glowing blade is held low in the right hand, pointing back and down; the free arm swings.`
+
+Имена: `gunner_run`, `swordsman_run`. Если 4 кадра не помещаются ровно — пришли как есть, разрежу сам.
+
 ---
 
 ## 2. Враги мира 1 (все — мутанты)

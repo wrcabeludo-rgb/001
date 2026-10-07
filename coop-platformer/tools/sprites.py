@@ -271,6 +271,8 @@ POSE_SOURCES = {
     # Back view with a hand raised above the head.
     "swordsman_climb": [("swordsman_climb", (0, 0, 724, 1086), 1.12), ("swordsman_climb", (724, 0, 1448, 1086), 1.12)],
 }
+# Run cycles: a sheet of RUN_FRAMES figures in a row (art_source/heroes/poses/originals/<hero>_run_original.png).
+RUN_FRAMES = 4
 # How far the wall is from the hero's middle in the wall pose (art pixels).
 WALL_GAP = 48
 
@@ -300,11 +302,37 @@ def _pose_cutout(name, box):
     return img
 
 
+def _add_run_cycles():
+    """Cut each run sheet into its frames: the figures are found as separate
+    columns of drawing, so uneven spacing does not matter."""
+    for hero in HEROES:
+        path = os.path.join(SRC, "heroes/poses/originals", hero + "_run_original.png")
+        key = hero + "_run"
+        if not os.path.exists(path) or key in POSE_SOURCES:
+            continue
+        img = Image.open(path)
+        filled = np.asarray(remove_background(img))[:, :, 3].max(axis=0) > 0
+        runs, start = [], None
+        for x, on in enumerate(list(filled) + [False]):
+            if on and start is None:
+                start = x
+            elif not on and start is not None:
+                if x - start > img.width / 20:
+                    runs.append((start, x))
+                start = None
+        if len(runs) != RUN_FRAMES:
+            # Figures touch: fall back to equal slices.
+            step = img.width / RUN_FRAMES
+            runs = [(round(i * step), round((i + 1) * step)) for i in range(RUN_FRAMES)]
+        POSE_SOURCES[key] = [(hero + "_run", (a, 0, b, img.height)) for a, b in runs]
+
+
 def build_poses():
     """Action poses -> <hero>_pose_<pose>_<n>.png and poses.json: for each frame,
     where the feet are across the picture (0..1), so the game stands the drawing
     on the hero's spot (the wall pose: against the wall)."""
     anchors = {}
+    _add_run_cycles()
     for hero, (name, box, share) in POSE_REFERENCE.items():
         reference = _pose_cutout(name, box)
         if reference is None:

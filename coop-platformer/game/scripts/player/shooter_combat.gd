@@ -73,7 +73,7 @@ func update(delta: float) -> void:
 		if is_charged() and weapon == "rifle":
 			ammo -= stats.charged_cost
 			_shoot(stats.charged_damage, stats.charged_knockback, Vector2(46, 22), CHARGED_COLOR,
-				stats.charged_pierce)
+				stats.charged_pierce, ProjectileLook.Style.PLASMA)
 			Sound.play("shoot_charged")
 		_charge = 0.0
 
@@ -123,19 +123,32 @@ func aim_direction() -> Vector2:
 	return aim.normalized()
 
 
-func _shoot(damage: int, knockback: float, size: Vector2, color: Color, pierce: int) -> void:
+func _shoot(damage: int, knockback: float, size: Vector2, color: Color, pierce: int,
+		style := ProjectileLook.Style.BOLT) -> void:
 	var direction := aim_direction()
 	var start := player.global_position + Vector2(0, muzzle_height()) + direction * MUZZLE_DISTANCE
-	_fire(start, direction, damage, knockback, size, color, pierce, stats.shot_lifetime)
+	_fire(start, direction, damage, knockback, size, color, pierce, stats.shot_lifetime, style)
 
 
 func _fire(start: Vector2, direction: Vector2, damage: int, knockback: float, size: Vector2, color: Color,
-		pierce: int, lifetime: float) -> void:
+		pierce: int, lifetime: float, style := ProjectileLook.Style.BOLT) -> void:
 	player.animate_attack()
 	var projectile := Projectile.new()
 	projectile.setup(Layers.Team.PLAYERS, start, direction, stats.shot_speed,
 		roundi(damage * player.damage_multiplier()), knockback, size, color, pierce, lifetime)
+	projectile.style = style
 	player.get_parent().add_child(projectile)
+	_muzzle_flash(start, color)
+
+
+## A short flash of light at the end of the barrel.
+func _muzzle_flash(at: Vector2, color: Color) -> void:
+	var flash := Fx.Flare.new()
+	flash.position = at
+	flash.radius = 26.0
+	flash.life = 0.08
+	flash.color = color.lightened(0.3)
+	player.get_parent().add_child(flash)
 
 
 func _shotgun() -> void:
@@ -144,7 +157,7 @@ func _shotgun() -> void:
 	for i in SHOTGUN_PELLETS:
 		var angle := (float(i) / (SHOTGUN_PELLETS - 1) - 0.5) * SHOTGUN_SPREAD
 		_fire(start, direction.rotated(angle), stats.shot_damage, stats.shot_knockback * 2.0,
-			Vector2(14, 8), SHOT_COLOR, 0, SHOTGUN_LIFETIME)
+			Vector2(14, 8), SHOT_COLOR, 0, SHOTGUN_LIFETIME, ProjectileLook.Style.PELLET)
 	Sound.play("shotgun", 0.08)
 
 

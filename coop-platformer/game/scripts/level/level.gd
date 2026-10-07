@@ -558,6 +558,7 @@ func _build_mechanics(map: Array) -> void:
 				"x":
 					var block := CrumblingBlock.new()
 					block.setup(rect)
+					block.look_material = ground_material if is_ground_top(map, row, col) else wall_material
 					add_child(block)
 				"M", "L":
 					var target := _find_marker(map, col, row, cell == "L")

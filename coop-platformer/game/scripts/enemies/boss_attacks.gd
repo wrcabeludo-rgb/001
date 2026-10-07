@@ -4,7 +4,6 @@ class_name BossAttacks
 ## falling from above onto a marked spot.
 
 const SLUDGE_COLOR := Color(0.45, 0.95, 0.25)
-const WAVE_COLOR := Color(0.75, 1.0, 0.35, 0.85)
 
 
 ## A wave that runs along the floor from `start` (a point on the floor) in
@@ -19,8 +18,6 @@ class Shockwave:
 	var damage := 3
 	var distance_left := 1600.0
 
-	var _look: ColorRect
-
 	func setup(start: Vector2, p_direction: int, p_speed: float, p_damage: int) -> void:
 		position = start
 		direction = p_direction
@@ -28,8 +25,10 @@ class Shockwave:
 		damage = p_damage
 
 	func _ready() -> void:
-		_look = Harm.box(Vector2(-SIZE.x / 2.0, -SIZE.y), SIZE, WAVE_COLOR)
-		add_child(_look)
+		var look := SlimeLook.Wave.new()
+		look.size = SIZE
+		look.scale.x = direction
+		add_child(look)
 
 	func area() -> Rect2:
 		return Rect2(global_position + Vector2(-SIZE.x / 2.0, -SIZE.y), SIZE)
@@ -43,7 +42,6 @@ class Shockwave:
 			return
 		position.x += direction * step
 		distance_left -= step
-		_look.scale.y = 0.8 + 0.2 * sin(Time.get_ticks_msec() * 0.03)
 		for hurtbox in Harm.hurtboxes_in_rect(get_world_2d(), area(), Harm.HEROES):
 			hurtbox.take_hit(Hit.make(damage, Vector2(direction * 450.0, -650.0), global_position))
 
@@ -64,6 +62,7 @@ class Glob:
 
 	func _on_body_entered(_body: Node2D) -> void:
 		_leave_puddle()
+		_burst()
 		queue_free()
 
 	func _leave_puddle() -> void:
@@ -95,8 +94,8 @@ class Drop:
 	var delay := 0.9
 	var damage := 3
 	var _time := 0.0
-	var _mark: ColorRect
-	var _column: ColorRect
+	var _mark: SlimeLook.Mark
+	var _column: SlimeLook.Column
 
 	## `floor_point` is where the column lands.
 	func setup(floor_point: Vector2, p_delay: float, p_damage: int) -> void:
@@ -105,19 +104,20 @@ class Drop:
 		damage = p_damage
 
 	func _ready() -> void:
-		_mark = Harm.box(Vector2(-WIDTH / 2.0, -8), Vector2(WIDTH, 8), Color(1.0, 0.95, 0.4))
+		_mark = SlimeLook.Mark.new()
+		_mark.width = WIDTH
+		_mark.delay = delay
 		add_child(_mark)
-		_column = Harm.box(Vector2(-WIDTH / 2.0, -HEIGHT), Vector2(WIDTH, HEIGHT), Color(SLUDGE_COLOR, 0.8))
-		_column.visible = false
-		add_child(_column)
 
 	func _physics_process(delta: float) -> void:
 		_time += delta
 		if _time < delay:
-			_mark.visible = int(_time * 10.0) % 2 == 0
 			return
-		_mark.visible = false
-		_column.visible = true
+		if _column == null:
+			_mark.visible = false
+			_column = SlimeLook.Column.new()
+			_column.size = Vector2(WIDTH, HEIGHT)
+			add_child(_column)
 		var area := Rect2(global_position + Vector2(-WIDTH / 2.0, -HEIGHT), Vector2(WIDTH, HEIGHT))
 		for hurtbox in Harm.hurtboxes_in_rect(get_world_2d(), area, Harm.HEROES):
 			var side := 1.0 if hurtbox.global_position.x >= global_position.x else -1.0

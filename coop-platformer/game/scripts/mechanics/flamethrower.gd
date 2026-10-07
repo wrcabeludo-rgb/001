@@ -2,11 +2,10 @@ class_name Flamethrower
 extends Node2D
 ## A flamethrower turret on a wall. On a timer it sputters sparks (warning),
 ## then shoots a jet of fire sideways that burns heroes and throws them back.
+## The fire and sparks are particles: white-hot at the nozzle, orange, then smoke.
 
 enum State { IDLE, WARNING, FIRE }
 
-const FLAME_COLOR := Color(1.0, 0.55, 0.15, 0.85)
-const SPARK_COLOR := Color(1.0, 0.9, 0.4)
 const FLAME_HEIGHT := 44.0
 
 @export var idle_time := 2.0
@@ -22,8 +21,9 @@ var direction := 1
 var rect := Rect2()
 
 var _timer := 0.0
-var _flame: ColorRect
-var _sparks: ColorRect
+var _fire: CPUParticles2D
+var _smoke: CPUParticles2D
+var _sparks: CPUParticles2D
 
 
 func setup(nozzle: Vector2, p_direction: int, reach: float, phase := 0.0) -> void:
@@ -44,12 +44,42 @@ func _ready() -> void:
 		add_child(art)
 	else:
 		add_child(Harm.box(Vector2(-30 if direction > 0 else -10, -24), Vector2(40, 48), Color(0.36, 0.3, 0.3)))
-	_flame = Harm.box(rect.position - position, rect.size, FLAME_COLOR)
-	_flame.visible = false
-	add_child(_flame)
-	_sparks = Harm.box(Vector2(direction * 14 - 8, -8), Vector2(16, 16), SPARK_COLOR)
-	_sparks.visible = false
-	add_child(_sparks)
+	var reach := rect.size.x
+	_fire = _jet(90, 0.42, reach, 10.0, 34.0,
+		[Color(1, 1, 0.85), Color(1.0, 0.75, 0.25), Color(1.0, 0.35, 0.08, 0.8), Color(0.5, 0.1, 0.05, 0.0)], true)
+	_smoke = _jet(24, 0.8, reach * 0.9, 16.0, 44.0,
+		[Color(0.2, 0.18, 0.18, 0.0), Color(0.18, 0.16, 0.16, 0.45), Color(0.1, 0.1, 0.1, 0.0)], false)
+	_smoke.gravity = Vector2(0, -160)
+	_sparks = _jet(10, 0.3, 90.0, 4.0, 4.0, [Color(1, 1, 0.7), Color(1.0, 0.6, 0.2, 0.0)], true)
+	_sparks.spread = 40.0
+	_sparks.gravity = Vector2(0, 500)
+
+
+## A stream of particles out of the nozzle, reaching about `reach` pixels,
+## each growing from `from_size` to `to_size`.
+func _jet(amount: int, lifetime: float, reach: float, from_size: float, to_size: float, colors: Array,
+		glow: bool) -> CPUParticles2D:
+	var jet := CPUParticles2D.new()
+	jet.emitting = false
+	jet.amount = amount
+	jet.lifetime = lifetime
+	jet.direction = Vector2(direction, 0)
+	jet.spread = 9.0
+	jet.initial_velocity_min = reach / lifetime * 0.9
+	jet.initial_velocity_max = reach / lifetime * 1.15
+	jet.gravity = Vector2(0, -120)
+	jet.scale_amount_min = from_size
+	jet.scale_amount_max = from_size * 1.3
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 1.0))
+	grow.add_point(Vector2(1, to_size / from_size))
+	jet.scale_amount_curve = grow
+	jet.color_ramp = Fx.ramp(colors)
+	if glow:
+		jet.material = Fx.additive()
+	jet.position = Vector2(direction * 6.0, 0)
+	add_child(Fx.soften(jet))
+	return jet
 
 
 func _physics_process(delta: float) -> void:
@@ -67,9 +97,9 @@ func _physics_process(delta: float) -> void:
 			State.FIRE:
 				state = State.IDLE
 				_timer += idle_time
-	_flame.visible = state == State.FIRE
-	_flame.color.a = 0.75 + 0.2 * sin(Time.get_ticks_msec() * 0.05)
-	_sparks.visible = state == State.WARNING and int(_timer * 14.0) % 2 == 0
+	_fire.emitting = state == State.FIRE
+	_smoke.emitting = state == State.FIRE
+	_sparks.emitting = state == State.WARNING
 	if state != State.FIRE:
 		return
 	for hurtbox in Harm.hurtboxes_in_rect(get_world_2d(), rect, Harm.HEROES):

@@ -9,7 +9,6 @@ enum State { READY, FUSE, GONE }
 
 const SIZE := Vector2(48, 80)
 const COLOR := Color(0.85, 0.25, 0.15)
-const BLAST_COLOR := Color(1.0, 0.7, 0.2, 0.8)
 
 @export var fuse_time := 0.45
 @export var chain_fuse_time := 0.15
@@ -116,15 +115,4 @@ func reset() -> void:
 
 
 func _show_blast() -> void:
-	var blast := Polygon2D.new()
-	var points := PackedVector2Array()
-	for i in 24:
-		points.append(Vector2.from_angle(TAU * i / 24.0) * blast_radius)
-	blast.polygon = points
-	blast.color = BLAST_COLOR
-	blast.scale = Vector2.ONE * 0.3
-	add_child(blast)
-	var tween := blast.create_tween()
-	tween.tween_property(blast, "scale", Vector2.ONE, 0.15)
-	tween.tween_property(blast, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(blast.queue_free)
+	Fx.explosion(get_parent(), global_position, blast_radius)

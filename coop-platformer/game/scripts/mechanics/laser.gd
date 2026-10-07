@@ -1,7 +1,8 @@
 class_name Laser
 extends Node2D
 ## A laser beam from a ceiling emitter down to the floor, on a timer:
-## off, then a thin blinking line (warning), then the deadly beam.
+## off, then a thin blinking line (warning), then the deadly beam: a white-hot
+## core in a flickering glow, with sparks where it burns the floor.
 
 enum State { OFF, WARNING, ON }
 
@@ -19,7 +20,8 @@ var state := State.OFF
 var rect := Rect2()
 
 var _timer := 0.0
-var _beam: ColorRect
+var _look: Look
+var _sparks: CPUParticles2D
 
 
 ## `top` is the emitter, `length` how far down the beam reaches; `phase` shifts
@@ -30,10 +32,25 @@ func setup(top: Vector2, length: float, phase := 0.0) -> void:
 
 
 func _ready() -> void:
-	add_child(Harm.box(Vector2(rect.get_center().x - 22, rect.position.y), Vector2(44, 20), Color(0.3, 0.32, 0.4)))
-	_beam = Harm.box(rect.position + Vector2(0, 20), rect.size - Vector2(0, 20), BEAM_COLOR)
-	add_child(_beam)
-	_beam.visible = false
+	_look = Look.new()
+	_look.position = Vector2(rect.get_center().x, rect.position.y)
+	_look.length = rect.size.y
+	add_child(_look)
+	_sparks = CPUParticles2D.new()
+	_sparks.position = Vector2(rect.get_center().x, rect.end.y - 4.0)
+	_sparks.emitting = false
+	_sparks.amount = 16
+	_sparks.lifetime = 0.35
+	_sparks.direction = Vector2.UP
+	_sparks.spread = 70.0
+	_sparks.initial_velocity_min = 120.0
+	_sparks.initial_velocity_max = 320.0
+	_sparks.gravity = Vector2(0, 900)
+	_sparks.scale_amount_min = 2.0
+	_sparks.scale_amount_max = 3.5
+	_sparks.color_ramp = Fx.ramp([Color(1, 1, 1), BEAM_COLOR, Color(BEAM_COLOR, 0.0)])
+	_sparks.material = Fx.additive()
+	add_child(Fx.soften(_sparks))
 
 
 func cycle_time() -> float:
@@ -72,8 +89,43 @@ func _hero_near() -> bool:
 
 
 func _update_look() -> void:
-	_beam.visible = state == State.ON or (state == State.WARNING and int(_timer * 12.0) % 2 == 0)
-	var width := BEAM_WIDTH if state == State.ON else 3.0
-	_beam.size.x = width
-	_beam.position.x = rect.get_center().x - width / 2.0
-	_beam.color = BEAM_COLOR if state == State.ON else Color(BEAM_COLOR, 0.6)
+	_look.state = state
+	_look.blink = int(_timer * 12.0) % 2 == 0
+	_sparks.emitting = state == State.ON
+
+
+## The emitter under the ceiling and its beam, drawn from the emitter (0, 0) down.
+class Look:
+	extends Node2D
+
+	const HOUSING := Color(0.22, 0.23, 0.28)
+
+	var length := 300.0
+	var state := State.OFF
+	var blink := false
+	var _time := 0.0
+
+	func _process(delta: float) -> void:
+		_time += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var beam_top := 22.0
+		if state == State.ON:
+			var flicker := 1.0 + 0.15 * sin(_time * 60.0) + 0.1 * sin(_time * 23.0)
+			for layer in [[BEAM_WIDTH * 2.6, 0.18], [BEAM_WIDTH * 1.4, 0.35], [BEAM_WIDTH * 0.8, 0.7]]:
+				var w: float = layer[0] * flicker
+				draw_rect(Rect2(-w / 2.0, beam_top, w, length - beam_top), Color(BEAM_COLOR, layer[1]))
+			draw_rect(Rect2(-2.5, beam_top, 5.0, length - beam_top), Color(1, 0.95, 0.97))
+			# A hot spot where the beam meets the floor.
+			draw_circle(Vector2(0, length), BEAM_WIDTH * 1.6 * flicker, Color(BEAM_COLOR, 0.35))
+		elif state == State.WARNING and blink:
+			draw_rect(Rect2(-1.5, beam_top, 3.0, length - beam_top), Color(BEAM_COLOR, 0.6))
+		# The emitter: a metal box with a lens that glows while the beam is live.
+		draw_rect(Rect2(-24, 0, 48, 14), HOUSING)
+		draw_rect(Rect2(-24, 0, 48, 4), HOUSING.lightened(0.2))
+		draw_colored_polygon(PackedVector2Array([Vector2(-14, 14), Vector2(14, 14), Vector2(8, 22), Vector2(-8, 22)]),
+			HOUSING.darkened(0.3))
+		var lens := 0.25 if state == State.OFF else (1.0 if state == State.ON or blink else 0.5)
+		draw_circle(Vector2(0, 18), 6.0, Color(BEAM_COLOR, lens))
+		draw_circle(Vector2(0, 18), 12.0, Color(BEAM_COLOR, lens * 0.3))

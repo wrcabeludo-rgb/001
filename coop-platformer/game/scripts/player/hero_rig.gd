@@ -10,7 +10,7 @@ extends Node2D
 ## A pose can also be a drawing: "<hero>_pose_<name>_<n>.png" in the heroes
 ## folder (made by tools/sprites.py from art_source/heroes/poses). When it
 ## exists it replaces the puppet for that pose; several numbered pictures
-## play as frames.
+## play as frames (a run cycle in step with the running speed).
 
 enum Slash { DOWN, RISING, FINISHER, OVERHEAD }
 
@@ -19,7 +19,7 @@ const ART := "res://assets/art/heroes/"
 const ART_SCALE := 0.5
 const RIG_FILE := "res://assets/art/heroes/rig.json"
 const POSE_FILE := "res://assets/art/heroes/poses.json"
-const POSES := ["crouch", "wall", "climb", "block", "kick",
+const POSES := ["run", "crouch", "wall", "climb", "block", "kick",
 	"slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 const SLASH_POSES := ["slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 const KICK_TIME := 0.28
@@ -182,6 +182,9 @@ func pose(player: Player, delta: float) -> void:
 	var current := current_pose(player)
 	if player.is_climbing() and absf(player.velocity.y) > 1.0:
 		_phase += absf(player.velocity.y) * delta * 0.03
+	# One stride (both legs) is a full turn of the phase.
+	if current == "run":
+		_phase += absf(player.velocity.x) * delta * 0.022
 	if _show_drawing(current):
 		return
 	var t := _action_time / _action_length if _acting() else 0.0
@@ -261,7 +264,6 @@ func pose(player: Player, delta: float) -> void:
 				back = 0.15
 				front = -0.2
 		"run":
-			_phase += absf(player.velocity.x) * delta * 0.022
 			back = sin(_phase) * 0.55
 			front = -back
 			lift = absf(sin(_phase)) * 6.0
@@ -302,6 +304,8 @@ func _show_drawing(pose_name: String) -> bool:
 	var index := 0
 	if pose_name == "climb":
 		index = int(_phase / PI) % frames.size()
+	elif pose_name == "run":
+		index = int(fposmod(_phase, TAU) / TAU * frames.size()) % frames.size()
 	elif _acting() and frames.size() > 1:
 		# The first frame is the windup, a short third of the action; the rest is the strike.
 		var t := _action_time / _action_length

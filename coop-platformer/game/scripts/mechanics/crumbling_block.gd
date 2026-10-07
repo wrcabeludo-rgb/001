@@ -2,6 +2,7 @@ class_name CrumblingBlock
 extends StaticBody2D
 ## A cracked block: a moment after a hero steps on it, it shakes and falls
 ## apart, then comes back after a few seconds (once nobody is in the way).
+## It is drawn with the zone's own wall or ground (`look_material`), cracked.
 
 enum State { SOLID, SHAKING, GONE }
 
@@ -12,6 +13,8 @@ const COLOR := Color(0.55, 0.45, 0.4)
 
 var state := State.SOLID
 var size := Vector2(60, 60)
+## The level's terrain material, so the block looks like the walls around it.
+var look_material: ShaderMaterial
 
 var _timer := 0.0
 var _collision: CollisionShape2D
@@ -33,8 +36,16 @@ func _ready() -> void:
 	add_child(_collision)
 	_look = Harm.box(-size / 2.0, size, COLOR)
 	add_child(_look)
-	for i in 3:
-		_look.add_child(Harm.box(Vector2(10 + i * 16, 14 + (i % 2) * 20), Vector2(4, 22), COLOR.darkened(0.45)))
+	if look_material != null:
+		_look.material = look_material
+		_look.color = Color.WHITE
+	else:
+		_look.add_child(Harm.box(Vector2.ZERO, Vector2(size.x, 6), COLOR.lightened(0.2)))
+	var cracks := Rubble.Cracks.new()
+	cracks.width = size.x
+	cracks.seed_value = int(position.x * 3.0 + position.y)
+	cracks.position = Vector2(size.x / 2.0, 0)
+	_look.add_child(cracks)
 
 
 func _physics_process(delta: float) -> void:
@@ -52,6 +63,10 @@ func _physics_process(delta: float) -> void:
 				_timer = return_time
 				_look.visible = false
 				_collision.set_deferred("disabled", true)
+				Fx.burst(get_parent(), global_position, [Color(0.5, 0.44, 0.4), Color(0.35, 0.3, 0.28, 0.0)], 14, 260.0,
+					7.0, 0.8, 1300.0, false)
+				Fx.burst(get_parent(), global_position, [Color(0.55, 0.5, 0.45, 0.6), Color(0.5, 0.45, 0.4, 0.0)], 10,
+					120.0, 12.0, 0.6, -30.0, false)
 		State.GONE:
 			_timer -= delta
 			if _timer <= 0.0 and not _someone_inside():

@@ -35,7 +35,10 @@ func _ready() -> void:
 	add_to_group("climbables")
 	var middle := _cells.get_center().x
 	if kind == Kind.ROPE:
-		_bar(Vector2(middle - 3, _cells.position.y), Vector2(6, _cells.size.y), ROPE_COLOR)
+		var rope := RopeLook.new()
+		rope.position = Vector2(middle, _cells.position.y)
+		rope.length = _cells.size.y
+		add_child(rope)
 		return
 	var picture := Harm.tiled_prop("ladder", Vector2.ZERO, Vector2(1, _cells.size.y))
 	if picture != null:
@@ -70,3 +73,35 @@ func _bar(at: Vector2, size: Vector2, color: Color) -> void:
 	bar.color = color
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bar)
+
+
+## A braided rope hanging from a ring, swaying a little at the bottom.
+class RopeLook:
+	extends Node2D
+
+	var length := 300.0
+	var _time := 0.0
+
+	func _process(delta: float) -> void:
+		_time += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var sway := sin(_time * 1.6) * 4.0
+		var dark := ROPE_COLOR.darkened(0.45)
+		var points := PackedVector2Array()
+		var steps := maxi(4, int(length / 24.0))
+		for i in steps + 1:
+			var k := float(i) / steps
+			points.append(Vector2(sway * k * k, length * k))
+		draw_polyline(points, dark, 8.0)
+		draw_polyline(points, ROPE_COLOR, 5.0)
+		# The twist: short dark strokes slanting across the rope.
+		var y := 6.0
+		while y < length - 4.0:
+			var k := y / length
+			var x := sway * k * k
+			draw_line(Vector2(x - 3, y - 3), Vector2(x + 3, y + 3), dark, 2.0)
+			y += 9.0
+		draw_arc(Vector2(0, -2), 7.0, 0.0, TAU, 16, Color(0.45, 0.45, 0.5), 3.0)
+		draw_circle(Vector2(sway, length), 5.0, dark)

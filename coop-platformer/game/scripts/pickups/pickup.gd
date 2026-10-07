@@ -16,12 +16,15 @@ const LOOKS := {
 	Kind.POWER: [Color.WHITE, "?"],
 }
 
-## Pictures for the kinds that have one (power-ups keep their coloured box).
+## Pictures for the kinds that have one; a power-up's is POWER_ART with its
+## name, and without one it is a glowing orb in its colour with its letter.
 const ART := {
 	Kind.HEALTH: "res://assets/art/props/pickup_health.png",
 	Kind.AMMO: "res://assets/art/props/pickup_ammo.png",
 	Kind.SCRAP: "res://assets/art/props/pickup_scrap.png",
 }
+
+const POWER_ART := "res://assets/art/props/power_%s.png"
 
 var kind: Kind = Kind.SCRAP
 ## For a power-up: "rage", "shield" or "haste" (see Player.POWER_TIME).
@@ -61,7 +64,7 @@ func _ready() -> void:
 	box.color = LOOKS[kind][0] if kind != Kind.POWER else Player.POWER_COLORS.get(power, Color.WHITE)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
-	var art: String = ART.get(kind, "")
+	var art: String = ART.get(kind, "") if kind != Kind.POWER else POWER_ART % power
 	if art != "" and ResourceLoader.exists(art):
 		var picture := Sprite2D.new()
 		picture.texture = load(art)
@@ -71,6 +74,11 @@ func _ready() -> void:
 		add_child(picture)
 		box.visible = false
 		return
+	if kind == Kind.POWER:
+		box.visible = false
+		var orb := PowerOrb.new()
+		orb.color = Player.POWER_COLORS.get(power, Color.WHITE)
+		add_child(orb)
 	var sign_label := Label.new()
 	sign_label.text = LOOKS[kind][1] if kind != Kind.POWER else POWER_GLYPHS.get(power, "?")
 	sign_label.size = SIZE
@@ -141,3 +149,24 @@ func _give_to(hero: Player) -> bool:
 			if level != null:
 				level.show_toast("P%d: %s" % [hero.slot + 1, Player.POWER_NAMES.get(power, power)])
 	return true
+
+
+## A power-up without a picture: a pulsing ball of light in its colour.
+class PowerOrb:
+	extends Node2D
+
+	var color := Color.WHITE
+	var _time := 0.0
+
+	func _ready() -> void:
+		material = Fx.additive()
+
+	func _process(delta: float) -> void:
+		_time += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var pulse := 1.0 + 0.12 * sin(_time * 6.0)
+		for i in 4:
+			draw_circle(Vector2.ZERO, 26.0 * pulse * (1.0 - i * 0.2), Color(color, 0.18))
+		draw_circle(Vector2.ZERO, 12.0, Color(color.lightened(0.5), 0.9))
