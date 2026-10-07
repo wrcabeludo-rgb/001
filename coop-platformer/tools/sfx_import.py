@@ -35,17 +35,27 @@ PACKS = {
     "roar": (OGA + "monster_roar.wav", "OpenGameArt (CC0 Deep Monster Roar)"),
 }
 
-# game sound: (pack, file name in the pack, longest length in seconds, peak in dBFS)
+# game sound: (pack, file name in the pack, longest length in seconds, peak in dBFS).
+# The pack can be a list of layers mixed together instead: [(pack, file, gain dB, pitch), ...]
+# (pitch 0.8 = lower and slower); the file name is then ignored.
 SOUNDS = {
-    "shoot": ("scifi", "laserSmall_000.ogg", 0.4, -3),
-    "shoot_charged": ("scifi", "laserLarge_000.ogg", 0.9, -1),
+    # Plasma rifle: a zap with a low thump under it.
+    "shoot": ([("scifi", "laserLarge_003.ogg", 0, 0.85), ("scifi", "lowFrequency_explosion_001.ogg", -7, 1.3),
+               ("impact", "impactMetal_heavy_000.ogg", -12, 1.0)], "", 0.45, -2),
+    "shoot_charged": ([("scifi", "laserLarge_000.ogg", 0, 0.7), ("scifi", "lowFrequency_explosion_000.ogg", -2, 1.0),
+                       ("scifi", "explosionCrunch_000.ogg", -8, 1.0)], "", 1.2, -1),
     "shotgun": ("gunshots", "Black Powder.wav", 0.9, -1),
     "charge_ready": ("digital", "powerUp2.ogg", 0.6, -4),
     "kick": ("impact", "impactPunch_heavy_000.ogg", 0.5, -1),
-    "slash": ("swishes", "swish-7.wav", 0.4, -2),
-    "slash_heavy": ("swords", "sword.3.ogg", 0.8, -1),
+    # Blade swings: a deep whoosh, the blade ringing, weight behind it.
+    "slash": ([("swishes", "swish-7.wav", 0, 0.75), ("swords", "sword.2.ogg", -4, 0.9),
+               ("impact", "impactPunch_heavy_001.ogg", -10, 0.8)], "", 0.45, -1),
+    "slash_heavy": ([("swords", "sword.3.ogg", 0, 0.8), ("swishes", "swish-9.wav", -2, 0.65),
+                     ("impact", "impactPunch_heavy_002.ogg", -3, 0.7),
+                     ("scifi", "lowFrequency_explosion_000.ogg", -9, 1.2)], "", 0.9, -1),
     "block": ("clashes", "sword_clash.1.ogg", 0.7, -2),
-    "jump": ("rpg", "cloth2.ogg", 0.3, -4),
+    # Boots pushing off and the clothes moving.
+    "jump": ([("impact", "footstep_concrete_002.ogg", 0, 0.85), ("rpg", "cloth3.ogg", -6, 0.9)], "", 0.3, -6),
     "double_jump": ("swishes", "swish-8.wav", 0.4, -4),
     "dash": ("scifi", "thrusterFire_000.ogg", 0.5, -3),
     "land": ("impact", "footstep_concrete_000.ogg", 0.3, -3),
@@ -95,6 +105,19 @@ def find(folder, name):
     raise FileNotFoundError(name)
 
 
+def mix(layers, target):
+    """Several files played together, each with its own gain and pitch."""
+    inputs, chains = [], []
+    for i, (path, gain, pitch) in enumerate(layers):
+        inputs += ["-i", path]
+        chains.append("[%d:a]aformat=sample_rates=44100:channel_layouts=mono,asetrate=%d,aresample=44100,"
+                      "silenceremove=start_periods=1:start_threshold=-45dB,volume=%sdB[l%d]"
+                      % (i, round(44100 * pitch), gain, i))
+    graph = ";".join(chains) + ";" + "".join("[l%d]" % i for i in range(len(layers))) \
+        + "amix=inputs=%d:normalize=0:duration=longest" % len(layers)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error"] + inputs + ["-filter_complex", graph, target], check=True)
+
+
 def convert(source, target, longest, peak):
     # Trim the silence in front, cut to length with a short fade, then set the peak.
     trimmed = target + ".tmp.wav"
@@ -112,8 +135,14 @@ def convert(source, target, longest, peak):
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         for name, (pack, file, longest, peak) in SOUNDS.items():
-            convert(find(fetch(tmp, pack), file), os.path.join(OUT, name + ".wav"), longest, peak)
-            print("sfx:", name, "<-", pack, file)
+            if isinstance(pack, list):
+                source = os.path.join(tmp, name + ".mix.wav")
+                mix([(find(fetch(tmp, p), f), gain, pitch) for p, f, gain, pitch in pack], source)
+                file = " + ".join(f for _, f, _, _ in pack)
+            else:
+                source = find(fetch(tmp, pack), file)
+            convert(source, os.path.join(OUT, name + ".wav"), longest, peak)
+            print("sfx:", name, "<-", file)
 
 
 if __name__ == "__main__":

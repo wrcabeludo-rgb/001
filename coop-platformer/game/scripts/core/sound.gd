@@ -12,10 +12,10 @@ const VOICES := 20
 const FADE_TIME := 1.2
 ## Per-sound loudness in dB, so frequent sounds do not drown out the rest.
 const VOLUME := {
-	"jump": -13.0, "double_jump": -13.0, "land": -10.0, "shoot": -11.0, "dash": -6.0,
+	"jump": -10.0, "double_jump": -13.0, "land": -10.0, "shoot": -8.0, "dash": -6.0,
 	"telegraph": -10.0, "menu_move": -12.0, "menu_select": -8.0, "pickup_ammo": -10.0,
 	"pickup_scrap": -9.0, "charge_ready": -10.0, "laser": -14.0, "flame": -9.0, "hit": -6.0,
-	"slash": -5.0, "block": -8.0, "lever": -6.0, "door": -6.0, "crumble": -7.0,
+	"slash": -3.0, "block": -8.0, "lever": -6.0, "door": -6.0, "crumble": -7.0,
 }
 ## A sound does not restart more often than this (a burst of hits stays one sound).
 const MIN_INTERVAL := 0.04
@@ -55,7 +55,8 @@ func _ready() -> void:
 		_music_players.append(player)
 
 
-func play(sound_name: String, pitch_jitter := 0.06, volume_offset := 0.0) -> void:
+## `pitch` below 1 makes a sound lower and heavier (the heavy blade).
+func play(sound_name: String, pitch_jitter := 0.06, volume_offset := 0.0, pitch := 1.0) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if _silent or now - _last_played.get(sound_name, -1.0) < MIN_INTERVAL:
 		return
@@ -67,7 +68,7 @@ func play(sound_name: String, pitch_jitter := 0.06, volume_offset := 0.0) -> voi
 	_next_voice = (_next_voice + 1) % VOICES
 	voice.stream = stream
 	voice.volume_db = VOLUME.get(sound_name, 0.0) + volume_offset
-	voice.pitch_scale = 1.0 + randf_range(-pitch_jitter, pitch_jitter)
+	voice.pitch_scale = pitch * (1.0 + randf_range(-pitch_jitter, pitch_jitter))
 	voice.play()
 
 

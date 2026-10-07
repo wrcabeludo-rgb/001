@@ -4,6 +4,10 @@
  "gunner_wall_1": 0.719,
  "gunner_climb_1": 0.498,
  "gunner_climb_2": 0.505,
+ "gunner_run_1": 0.399,
+ "gunner_run_2": 0.442,
+ "gunner_run_3": 0.406,
+ "gunner_run_4": 0.459,
  "swordsman_crouch_1": 0.396,
  "swordsman_block_1": 0.497,
  "swordsman_slash_down_1": 0.497,
@@ -13,5 +17,9 @@
  "swordsman_slash_overhead_1": 0.577,
  "swordsman_wall_1": 0.69,
  "swordsman_climb_1": 0.505,
- "swordsman_climb_2": 0.535
+ "swordsman_climb_2": 0.535,
+ "swordsman_run_1": 0.481,
+ "swordsman_run_2": 0.533,
+ "swordsman_run_3": 0.474,
+ "swordsman_run_4": 0.529
 }

@@ -534,9 +534,9 @@ func _apply_look() -> void:
 
 
 ## The puppet's motion for a shot: the Gunner recoils.
-func animate_attack() -> void:
+func animate_attack(strength := 1.0) -> void:
 	if _rig != null:
-		_rig.recoil()
+		_rig.recoil(strength)
 
 
 ## The Gunner's kick.

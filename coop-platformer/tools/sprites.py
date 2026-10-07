@@ -271,8 +271,10 @@ POSE_SOURCES = {
     # Back view with a hand raised above the head.
     "swordsman_climb": [("swordsman_climb", (0, 0, 724, 1086), 1.12), ("swordsman_climb", (724, 0, 1448, 1086), 1.12)],
 }
-# Run cycles: a sheet of RUN_FRAMES figures in a row (art_source/heroes/poses/originals/<hero>_run_original.png).
+# Run cycles: a sheet of RUN_FRAMES figures in a row (art_source/heroes/poses/originals/<hero>_run_original.png),
+# each figure as tall as RUN_HEIGHT of the standing hero.
 RUN_FRAMES = 4
+RUN_HEIGHT = 0.97
 # How far the wall is from the hero's middle in the wall pose (art pixels).
 WALL_GAP = 48
 
@@ -288,6 +290,8 @@ def _green_to_white(img):
 
 def _pose_cutout(name, box):
     """One figure from an original: background, a drawn green prop and stray specks removed, cropped."""
+    if box and box[0] == "sheet":
+        return _sheet_frames(name)[box[1]]
     path = os.path.join(SRC, "heroes/poses/originals", name + "_original.png")
     if not os.path.exists(path):
         return None
@@ -303,28 +307,38 @@ def _pose_cutout(name, box):
 
 
 def _add_run_cycles():
-    """Cut each run sheet into its frames: the figures are found as separate
-    columns of drawing, so uneven spacing does not matter."""
+    """Each run sheet becomes RUN_FRAMES frames (see _sheet_frames)."""
     for hero in HEROES:
-        path = os.path.join(SRC, "heroes/poses/originals", hero + "_run_original.png")
         key = hero + "_run"
-        if not os.path.exists(path) or key in POSE_SOURCES:
+        if os.path.exists(os.path.join(SRC, "heroes/poses/originals", key + "_original.png")):
+            POSE_SOURCES.setdefault(key, [(key, ("sheet", i), RUN_HEIGHT) for i in range(RUN_FRAMES)])
+
+
+def _sheet_frames(name):
+    """The figures of a sheet drawn in a row. Overlapping figures (a cape over
+    the next one's boots) are told apart by connected pieces of drawing: each
+    piece goes to the figure whose slot holds its middle."""
+    img = remove_background(Image.open(os.path.join(SRC, "heroes/poses/originals", name + "_original.png")),
+                            holes=400)
+    alpha = np.asarray(img)[:, :, 3]
+    marks = Image.fromarray(np.where(alpha > 0, 255, 0).astype(np.uint8)).copy()
+    owner = np.full(alpha.shape, -1, np.int8)
+    step = img.width / RUN_FRAMES
+    ys, xs = np.nonzero(alpha[::3, ::3] > 0)
+    for y, x in zip(ys * 3, xs * 3):
+        if marks.getpixel((int(x), int(y))) != 255:
             continue
-        img = Image.open(path)
-        filled = np.asarray(remove_background(img))[:, :, 3].max(axis=0) > 0
-        runs, start = [], None
-        for x, on in enumerate(list(filled) + [False]):
-            if on and start is None:
-                start = x
-            elif not on and start is not None:
-                if x - start > img.width / 20:
-                    runs.append((start, x))
-                start = None
-        if len(runs) != RUN_FRAMES:
-            # Figures touch: fall back to equal slices.
-            step = img.width / RUN_FRAMES
-            runs = [(round(i * step), round((i + 1) * step)) for i in range(RUN_FRAMES)]
-        POSE_SOURCES[key] = [(hero + "_run", (a, 0, b, img.height)) for a, b in runs]
+        ImageDraw.floodfill(marks, (int(x), int(y)), 128)
+        piece = np.asarray(marks) == 128
+        if piece.sum() > 200:
+            owner[piece] = min(int(np.nonzero(piece)[1].mean() // step), RUN_FRAMES - 1)
+        ImageDraw.floodfill(marks, (int(x), int(y)), 0)
+    frames = []
+    for i in range(RUN_FRAMES):
+        frame = np.asarray(img).copy()
+        frame[:, :, 3] = np.where(owner == i, frame[:, :, 3], 0)
+        frames.append(crop(Image.fromarray(frame))[0])
+    return frames
 
 
 def build_poses():
@@ -357,6 +371,10 @@ def build_poses():
                 width = alpha.shape[1]
                 if pose == "wall":
                     anchor = (width - WALL_GAP) / width
+                elif pose == "run":
+                    # Steady between frames: the middle of the body, not a foot.
+                    torso = alpha[int(alpha.shape[0] * 0.35):int(alpha.shape[0] * 0.6)]
+                    anchor = np.nonzero(torso > 128)[1].mean() / width
                 elif pose == "climb":
                     # Centred on the ladder: the middle of the figure's mass.
                     anchor = np.nonzero(alpha > 128)[1].mean() / width

@@ -19,9 +19,18 @@ const ART := "res://assets/art/heroes/"
 const ART_SCALE := 0.5
 const RIG_FILE := "res://assets/art/heroes/rig.json"
 const POSE_FILE := "res://assets/art/heroes/poses.json"
-const POSES := ["run", "crouch", "wall", "climb", "block", "kick",
+const POSES := ["run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick",
 	"slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 const SLASH_POSES := ["slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
+## Until a pose has its own drawing it borrows a run frame: [pose, frame, tilt].
+## The run's second frame has a knee raised (a jump), the first a wide stride.
+const BORROWED := {
+	"jump": ["run", 1, -0.08],
+	"fall": ["run", 0, 0.06],
+	"dash": ["run", 0, 0.22],
+}
+## While dashing, a fading copy of the hero is left behind this often (seconds).
+const AFTERIMAGE_EVERY := 0.03
 const KICK_TIME := 0.28
 ## How far the legs spread in a crouch (radians from straight down) and how
 ## much the whole hero hunches down (the picture is squeezed at the feet).
@@ -53,6 +62,7 @@ var _pose_art := {}
 var _pose_anchor := {}
 var _pose_sprite: Sprite2D
 var _clock := 0.0
+var _afterimage_timer := 0.0
 
 
 ## Returns null if the hero has no art yet.
@@ -129,8 +139,8 @@ func has_pose_art(pose_name: String) -> bool:
 
 
 ## A shot: the body jerks back for a moment.
-func recoil() -> void:
-	_recoil = 1.0
+func recoil(strength := 1.0) -> void:
+	_recoil = maxf(_recoil, strength)
 
 
 ## The Gunner's kick: the front leg snaps forward.
@@ -170,7 +180,7 @@ func _state(player: Player) -> String:
 	if player.crouching:
 		return "crouch"
 	if not player.is_on_floor():
-		return "air"
+		return "jump" if player.velocity.y < 0.0 else "fall"
 	return "run" if absf(player.velocity.x) > 20.0 else "idle"
 
 
@@ -180,6 +190,8 @@ func pose(player: Player, delta: float) -> void:
 	_clock += delta
 	_action_time += delta
 	var current := current_pose(player)
+	_leave_afterimage(current == "dash", player, delta)
+	_recoil = move_toward(_recoil, 0.0, delta * 8.0)
 	if player.is_climbing() and absf(player.velocity.y) > 1.0:
 		_phase += absf(player.velocity.y) * delta * 0.03
 	# One stride (both legs) is a full turn of the phase.
@@ -256,13 +268,12 @@ func pose(player: Player, delta: float) -> void:
 			lean = 0.2
 			shift = 6.0
 			squash = CROUCH_SQUASH
-		"air":
-			if player.velocity.y < 0.0:
-				back = 0.35
-				front = -0.45
-			else:
-				back = 0.15
-				front = -0.2
+		"jump":
+			back = 0.35
+			front = -0.45
+		"fall":
+			back = 0.15
+			front = -0.2
 		"run":
 			back = sin(_phase) * 0.55
 			front = -back
@@ -284,7 +295,6 @@ func pose(player: Player, delta: float) -> void:
 	_squash = lerpf(_squash, squash, follow)
 	scale.y = ART_SCALE * _squash
 	_shift.x = lerpf(_shift.x, shift, follow)
-	_recoil = move_toward(_recoil, 0.0, delta * 8.0)
 	_lean = lerpf(_lean, lean, minf(1.0, delta * 14.0))
 	_back_leg.position = _back_rest + Vector2(0, _drop)
 	_front_leg.position = _front_rest + Vector2(0, _drop)
@@ -295,14 +305,25 @@ func pose(player: Player, delta: float) -> void:
 ## Shows the drawing for this pose if there is one; false keeps the puppet.
 func _show_drawing(pose_name: String) -> bool:
 	var frames: Array = _pose_art.get(pose_name, [])
+	var tilt := 0.0
+	var borrowed := -1
+	if frames.is_empty() and BORROWED.has(pose_name) and _pose_art.has(BORROWED[pose_name][0]):
+		var source: Array = BORROWED[pose_name]
+		frames = _pose_art[source[0]]
+		borrowed = source[1]
+		tilt = source[2]
+		pose_name = source[0]
 	var drawn := not frames.is_empty()
+	_pose_sprite.rotation = lerp_angle(_pose_sprite.rotation, tilt, 0.3)
 	_pose_sprite.visible = drawn
 	for part in [_body, _back_leg, _front_leg]:
 		part.visible = not drawn
 	if not drawn:
 		return false
 	var index := 0
-	if pose_name == "climb":
+	if borrowed >= 0:
+		index = mini(borrowed, frames.size() - 1)
+	elif pose_name == "climb":
 		index = int(_phase / PI) % frames.size()
 	elif pose_name == "run":
 		index = int(fposmod(_phase, TAU) / TAU * frames.size()) % frames.size()
@@ -314,8 +335,35 @@ func _show_drawing(pose_name: String) -> bool:
 		index = int(_clock * 8.0) % frames.size()
 	var texture: Texture2D = frames[index]
 	_pose_sprite.texture = texture
+	_pose_sprite.position = Vector2(-_recoil * 10.0, 0)
 	_pose_sprite.offset = Vector2(-texture.get_width() * float(_pose_anchor[pose_name][index]), -texture.get_height())
 	return true
+
+
+## Dashing leaves fading copies of the hero behind, tinted in his colour.
+func _leave_afterimage(dashing: bool, player: Player, delta: float) -> void:
+	_afterimage_timer -= delta
+	if not dashing or _afterimage_timer > 0.0 or not is_inside_tree():
+		return
+	_afterimage_timer = AFTERIMAGE_EVERY
+	var ghost := Node2D.new()
+	ghost.global_transform = global_transform
+	ghost.modulate = Color(Heroes.COLORS[player.hero], 0.55)
+	ghost.z_index = -1
+	for part in [_pose_sprite, _back_leg, _front_leg, _body]:
+		if not part.visible:
+			continue
+		var copy := Sprite2D.new()
+		copy.texture = part.texture
+		copy.centered = false
+		copy.offset = part.offset
+		copy.position = part.position
+		copy.rotation = part.rotation
+		ghost.add_child(copy)
+	player.get_parent().add_child(ghost)
+	var fade := ghost.create_tween()
+	fade.tween_property(ghost, "modulate:a", 0.0, 0.25)
+	fade.tween_callback(ghost.queue_free)
 
 
 ## Tints the whole puppet (hit flash, charged glow); `amount` 0 = none.

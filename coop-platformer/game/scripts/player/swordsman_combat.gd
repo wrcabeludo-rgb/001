@@ -27,6 +27,7 @@ var _slash: Hitbox
 var _up_slash: Hitbox
 var _shield: GuardShield
 var _slash_height := 0.0
+var _embers: CPUParticles2D
 
 
 func setup(p_player: Player) -> void:
@@ -46,6 +47,8 @@ func setup(p_player: Player) -> void:
 		hitbox.show_flash = false
 		hitbox.landed.connect(func(_target: Hurtbox) -> void: player.hitstop())
 
+	if heavy:
+		_add_embers()
 	_shield = GuardShield.new()
 	_shield.visible = false
 	add_child(_shield)
@@ -105,7 +108,7 @@ func _swing() -> void:
 		_up_slash.activate(swing_time, _damage(stats.up_slash_damage), Vector2(0, -stats.slash_knockback), 1)
 		player.animate_slash(HeroRig.Slash.OVERHEAD, swing_time)
 		_trail(HeroRig.Slash.OVERHEAD, swing_time)
-		Sound.play("slash")
+		Sound.play("slash", 0.06, 0.0, _sound_pitch())
 		return
 	if _combo_timer <= 0.0:
 		_step = 0
@@ -119,7 +122,7 @@ func _swing() -> void:
 	_trail(kind, swing_time)
 	if finisher:
 		get_tree().call_group("cameras", "shake", 5.0 if heavy else 3.0)
-	Sound.play("slash_heavy" if finisher else "slash")
+	Sound.play("slash_heavy" if finisher else "slash", 0.06, 0.0, _sound_pitch())
 	_step = (_step + 1) % 3
 	_combo_timer = swing_time + stats.combo_window
 
@@ -147,7 +150,38 @@ func _trail(kind: int, swing_time: float) -> void:
 	add_child(arc)
 
 
+## The heavy blade sounds lower and heavier.
+func _sound_pitch() -> float:
+	return 0.78 if heavy else 1.0
+
+
 func _update_shield() -> void:
 	_shield.visible = blocking
 	_shield.scale.x = player.facing
 	_shield.position = Vector2(player.facing * 4.0, -14.0 + (CROUCH_DROP * 0.6 if player.crouching else 0.0))
+
+
+## The heavy blade is so hot it drips embers (low in front of the hero, where the blade hangs).
+func _add_embers() -> void:
+	var embers := CPUParticles2D.new()
+	embers.amount = 10
+	embers.lifetime = 0.8
+	embers.local_coords = false
+	embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	embers.emission_rect_extents = Vector2(18, 10)
+	embers.direction = Vector2.DOWN
+	embers.spread = 30.0
+	embers.initial_velocity_min = 10.0
+	embers.initial_velocity_max = 50.0
+	embers.gravity = Vector2(0, 240)
+	embers.scale_amount_min = 2.0
+	embers.scale_amount_max = 4.0
+	embers.color_ramp = Fx.ramp([Color(1, 0.9, 0.5), Color(1.0, 0.35, 0.08), Color(0.6, 0.1, 0.05, 0.0)])
+	embers.material = Fx.additive()
+	add_child(Fx.soften(embers))
+	_embers = embers
+
+
+func _process(_delta: float) -> void:
+	if _embers != null:
+		_embers.position = Vector2(player.facing * 34.0, 28.0)

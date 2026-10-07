@@ -132,13 +132,14 @@ func _shoot(damage: int, knockback: float, size: Vector2, color: Color, pierce: 
 
 func _fire(start: Vector2, direction: Vector2, damage: int, knockback: float, size: Vector2, color: Color,
 		pierce: int, lifetime: float, style := ProjectileLook.Style.BOLT) -> void:
-	player.animate_attack()
+	player.animate_attack(2.2 if style == ProjectileLook.Style.PELLET else 1.0)
 	var projectile := Projectile.new()
 	projectile.setup(Layers.Team.PLAYERS, start, direction, stats.shot_speed,
 		roundi(damage * player.damage_multiplier()), knockback, size, color, pierce, lifetime)
 	projectile.style = style
 	player.get_parent().add_child(projectile)
-	_muzzle_flash(start, color)
+	if style != ProjectileLook.Style.PELLET:
+		_muzzle_flash(start, color)
 
 
 ## A short flash of light at the end of the barrel.
@@ -159,6 +160,17 @@ func _shotgun() -> void:
 		_fire(start, direction.rotated(angle), stats.shot_damage, stats.shot_knockback * 2.0,
 			Vector2(14, 8), SHOT_COLOR, 0, SHOTGUN_LIFETIME, ProjectileLook.Style.PELLET)
 	Sound.play("shotgun", 0.08)
+	# A big orange flash, a puff of smoke and a spent shell flying out.
+	var flash := Fx.Flare.new()
+	flash.position = start
+	flash.radius = 60.0
+	flash.life = 0.1
+	flash.color = Color(1.0, 0.7, 0.3)
+	player.get_parent().add_child(flash)
+	Fx.burst(player.get_parent(), start, [Color(0.6, 0.58, 0.55, 0.5), Color(0.4, 0.4, 0.4, 0.0)], 8, 120.0, 12.0,
+		0.6, -80.0, false, direction, 30.0)
+	Fx.burst(player.get_parent(), start - direction * 30.0, [Color(0.9, 0.3, 0.15), Color(0.6, 0.2, 0.1, 0.0)], 1,
+		260.0, 5.0, 0.6, 1400.0, false, Vector2(-direction.x * 0.5, -1.0), 15.0)
 
 
 ## The shotgun ran dry: back to the rifle (which never runs out).

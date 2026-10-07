@@ -104,6 +104,33 @@ Arms swing opposite to the legs. Flat even lighting, white background, nothing c
 
 Имена: `gunner_run`, `swordsman_run`. Если 4 кадра не помещаются ровно — пришли как есть, разрежу сам.
 
+Готово: бег обоих героев.
+
+### 1.5 Прыжок, падение, рывок
+
+Пока их нет, игра берёт подходящие кадры бега (колено поднято — прыжок, широкий шаг — падение и рывок).
+Промпт — как для поз (раздел 1.3), строка позы:
+
+| Имя | Поза |
+|---|---|
+| `gunner_jump_1` | `Jumping up: both knees pulled up, the rifle held across the chest, the cape flying down behind.` |
+| `gunner_fall_1` | `Falling: legs stretched down ready to land, arms out for balance holding the rifle, the cape flying up.` |
+| `swordsman_jump_1` | `Jumping up: knees pulled up, the glowing blade held back and low, the free arm raised.` |
+| `swordsman_fall_1` | `Falling: legs down ready to land, the blade held out to the side, the scarf flying up.` |
+| `swordsman_dash_1` | `A fast forward dash: body low and leaning far forward, the blade held back along the body, one leg stretched behind, the scarf streaming back.` |
+
+### 1.6 Оружие из лавки (иконки для магазина)
+
+Дробовик и тяжёлый клинок в руках героя пока те же, что обычные: их отличают выстрел/взмах, звук и эффекты.
+Иконки для лавки — **отдельные предметы без героя**, вид сбоку:
+
+| Имя | Промпт |
+|---|---|
+| `weapon_shotgun` | `A brutal sawed-off double-barrel shotgun made of scrap: thick barrels wrapped in wire, a pump grip of rusty pipe, red shells strapped to the stock, warm orange glow at the muzzle. Side view, pointing right.` |
+| `weapon_heavy_blade` | `A huge two-handed cleaver forged from a railway rail: wide dark steel blade with molten red cracks glowing from inside, a long wrapped grip, chains on the guard. Side view, edge pointing right.` |
+| `weapon_rifle` | `The Gunner's plasma rifle: long rusty barrel with glowing cyan energy cells, scope, leather sling. Side view, pointing right.` |
+| `weapon_blade` | `The Swordsman's glowing orange serrated blade with dash-shaped vents along it, a mechanical hilt. Side view, edge pointing right.` |
+
 ---
 
 ## 2. Враги мира 1 (все — мутанты)
