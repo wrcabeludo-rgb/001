@@ -65,6 +65,6 @@ func _animate_sprite() -> void:
 	var hanging := state != State.DROPPED
 	_sprite.flip_v = hanging
 	if hanging:
-		var drawn := _sprite.texture.get_height() * _sprite.scale.y
+		var drawn := art_drawn_size().y
 		_sprite.position = Vector2(0, -body_size.y / 2.0 + drawn / 2.0)
 		_sprite.rotation = 0.0

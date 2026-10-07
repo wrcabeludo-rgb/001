@@ -9,5 +9,7 @@
  "swordsman_slash_finisher_1": 0.535,
  "swordsman_slash_finisher_2": 0.497,
  "swordsman_slash_overhead_1": 0.497,
- "swordsman_wall_1": 0.69
+ "swordsman_wall_1": 0.69,
+ "swordsman_climb_1": 0.505,
+ "swordsman_climb_2": 0.535
 }

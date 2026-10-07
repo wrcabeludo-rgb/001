@@ -53,6 +53,19 @@ func _run_all() -> void:
 	await _frames(20)
 	await _save("wall")
 	_input.set_virtual("right", false)
+	# Ladder: the Swordsman climbing a ladder put into the open middle of the room.
+	var ladder := Climbable.new()
+	ladder.setup(Climbable.Kind.LADDER, Rect2(OPEN_X - 30, 1020 - 420, 60, 420), 60.0)
+	_room.add_child(ladder)
+	_player.global_position = Vector2(OPEN_X + 400, FLOOR_Y)
+	partner.global_position = Vector2(OPEN_X, FLOOR_Y)
+	_camera.position = Vector2(OPEN_X, 860)
+	sword.set_virtual("up", true)
+	await _frames(22)
+	await _save("climb1")
+	await _frames(7)
+	await _save("climb2")
+	sword.set_virtual("up", false)
 	var _keep := partner
 
 

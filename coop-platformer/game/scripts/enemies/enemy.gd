@@ -28,6 +28,8 @@ const ROBOT_COLOR := Color(0.5, 0.58, 0.7)
 ## where the enemy can be hit grows to the picture's size.
 @export var art := ""
 @export var art_height := 100.0
+## The clear margin around monster pictures, in texture pixels (room for the rim).
+const ART_BORDER := 12.0
 ## Flyers have the picture centred on the body; walkers stand it on the floor.
 @export var art_centered := false
 @export_group("Добыча")
@@ -53,6 +55,13 @@ var _sprite: Sprite2D
 var _sprite_rest := Vector2.ZERO
 var _anim_time := 0.0
 
+
+
+## The size of the monster's picture on screen, without the clear margin.
+func art_drawn_size() -> Vector2:
+	if _sprite == null:
+		return body_size
+	return (_sprite.texture.get_size() - Vector2.ONE * 2.0 * ART_BORDER) * _sprite.scale
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -97,13 +106,14 @@ func _ready() -> void:
 		_sprite = Sprite2D.new()
 		_sprite.texture = load(art_path)
 		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		var factor := art_height / _sprite.texture.get_height()
+		var factor := art_height / (_sprite.texture.get_height() - 2.0 * ART_BORDER)
 		_sprite.scale = Vector2(factor, factor)
-		var drawn := _sprite.texture.get_size() * factor
+		var drawn := art_drawn_size()
 		# Standing on the same floor as the body.
 		_sprite_rest = Vector2.ZERO if art_centered else Vector2(0, body_size.y / 2.0 - drawn.y / 2.0)
 		_sprite.position = _sprite_rest
 		_sprite.material = Flash.material()
+		Outline.on_sprite(_sprite, Outline.ENEMY_COLOR, Outline.ENEMY_WIDTH / factor)
 		add_child(_sprite)
 		move_child(_sprite, _body.get_index())
 		_body.visible = false

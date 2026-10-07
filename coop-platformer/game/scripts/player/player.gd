@@ -73,6 +73,8 @@ var _eye: ColorRect
 var _tag: Label
 ## The drawn puppet (null until the hero has art; then the box is hidden).
 var _rig: HeroRig
+## Holds the puppet so it gets one rim in the hero's colour (Outline).
+var _rig_group: CanvasGroup
 
 
 func setup(p_slot: int, p_input: PlayerInput, p_hero: Heroes.Id) -> void:
@@ -527,13 +529,16 @@ func _get_wall_dir() -> int:
 
 func _apply_look() -> void:
 	_tag.text = "P%d %s" % [slot + 1, Heroes.NAMES[hero]]
-	if _rig != null:
-		_rig.queue_free()
+	if _rig_group != null:
+		_rig_group.queue_free()
+		_rig_group = null
 	_rig = HeroRig.create("gunner" if hero == Heroes.Id.SHOOTER else "swordsman")
 	if _rig != null:
 		_rig.position = Vector2(0, SIZE.y / 2.0)
-		add_child(_rig)
-		move_child(_rig, _aura.get_index() + 1)
+		_rig_group = Outline.group(Color(Heroes.COLORS[hero], 0.9))
+		_rig_group.add_child(_rig)
+		add_child(_rig_group)
+		move_child(_rig_group, _aura.get_index() + 1)
 		_aura.position = Vector2(-40, SIZE.y / 2.0 - 156)
 		_aura.size = Vector2(80, 160)
 		_tag.position.y = SIZE.y / 2.0 - 180

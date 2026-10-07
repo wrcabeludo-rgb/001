@@ -11,7 +11,7 @@ import json
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from bgtools import make_seamless, white_to_alpha
 
@@ -115,6 +115,11 @@ ENEMIES = {
 }
 
 
+# Clear margin around monster pictures: room for the rim the game draws around
+# them (Enemy.ART_BORDER must match).
+ENEMY_BORDER = 12
+
+
 def build_enemies():
     for name, (source, height) in ENEMIES.items():
         path = os.path.join(SRC, source)
@@ -122,7 +127,7 @@ def build_enemies():
             continue
         img, _ = crop(remove_background(Image.open(path)))
         img, _ = scaled(img, height)
-        save(img, name)
+        save(ImageOps.expand(img, ENEMY_BORDER, (0, 0, 0, 0)), name)
 
 
 # ---------------------------------------------------------------- heroes
@@ -253,8 +258,9 @@ POSE_REFERENCE = {
 # Where each pose's frames come from: (picture in art_source/heroes/poses/originals
 # without "_original.png", box or None for the whole picture). The wall poses have
 # the wall drawn on the right: the box stops just before it. A picture with two
-# figures is drawn smaller: a third item, the box of an upright figure in the same
-# picture, gives its own scale.
+# figures is drawn smaller: a third item gives that picture its own scale, either
+# the box of an upright figure in it, or the frame's height compared with the
+# standing hero.
 POSE_SOURCES = {
     "gunner_crouch": [("gunner_crouch", None)],
     "gunner_kick": [("gunner_kick", None)],
@@ -266,6 +272,8 @@ POSE_SOURCES = {
     "swordsman_slash_finisher": [("swordsman_finisher_a", None), ("swordsman_finisher_b", None)],
     "swordsman_slash_overhead": [("swordsman_slash_rising", None)],
     "swordsman_wall": [("swordsman_wall", (0, 0, 874, 1536))],
+    # Back view with a hand raised above the head.
+    "swordsman_climb": [("swordsman_climb", (0, 0, 724, 1086), 1.12), ("swordsman_climb", (724, 0, 1448, 1086), 1.12)],
 }
 # How far the wall is from the hero's middle in the wall pose (art pixels).
 WALL_GAP = 48
@@ -315,7 +323,9 @@ def build_poses():
                 if img is None:
                     continue
                 factor = hero_factor
-                if upright:
+                if upright and isinstance(upright[0], (int, float)):
+                    factor = HEROES[hero]["height"] * upright[0] / img.size[1]
+                elif upright:
                     factor = HEROES[hero]["height"] / _pose_cutout(source, upright[0]).size[1]
                 img = img.resize((max(1, round(img.size[0] * factor)), max(1, round(img.size[1] * factor))),
                                  Image.LANCZOS)
@@ -323,6 +333,9 @@ def build_poses():
                 width = alpha.shape[1]
                 if pose == "wall":
                     anchor = (width - WALL_GAP) / width
+                elif pose == "climb":
+                    # Centred on the ladder: the middle of the figure's mass.
+                    anchor = np.nonzero(alpha > 128)[1].mean() / width
                 else:
                     soles = np.nonzero(alpha[int(alpha.shape[0] * 0.86):].max(axis=0) > 128)[0]
                     anchor = (soles.min() + soles.max()) / 2.0 / width if len(soles) else 0.5
