@@ -1,6 +1,7 @@
 extends Control
 ## Title screen. Main page: continue, new game, zone select, shop, settings,
-## test levels, credits, quit. New game asks for the difficulty and plays the intro comic.
+## test levels, credits, quit. New game asks for the difficulty. Every way into
+## the game passes the hero select screen (then the intro comic for a new game).
 ## Pressing a button on a device also joins it as a player (PlayerManager).
 
 const BACKGROUND := preload("res://assets/art/ui/menu_bg_01.png")
@@ -9,6 +10,7 @@ const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
 const COMIC_SCENE := "res://scenes/intro_comic.tscn"
 const SHOP_SCENE := "res://scenes/shop.tscn"
 const TEST_SCENE := "res://scenes/test_room.tscn"
+const HERO_SELECT_SCENE := "res://scenes/hero_select.tscn"
 
 var _menu: MenuList
 var _hint: Label
@@ -74,7 +76,7 @@ func show_main() -> void:
 	var entries: Array = []
 	if progress:
 		var next: Dictionary = SaveGame.ZONES[int(SaveGame.data["next_zone"])]
-		entries.append({"text": "Продолжить", "action": func() -> void: _open(next["scene"]),
+		entries.append({"text": "Продолжить", "action": func() -> void: _choose_heroes(next["scene"]),
 			"hint": "%s · сложность: %s" % [next["title"], GameSettings.NAMES[GameSettings.difficulty]]})
 	entries.append({"text": "Новая игра", "action": show_difficulty,
 		"hint": "Прогресс и покупки будут сброшены" if progress else ""})
@@ -114,7 +116,7 @@ func show_difficulty() -> void:
 		entries.append({"text": GameSettings.NAMES[difficulty], "hint": GameSettings.HINTS[difficulty],
 			"action": func() -> void:
 				SaveGame.new_game(difficulty)
-				_open(COMIC_SCENE)})
+				_choose_heroes(COMIC_SCENE)})
 	entries.append({"text": "Назад", "action": show_main})
 	_on_back = show_main
 	_show_page(entries, 1)
@@ -131,7 +133,7 @@ func show_zones() -> void:
 			"text": zone["title"] if open else "%s — закрыто" % zone["id"],
 			"enabled": open,
 			"hint": ("Лучшее время: %d:%02d" % [int(best) / 60, int(best) % 60]) if best >= 0.0 else "",
-			"action": func() -> void: _open(zone["scene"]),
+			"action": func() -> void: _choose_heroes(zone["scene"]),
 		})
 	entries.append({"text": "Назад", "action": show_main})
 	_on_back = show_main
@@ -141,6 +143,12 @@ func show_zones() -> void:
 func show_settings() -> void:
 	_on_back = show_main
 	_show_page(SettingsEntries.build(show_main))
+
+
+## The hero select screen first, then `scene`.
+func _choose_heroes(scene: String) -> void:
+	HeroSelect.next_scene = scene
+	_open(HERO_SELECT_SCENE)
 
 
 func _open(scene: String) -> void:

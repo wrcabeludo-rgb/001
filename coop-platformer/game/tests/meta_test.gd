@@ -1,6 +1,6 @@
 extends "res://tests/test_harness.gd"
 ## Headless checks of the meta game: saving, shop goods and what they change,
-## the shotgun, power-ups, secret rooms and the pause menu. Run by CI:
+## the shotgun, power-ups, secret rooms, the pause menu and the hero select. Run by CI:
 ##   godot --headless --path game res://tests/meta_test.tscn
 
 
@@ -12,6 +12,8 @@ func _run_all() -> void:
 	await _test_power_ups()
 	await _test_secret_room()
 	await _test_pause_menu()
+	await _test_hero_select_alone()
+	await _test_hero_select_two_players()
 
 
 func _test_save_round_trip() -> void:
@@ -140,6 +142,56 @@ func _test_pause_menu() -> void:
 	_check(paused and menu_open, "Start ставит игру на паузу и открывает меню")
 	level.remove_player(1)
 	PlayerManager.players[1] = null
+
+
+func _test_hero_select_alone() -> void:
+	PlayerManager.players = [_input, null]
+	PlayerManager.heroes = [Heroes.Id.SHOOTER, Heroes.Id.SWORDSMAN]
+	var screen := await _hero_select()
+	await _press("right")
+	await _press("jump")
+	await _frames(int(HeroSelect.START_DELAY * 60) + 10)
+	_check(screen.get_meta("done", false) and PlayerManager.heroes[0] == Heroes.Id.SWORDSMAN,
+		"выбор героя: один игрок берёт мечника, и игра идёт дальше")
+	screen.queue_free()
+
+
+func _test_hero_select_two_players() -> void:
+	var second := PlayerInput.scripted()
+	_extra_inputs.append(second)
+	PlayerManager.players = [_input, second]
+	PlayerManager.heroes = [Heroes.Id.SHOOTER, Heroes.Id.SWORDSMAN]
+	var screen := await _hero_select()
+	await _press("jump")
+	# The second player tries the Gunner too: it is taken.
+	await _press_on(second, "left")
+	await _press_on(second, "jump")
+	_check(not screen.chosen[1], "выбор героя: занятого стрелка второй игрок взять не может")
+	await _press_on(second, "right")
+	await _press_on(second, "jump")
+	await _frames(int(HeroSelect.START_DELAY * 60) + 10)
+	_check(screen.get_meta("done", false) and PlayerManager.heroes == [Heroes.Id.SHOOTER, Heroes.Id.SWORDSMAN],
+		"выбор героя: вдвоём — стрелок и мечник, игра идёт дальше")
+	screen.queue_free()
+	_extra_inputs.erase(second)
+	PlayerManager.players = [null, null]
+
+
+## The hero select screen, staying in place when done.
+func _hero_select() -> HeroSelect:
+	HeroSelect.next_scene = ""
+	var screen := HeroSelect.new()
+	screen.heroes_chosen.connect(func() -> void: screen.set_meta("done", true))
+	add_child(screen)
+	await _frames(2)
+	return screen
+
+
+func _press_on(device: PlayerInput, action: String) -> void:
+	device.set_virtual(action, true)
+	await _frames(1)
+	device.set_virtual(action, false)
+	await _frames(1)
 
 
 func _projectiles() -> int:

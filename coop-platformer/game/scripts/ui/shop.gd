@@ -4,11 +4,18 @@ extends Control
 ## each hero pays from their own wallet. In co-op players take turns.
 
 const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
-const BACKGROUNDS := [
-	preload("res://assets/art/backgrounds/sky_world1_1.png"),
-	preload("res://assets/art/backgrounds/bg_mid_world1_01.png"),
-]
+const BACKDROP := preload("res://assets/art/ui/shop_bg.png")
+const GROUND := preload("res://assets/art/tiles/1-1_ground.png")
 const TRADER := preload("res://assets/art/props/trader.png")
+const STALL_SCALE := 0.82
+## The street level: the stall stands on it.
+const STREET_Y := 900.0
+## Lanterns in the stall picture (pixels of trader.png) and their light colour.
+const LANTERNS := [
+	[Vector2(180, 130), Color(1.0, 0.55, 0.2)], [Vector2(255, 285), Color(1.0, 0.55, 0.2)],
+	[Vector2(365, 145), Color(1.0, 0.7, 0.35)], [Vector2(320, 205), Color(0.3, 0.9, 1.0)],
+	[Vector2(705, 170), Color(0.3, 0.9, 1.0)], [Vector2(845, 250), Color(0.3, 0.9, 1.0)],
+]
 const LINES := [
 	"Лом — вот настоящая валюта. Неон его не заменит.",
 	"Всё рабочее. Ну, почти всё.",
@@ -21,26 +28,13 @@ var hero: Heroes.Id = Heroes.Id.SHOOTER
 var _menu: MenuList
 var _hint: Label
 var _wallet: Label
+var _lights: Array[TextureRect] = []
+var _time := 0.0
 
 
 func _ready() -> void:
-	# The slums at night behind, the trader's stall on the right, the goods on a dark panel.
-	for picture in BACKGROUNDS:
-		var backdrop := TextureRect.new()
-		backdrop.texture = picture
-		backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		backdrop.size = Vector2(1920, 1080)
-		backdrop.modulate = Color(0.5, 0.47, 0.55)
-		add_child(backdrop)
-	add_child(Harm.box(Vector2(0, 900), Vector2(1920, 180), Color(0.05, 0.04, 0.06, 0.9)))
-	var stall := TextureRect.new()
-	stall.texture = TRADER
-	stall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	stall.size = TRADER.get_size() * 0.82
-	stall.position = Vector2(1900 - stall.size.x, 905 - stall.size.y)
-	add_child(stall)
-	add_child(Harm.box(Vector2(80, 40), Vector2(1020, 860), Color(0.04, 0.04, 0.06, 0.82)))
+	_build_street()
+	add_child(Harm.box(Vector2(80, 40), Vector2(980, 860), Color(0.03, 0.03, 0.05, 0.78)))
 	var title := Label.new()
 	title.text = "ЛАВКА СТАРЬЁВЩИКА"
 	title.position = Vector2(120, 60)
@@ -50,7 +44,7 @@ func _ready() -> void:
 	add_child(title)
 	var quote := Label.new()
 	quote.text = "«%s»" % LINES.pick_random()
-	quote.position = Vector2(1140, 250)
+	quote.position = Vector2(1100, 300)
 	quote.size = Vector2(740, 80)
 	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -65,7 +59,7 @@ func _ready() -> void:
 
 	_menu = MenuList.new()
 	_menu.position = Vector2(120, 240)
-	_menu.size = Vector2(1000, 640)
+	_menu.size = Vector2(940, 640)
 	_menu.font_size = 36
 	_menu.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_child(_menu)
@@ -86,6 +80,113 @@ func _ready() -> void:
 			break
 	_build()
 	Sound.music("shop")
+
+
+## A night street in the slums: the houses far behind (blurred), the trader's
+## stall standing on the ground of zone 1-1 with a shadow under it, its
+## lanterns lighting the stall and the ground, ash in the air, dark corners.
+func _build_street() -> void:
+	var backdrop := TextureRect.new()
+	backdrop.texture = BACKDROP
+	backdrop.size = Vector2(1920, 1080)
+	add_child(backdrop)
+	var street := TextureRect.new()
+	street.texture = GROUND
+	street.stretch_mode = TextureRect.STRETCH_TILE
+	street.position = Vector2(0, STREET_Y)
+	street.size = Vector2(1920, 1080 - STREET_Y)
+	street.modulate = Color(0.5, 0.46, 0.5)
+	add_child(street)
+	# The far edge of the street fades into the dark.
+	add_child(_gradient_rect(Rect2(0, STREET_Y, 1920, 70), Color(0, 0, 0, 0.75), Color(0, 0, 0, 0.0), false))
+
+	var size := TRADER.get_size() * STALL_SCALE
+	var stall_at := Vector2(1890 - size.x, STREET_Y + 26 - size.y)
+	add_child(_glow(Rect2(stall_at.x - 40, STREET_Y - 30, size.x + 80, 110), Color(0, 0, 0, 0.7), false))
+	# The light of the lanterns pooling on the ground in front of the counter.
+	var pool := _glow(Rect2(stall_at.x + 60, STREET_Y - 10, size.x - 60, 150), Color(1.0, 0.55, 0.25, 0.28), true)
+	add_child(pool)
+	_lights.append(pool)
+	var stall := TextureRect.new()
+	stall.texture = TRADER
+	stall.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	stall.size = size
+	stall.position = stall_at
+	# The same night as the street around it.
+	stall.modulate = Color(0.9, 0.86, 0.92)
+	add_child(stall)
+	for lantern in LANTERNS:
+		var at: Vector2 = stall_at + lantern[0] * STALL_SCALE
+		var light := _glow(Rect2(at - Vector2(110, 110), Vector2(220, 220)), Color(lantern[1], 0.4), true)
+		add_child(light)
+		_lights.append(light)
+
+	var ash := CPUParticles2D.new()
+	ash.position = Vector2(960, -20)
+	ash.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	ash.emission_rect_extents = Vector2(1000, 10)
+	ash.amount = 60
+	ash.lifetime = 14.0
+	ash.preprocess = 14.0
+	ash.direction = Vector2(0.2, 1)
+	ash.spread = 20.0
+	ash.initial_velocity_min = 40.0
+	ash.initial_velocity_max = 90.0
+	ash.gravity = Vector2(6, 4)
+	ash.scale_amount_min = 1.5
+	ash.scale_amount_max = 3.0
+	ash.color = Color(0.75, 0.72, 0.7, 0.5)
+	add_child(ash)
+	# Dark corners pull the eye to the middle.
+	add_child(_glow(Rect2(-480, -270, 2880, 1620), Color(0, 0, 0, 0.0), false, Color(0, 0, 0, 0.7)))
+
+
+## A soft round spot of light (added on top) or shadow; `edge` is the colour at its rim.
+func _glow(area: Rect2, color: Color, light: bool, edge := Color(color, 0.0)) -> TextureRect:
+	var gradient := Gradient.new()
+	gradient.set_color(0, color)
+	gradient.set_color(1, edge)
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(0.5, 0.0) if edge.a == 0.0 else Vector2(1.0, 1.0)
+	var rect := TextureRect.new()
+	rect.texture = texture
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.position = area.position
+	rect.size = area.size
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if light:
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		rect.material = add
+	return rect
+
+
+## A rectangle fading from `from` (top) to `to` (bottom).
+func _gradient_rect(area: Rect2, from: Color, to: Color, _light: bool) -> TextureRect:
+	var gradient := Gradient.new()
+	gradient.set_color(0, from)
+	gradient.set_color(1, to)
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill_from = Vector2(0, 0)
+	texture.fill_to = Vector2(0, 1)
+	var rect := TextureRect.new()
+	rect.texture = texture
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.position = area.position
+	rect.size = area.size
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return rect
+
+
+## The lanterns flicker a little.
+func _process(delta: float) -> void:
+	_time += delta
+	for i in _lights.size():
+		_lights[i].modulate.a = 0.85 + 0.15 * sin(_time * (2.3 + i * 0.7) + i) * sin(_time * 5.1 + i * 2.0)
 
 
 func _build(select := 0) -> void:

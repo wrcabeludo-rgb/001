@@ -90,13 +90,21 @@ func _handle_joining() -> void:
 			continue
 		if not (device.just_pressed("jump") or device.just_pressed("start")):
 			continue
-		var slot := players.find(null)
-		if slot == -1:
+		if join(device) == -1:
 			return
-		device.consume()
-		players[slot] = device
-		heroes[slot] = Heroes.Id.SWORDSMAN if _hero_taken(Heroes.Id.SHOOTER, slot) else Heroes.Id.SHOOTER
-		player_joined.emit(slot)
+
+
+## Gives the device a free player slot (and a hero nobody plays); returns the
+## slot, or -1 when both are taken.
+func join(device: PlayerInput) -> int:
+	var slot := players.find(null)
+	if slot == -1 or players.has(device):
+		return -1
+	device.consume()
+	players[slot] = device
+	heroes[slot] = Heroes.Id.SWORDSMAN if _hero_taken(Heroes.Id.SHOOTER, slot) else Heroes.Id.SHOOTER
+	player_joined.emit(slot)
+	return slot
 
 
 func _hero_taken(hero: Heroes.Id, except_slot: int) -> bool:

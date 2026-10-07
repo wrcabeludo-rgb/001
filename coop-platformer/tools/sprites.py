@@ -341,6 +341,53 @@ def build_poses():
         json.dump(anchors, f, indent=1)
 
 
+# ---------------------------------------------------------------- shop backdrop
+
+def _cover(img, size):
+    """Scaled to cover `size` (cropping the overflow evenly)."""
+    factor = max(size[0] / img.width, size[1] / img.height)
+    img = img.resize((round(img.width * factor), round(img.height * factor)), Image.LANCZOS)
+    left, top = (img.width - size[0]) // 2, (img.height - size[1]) // 2
+    return img.crop((left, top, left + size[0], top + size[1]))
+
+
+def build_shop_backdrop():
+    """The slums behind the trader's stall: night sky and houses, a little blurred
+    and darkened so the stall in front stands out, like a distant street."""
+    size = (1920, 1080)
+    art = os.path.join(OUT, "backgrounds")
+    sky = _cover(Image.open(os.path.join(art, "sky_world1_1.png")).convert("RGBA"), size)
+    houses = _cover(Image.open(os.path.join(art, "bg_mid_world1_01.png")).convert("RGBA"), size)
+    picture = Image.alpha_composite(sky, houses).convert("RGB").filter(ImageFilter.GaussianBlur(3))
+    rgb = np.asarray(picture).astype(np.float32) * np.array([0.62, 0.58, 0.7])
+    # Darker towards the top and the edges.
+    y, x = np.mgrid[0:size[1], 0:size[0]]
+    shade = 1.0 - 0.35 * (1.0 - y / size[1]) ** 2 - 0.25 * (np.abs(x / size[0] - 0.5) * 2) ** 3
+    rgb *= shade[:, :, None]
+    save(Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), "ui/shop_bg.png")
+
+
+# ---------------------------------------------------------------- hero select avatars
+
+# The front view from each approved concept sheet (the leftmost figure).
+AVATARS = {
+    "ui/avatar_gunner.png": ("concepts/gunner_concept_approved.png", (0, 0, 560, 1024)),
+    "ui/avatar_swordsman.png": ("concepts/swordsman_concept_approved.png", (0, 0, 560, 1024)),
+}
+AVATAR_HEIGHT = 700
+
+
+def build_avatars():
+    for name, (source, box) in AVATARS.items():
+        img = Image.open(os.path.join(SRC, source)).crop(box)
+        # A sheet that is already cut out keeps its own transparency.
+        if img.mode != "RGBA" or img.getextrema()[3][0] == 255:
+            img = remove_background(img, holes=400)
+        img, _ = crop(img)
+        img, _ = scaled(img, AVATAR_HEIGHT)
+        save(img, name)
+
+
 # ---------------------------------------------------------------- props
 
 PROPS = {
@@ -363,7 +410,7 @@ PROPS = {
     "props/pickup_ammo.png": ("props/pickup_ammo_original.png", (60, 120, 1200, 1060), 80),
     "props/pickup_scrap.png": ("props/pickup_scrap_original.png", (40, 180, 1220, 1060), 80),
     # The white gap between the awning and the counter has to go too.
-    "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 300),
+    "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 120),
 }
 
 
@@ -468,4 +515,6 @@ if __name__ == "__main__":
     build_enemies()
     build_heroes()
     build_poses()
+    build_avatars()
+    build_shop_backdrop()
     build_tiles()
