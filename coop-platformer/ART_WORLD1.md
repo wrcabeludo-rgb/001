@@ -65,7 +65,7 @@ white background, nothing cropped, no motion lines, no effects. Pose: ...
 | `gunner_crouch_1` | `Crouching low on one knee, aiming the rifle forward at knee height.` |
 | `gunner_kick_1` | `A strong front kick: the near leg kicked straight forward at waist height, leaning back, the rifle held up in both hands.` |
 | `gunner_wall_1` | `Sliding down a wall that is on the right: one hand and one boot pressed against the wall, the coat flying up, looking down.` |
-| `gunner_climb_1`, `gunner_climb_2` | `Back view climbing a ladder, the rifle on his back; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
+| `gunner_climb_1`, `gunner_climb_2` | `Back view in a climbing pose, the rifle on his back, NO ladder drawn: the hands grip nothing, as if holding invisible rungs; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
 | `swordsman_crouch_1` | `Crouching low in a wide stance, the blade held low and forward, ready to strike.` |
 | `swordsman_block_1` | `Defensive stance: the mechanical arm raised in front of the face and chest like a shield, the blade held back, knees bent.` |
 | `swordsman_slash_down_1` | `Mid-swing of a quick downward diagonal cut, the blade low in front, the body turning into the cut.` |
@@ -73,9 +73,13 @@ white background, nothing cropped, no motion lines, no effects. Pose: ...
 | `swordsman_slash_finisher_1`, `swordsman_slash_finisher_2` | `A heavy two-handed finishing blow; frame 1: the blade raised high behind the head, leaning back; frame 2: a deep lunge, the blade slammed down low in front.` |
 | `swordsman_slash_overhead_1` | `Sweeping the blade in an arc above the head, looking up.` |
 | `swordsman_wall_1` | `Sliding down a wall that is on the right: the mechanical hand gripping the wall, one boot against it.` |
-| `swordsman_climb_1`, `swordsman_climb_2` | `Back view climbing a ladder, the blade on his back; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
+| `swordsman_climb_1`, `swordsman_climb_2` | `Back view in a climbing pose, the blade on his back, NO ladder drawn: the hands grip nothing, as if holding invisible rungs; frame 1: left hand and right foot up; frame 2: right hand and left foot up.` |
 
-Начни с удара-добивания, блока и лестницы — там разница с «куклой» больше всего.
+Лестницу в позе лазания рисовать **не надо**: в игре своя лестница, а нарисованную от героя не отрезать.
+Если ChatGPT всё равно рисует лестницу, допиши: `If you draw a ladder, make it pure flat bright green (#00FF00).`
+Стену в позе у стены рисовать можно (справа) — её я отрезаю.
+
+Готово: `gunner_crouch_1`, `gunner_kick_1`, `gunner_wall_1`.
 
 ---
 

@@ -12,7 +12,7 @@ const CHARGED_COLOR := Color(0.7, 1.0, 1.0)
 const MUZZLE_DISTANCE := 44.0
 const MUZZLE_HEIGHT := -36.0
 ## Crouching, the gun is held at knee height: low enough for small enemies.
-const CROUCH_MUZZLE_HEIGHT := 10.0
+const CROUCH_MUZZLE_HEIGHT := 2.0
 
 var ammo := 0
 ## "rifle" or "shotgun".
@@ -82,8 +82,8 @@ func update(delta: float) -> void:
 		_kick.activate(0.12, roundi(stats.kick_damage * player.damage_multiplier()),
 			Vector2(stats.kick_knockback, -320), player.facing)
 		player.animate_kick()
-		var swoosh := SlashArc.make(44, 12, 1.3, -0.35, Color(0.75, 0.9, 1.0), player.facing, 0.2)
-		swoosh.position = Vector2(player.facing * 4, 22)
+		var swoosh := SlashArc.make(42, 12, 1.4, -0.3, Color(0.75, 0.9, 1.0), player.facing, 0.2)
+		swoosh.position = Vector2(player.facing * 22, -10)
 		add_child(swoosh)
 		Sound.play("kick")
 

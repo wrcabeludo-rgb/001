@@ -1,2 +1,3 @@
-Рисунки поз героев: `<герой>_<поза>_<номер кадра>.png` (например `swordsman_block_1.png`).
-`python3 tools/sprites.py` вырезает их и кладёт в игру; список поз — в ART_WORLD1.md, раздел 1.3.
+Рисунки поз героев как есть из ChatGPT: `originals/<герой>_<поза>_original.png`.
+Как резать каждый (кадры, обрезка стены) — `POSE_SOURCES` в `tools/sprites.py`;
+`python3 tools/sprites.py` кладёт позы в игру. Список поз — ART_WORLD1.md, раздел 1.3.

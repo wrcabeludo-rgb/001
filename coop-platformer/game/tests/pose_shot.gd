@@ -46,6 +46,13 @@ func _run_all() -> void:
 	await _frames(8)
 	await _save("block")
 	sword.set_virtual("extra", false)
+	# Wall slide: the Gunner against the room's right wall (x = 1860), in the air.
+	_player.global_position = Vector2(1860.0 - Player.SIZE.x / 2.0 - 1.0, 200.0)
+	_input.set_virtual("right", true)
+	_camera.position = Vector2(1780, 300)
+	await _frames(20)
+	await _save("wall")
+	_input.set_virtual("right", false)
 	var _keep := partner
 
 

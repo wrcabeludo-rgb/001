@@ -250,26 +250,57 @@ POSE_HEIGHT = {
 }
 
 
+# Where each pose comes from: art_source/heroes/poses/originals/<hero>_<pose>_original.png,
+# cut into frames by boxes (None = the whole picture). The wall pose has the wall
+# drawn on the right: the box stops just before it.
+POSE_SOURCES = {
+    "gunner_crouch": [None],
+    "gunner_kick": [None],
+    "gunner_wall": [(0, 0, 926, 1536)],
+}
+# How far the wall is from the hero's middle in the wall pose (art pixels).
+WALL_GAP = 48
+
+
+def _green_to_white(img):
+    """A prop drawn in flat bright green (a ladder in a climbing pose) becomes background."""
+    rgb = np.asarray(img.convert("RGB")).copy()
+    r, g, b = (rgb[:, :, i].astype(np.int16) for i in range(3))
+    green = (g > 170) & (r < 130) & (b < 130) & (g - np.maximum(r, b) > 80)
+    rgb[green] = 255
+    return Image.fromarray(rgb)
+
+
 def build_poses():
-    """Action poses: art_source/heroes/poses/<hero>_<pose>_<n>.png -> <hero>_pose_<pose>_<n>.png.
-    Writes poses.json with where the feet are across each picture (0..1), so the
-    game stands the drawing on the hero's spot."""
-    folder = os.path.join(SRC, "heroes/poses")
-    if not os.path.isdir(folder):
-        return
+    """Action poses -> <hero>_pose_<pose>_<n>.png and poses.json, where the feet
+    are across each picture (0..1), so the game stands the drawing on the hero's
+    spot. Stray specks (dust, debris) are dropped."""
+    folder = os.path.join(SRC, "heroes/poses/originals")
     anchors = {}
-    for file in sorted(os.listdir(folder)):
-        stem, ext = os.path.splitext(file)
-        hero = stem.split("_")[0]
-        pose = "_".join(stem.split("_")[1:-1])
-        if ext != ".png" or hero not in HEROES or pose not in POSE_HEIGHT:
+    for key, boxes in POSE_SOURCES.items():
+        path = os.path.join(folder, key + "_original.png")
+        if not os.path.exists(path):
             continue
-        img, _ = crop(remove_background(Image.open(os.path.join(folder, file)), holes=400))
-        img, _ = scaled(img, round(HEROES[hero]["height"] * POSE_HEIGHT[pose]))
-        alpha = np.asarray(img)[:, :, 3]
-        feet = np.nonzero(alpha[int(alpha.shape[0] * 0.92):].max(axis=0) > 128)[0]
-        anchors["%s_%s" % (hero, pose)] = round(float(feet.mean()) / alpha.shape[1], 3) if len(feet) else 0.5
-        save(img, "heroes/%s_pose_%s_%s.png" % (hero, pose, stem.split("_")[-1]))
+        hero, pose = key.split("_", 1)
+        for n, box in enumerate(boxes, 1):
+            img = Image.open(path)
+            if box:
+                img = img.crop(box)
+            img = _green_to_white(img)
+            img = remove_background(img, holes=400)
+            alpha = np.asarray(img)[:, :, 3]
+            keep = _big_regions(alpha > 0, 3000)
+            img.putalpha(Image.fromarray(np.where(keep, alpha, 0).astype(np.uint8)))
+            img, _ = crop(img)
+            img, _ = scaled(img, round(HEROES[hero]["height"] * POSE_HEIGHT[pose]))
+            alpha = np.asarray(img)[:, :, 3]
+            width = alpha.shape[1]
+            if pose == "wall":
+                anchors[key] = round((width - WALL_GAP) / width, 3)
+            else:
+                feet = np.nonzero(alpha[int(alpha.shape[0] * 0.92):].max(axis=0) > 128)[0]
+                anchors[key] = round(float(feet.mean()) / width, 3) if len(feet) else 0.5
+            save(img, "heroes/%s_pose_%s_%d.png" % (hero, pose, n))
     with open(os.path.join(OUT, "heroes/poses.json"), "w") as f:
         json.dump(anchors, f, indent=1)
 
