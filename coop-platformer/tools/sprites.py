@@ -260,6 +260,8 @@ POSE_SOURCES = {
     "gunner_crouch": [("gunner_crouch", None)],
     "gunner_kick": [("gunner_kick", None)],
     "gunner_wall": [("gunner_wall", (0, 0, 926, 1536))],
+    "gunner_jump": [("gunner_jump", None)],
+    "gunner_fall": [("gunner_fall", None)],
     "gunner_climb": [("gunner_climb", (0, 0, 724, 1086), 1.12), ("gunner_climb", (724, 0, 1448, 1086), 1.12)],
     "swordsman_crouch": [("swordsman_crouch", (0, 880, 1024, 1536), (0, 0, 1024, 875))],
     "swordsman_block": [("swordsman_block", None)],

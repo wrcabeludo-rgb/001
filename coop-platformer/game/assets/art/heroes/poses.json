@@ -2,6 +2,8 @@
  "gunner_crouch_1": 0.394,
  "gunner_kick_1": 0.257,
  "gunner_wall_1": 0.719,
+ "gunner_jump_1": 0.431,
+ "gunner_fall_1": 0.422,
  "gunner_climb_1": 0.498,
  "gunner_climb_2": 0.505,
  "gunner_run_1": 0.399,
