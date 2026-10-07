@@ -7,6 +7,16 @@ const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
 const BACKDROP := preload("res://assets/art/ui/shop_bg.png")
 const GROUND := preload("res://assets/art/tiles/1-1_ground.png")
 const TRADER := preload("res://assets/art/props/trader.png")
+## Pictures of the goods (art/ui/<name>.png); an item without one shows the
+## weapon in hand instead.
+const ITEM_ICONS := {
+	"shotgun": "weapon_shotgun", "heavy_blade": "weapon_heavy_blade", "armor1": "item_armor1",
+	"armor2": "item_armor2", "pouch": "item_pouch", "quick_charge": "item_quick_charge",
+	"quick_dash": "item_quick_dash", "iron_block": "item_iron_block",
+}
+const WEAPON_ICONS := {
+	"rifle": "weapon_rifle", "shotgun": "weapon_shotgun", "blade": "weapon_blade", "heavy": "weapon_heavy_blade",
+}
 const STALL_SCALE := 0.82
 ## The street level: the stall stands on it.
 const STREET_Y := 900.0
@@ -28,6 +38,12 @@ var hero: Heroes.Id = Heroes.Id.SHOOTER
 var _menu: MenuList
 var _hint: Label
 var _wallet: Label
+## The showcase above the stall: a big picture of the chosen row's item.
+var _show_icon: TextureRect
+var _show_glow: TextureRect
+var _show_caption: Label
+## For each menu row: [icon name or "", caption, owned].
+var _rows: Array = []
 var _lights: Array[TextureRect] = []
 var _time := 0.0
 
@@ -44,7 +60,7 @@ func _ready() -> void:
 	add_child(title)
 	var quote := Label.new()
 	quote.text = "«%s»" % LINES.pick_random()
-	quote.position = Vector2(1100, 300)
+	quote.position = Vector2(1100, 330)
 	quote.size = Vector2(740, 80)
 	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -70,7 +86,10 @@ func _ready() -> void:
 	_hint.add_theme_font_size_override("font_size", 28)
 	_hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
 	add_child(_hint)
-	_menu.selection_changed.connect(func(_index: int) -> void: _hint.text = _menu.hint())
+	_build_showcase()
+	_menu.selection_changed.connect(func(index: int) -> void:
+		_hint.text = _menu.hint()
+		_show_row(index))
 	_menu.back.connect(_leave)
 
 	# Start with the hero of the first joined player.
@@ -193,6 +212,10 @@ func _build(select := 0) -> void:
 	_wallet.text = "%s · лом: %d" % [Heroes.NAMES[hero], SaveGame.scrap(hero)]
 	_wallet.add_theme_color_override("font_color", Heroes.COLORS[hero])
 	var entries: Array = []
+	_rows.clear()
+	var in_hand := func() -> Array:
+		return [WEAPON_ICONS.get(SaveGame.weapon(hero), ""), "В руках: %s" % ShopItems.weapon_name(hero, SaveGame.weapon(hero)), false]
+	_rows.append(in_hand)
 	entries.append({
 		"text": "◀  %s  ▶" % Heroes.NAMES[hero],
 		"adjust": func(_direction: int) -> void:
@@ -205,6 +228,11 @@ func _build(select := 0) -> void:
 	})
 	for item in ShopItems.ITEMS[hero]:
 		entries.append(_item_entry(item))
+		var icon: String = ITEM_ICONS.get(item["id"], "")
+		if not ResourceLoader.exists(_icon_path(icon)):
+			_rows.append(in_hand)
+		else:
+			_rows.append(func() -> Array: return [icon, item["name"], SaveGame.has_item(hero, item["id"])])
 	var owned := ShopItems.owned_weapons(hero)
 	if owned.size() > 1:
 		entries.append({
@@ -212,15 +240,55 @@ func _build(select := 0) -> void:
 			"adjust": func(direction: int) -> void:
 				var index := owned.find(SaveGame.weapon(hero))
 				SaveGame.set_weapon(hero, owned[wrapi(index + direction, 0, owned.size())])
-				SaveGame.save(),
+				SaveGame.save()
+				_show_row(_menu.selected),
 			"hint": "Влево / вправо — какое оружие взять с собой" + ("; в бою стрелок меняет его кнопкой доп." if hero == Heroes.Id.SHOOTER else ""),
 		})
+		_rows.append(in_hand)
 	var next: Dictionary = SaveGame.ZONES[int(SaveGame.data["next_zone"])]
 	entries.append({"text": "В путь: %s" % next["id"], "action": func() -> void:
 		get_tree().change_scene_to_file(next["scene"]), "hint": next["title"]})
 	entries.append({"text": "В главное меню", "action": _leave})
+	_rows.append(in_hand)
+	_rows.append(in_hand)
 	_menu.set_entries(entries, select)
 	_hint.text = _menu.hint()
+	_show_row(_menu.selected)
+
+
+func _icon_path(icon: String) -> String:
+	return "res://assets/art/ui/%s.png" % icon
+
+
+## The showcase: a soft light in the hero's colour, the picture, a caption.
+func _build_showcase() -> void:
+	var area := Rect2(1130, 30, 760, 290)
+	_show_glow = _glow(Rect2(area.position + Vector2(130, 0), Vector2(500, 260)), Color.WHITE, true)
+	add_child(_show_glow)
+	_show_icon = TextureRect.new()
+	_show_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_show_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_show_icon.position = area.position + Vector2(180, 10)
+	_show_icon.size = Vector2(400, 230)
+	add_child(_show_icon)
+	_show_caption = Label.new()
+	_show_caption.position = area.position + Vector2(0, 245)
+	_show_caption.size = Vector2(area.size.x, 40)
+	_show_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_show_caption.add_theme_font_override("font", TITLE_FONT)
+	_show_caption.add_theme_font_size_override("font_size", 30)
+	add_child(_show_caption)
+
+
+func _show_row(index: int) -> void:
+	if _show_icon == null or index < 0 or index >= _rows.size():
+		return
+	var row: Array = _rows[index].call()
+	var path := _icon_path(row[0])
+	_show_icon.texture = load(path) if row[0] != "" and ResourceLoader.exists(path) else null
+	_show_caption.text = row[1] + ("  ✓ есть" if row[2] else "")
+	_show_caption.add_theme_color_override("font_color", Heroes.COLORS[hero])
+	_show_glow.modulate = Color(Heroes.COLORS[hero], 0.45)
 
 
 func _item_entry(item: Dictionary) -> Dictionary:

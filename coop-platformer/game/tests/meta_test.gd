@@ -12,6 +12,7 @@ func _run_all() -> void:
 	await _test_power_ups()
 	await _test_secret_room()
 	await _test_pause_menu()
+	await _test_shop_showcase()
 	await _test_hero_select_alone()
 	await _test_hero_select_two_players()
 
@@ -175,6 +176,21 @@ func _test_hero_select_two_players() -> void:
 	screen.queue_free()
 	_extra_inputs.erase(second)
 	PlayerManager.players = [null, null]
+
+
+func _test_shop_showcase() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	var shop: Control = load("res://scenes/shop.tscn").instantiate()
+	add_child(shop)
+	await _frames(2)
+	var at_start: Texture2D = shop._show_icon.texture
+	shop._show_row(1)  # the first item of the Gunner: the shotgun
+	var shotgun: Texture2D = shop._show_icon.texture
+	_check(at_start != null and at_start.resource_path.ends_with("weapon_rifle.png")
+		and shotgun != null and shotgun.resource_path.ends_with("weapon_shotgun.png"),
+		"лавка показывает оружие в руках и картинку выбранного товара")
+	shop.queue_free()
+	await _frames(1)
 
 
 ## The hero select screen, staying in place when done.

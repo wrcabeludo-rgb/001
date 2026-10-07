@@ -420,6 +420,34 @@ def build_shop_backdrop():
     save(Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8)), "ui/shop_bg.png")
 
 
+# ---------------------------------------------------------------- shop icons
+
+# art_source/ui/<name>_original.png -> ui/<name>.png, fitted into ICON_SIZE.
+# Enclosed white (inside a rifle's sling) goes too.
+ICONS = ["weapon_rifle", "weapon_shotgun", "weapon_blade", "weapon_heavy_blade",
+         "item_armor1", "item_armor2", "item_pouch", "item_quick_charge", "item_quick_dash", "item_iron_block"]
+ICON_SIZE = 360
+
+
+def build_icons():
+    for name in ICONS:
+        path = os.path.join(SRC, "ui", name + "_original.png")
+        if not os.path.exists(path):
+            continue
+        # Only big gaps: the bright glowing slots on blades are drawing, not background.
+        img = remove_background(Image.open(path), holes=3000)
+        # Small holes in a gun stock are pure neutral white.
+        rgba = np.asarray(img).copy()
+        rgb = rgba[:, :, :3].astype(np.int16)
+        neutral = (rgb.min(axis=2) >= 240) & (rgb.max(axis=2) - rgb.min(axis=2) <= 8)
+        if name in ("weapon_rifle", "weapon_shotgun"):  # blades have white-hot slot cores
+            rgba[neutral, 3] = 0
+        img, _ = crop(Image.fromarray(rgba))
+        factor = ICON_SIZE / max(img.size)
+        img = img.resize((round(img.width * factor), round(img.height * factor)), Image.LANCZOS)
+        save(img, "ui/%s.png" % name)
+
+
 # ---------------------------------------------------------------- game icon
 
 def build_icon():
@@ -614,4 +642,5 @@ if __name__ == "__main__":
     build_avatars()
     build_shop_backdrop()
     build_icon()
+    build_icons()
     build_tiles()
