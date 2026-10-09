@@ -57,6 +57,13 @@ func load_data() -> void:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	if parsed is Dictionary:
 		_merge(data, parsed)
+	# Zones added in an update open up for saves that already finished the
+	# zone before them (world 2 for a team that beat world 1 earlier).
+	for i in ZONES.size():
+		if data["best_times"].has(ZONES[i]["id"]):
+			data["unlocked"] = maxi(int(data["unlocked"]), mini(i + 2, ZONES.size()))
+			if int(data["next_zone"]) <= i:
+				data["next_zone"] = mini(i + 1, ZONES.size() - 1)
 
 
 func save() -> void:

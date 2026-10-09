@@ -32,6 +32,14 @@ func _test_save_round_trip() -> void:
 	_check(int(SaveGame.data["unlocked"]) == 2 and int(SaveGame.data["next_zone"]) == 1,
 		"пройденная зона открывает следующую")
 	_check(GameSettings.difficulty == GameSettings.Difficulty.HARD, "сложность сохраняется")
+	# An old save that beat world 1 when world 2 did not exist yet.
+	SaveGame.data["unlocked"] = 3
+	SaveGame.data["next_zone"] = 2
+	SaveGame.data["best_times"]["1-3"] = 900.0
+	SaveGame.save()
+	SaveGame.load_data()
+	_check(int(SaveGame.data["unlocked"]) == 4 and int(SaveGame.data["next_zone"]) == 3,
+		"старое сохранение с пройденным миром 1 открывает мир 2")
 	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
 	_check(SaveGame.scrap(Heroes.Id.SHOOTER) == 0 and int(SaveGame.data["unlocked"]) == 1, "новая игра сбрасывает прогресс")
 
