@@ -108,6 +108,8 @@ func _test_boss_fight() -> void:
 	boss.state = LoaderBoss.State.IDLE
 	boss.health.damage(boss.health.current - boss.health.maximum / 4)
 	await _wait_for(func() -> bool: return boss.phase == 3, 300)
+	await _wait_for(func() -> bool: return boss.state == LoaderBoss.State.IDLE, 300)
+	boss._start_attack(LoaderBoss.Attack.RAM, _player)
 	var rammed := false
 	for i in 900:
 		await _frames(1)
