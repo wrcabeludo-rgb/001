@@ -26,10 +26,17 @@ func _run_all() -> void:
 	var x := (_spot.x + 0.5) * 60.0
 	await _spawn(Heroes.Id.SHOOTER, Vector2(x, floor_y - 48))
 	var partner := _spawn_extra(Heroes.Id.SWORDSMAN, Vector2(x + 160, floor_y - 48))
-	var lineup := ["w", "c", "h", "g"]
-	for i in lineup.size():
-		level.spawn_enemy(lineup[i], Vector2(x + 380 + i * 200, floor_y))
-	level.spawn_enemy("f", Vector2(x + 560, floor_y - 320))
+	if OS.get_cmdline_user_args().has("live"):
+		# The map's own enemies around the spot instead of the lineup.
+		var map := level.get_map()
+		for row in map.size():
+			for col in range(maxi(0, _spot.x - 10), mini(map[row].length(), _spot.x + 30)):
+				level.spawn_enemy(map[row][col], Level.cell_floor(col, row))
+	else:
+		var lineup := ["w", "c", "h", "g"]
+		for i in lineup.size():
+			level.spawn_enemy(lineup[i], Vector2(x + 380 + i * 200, floor_y))
+		level.spawn_enemy("f", Vector2(x + 560, floor_y - 320))
 	if OS.get_cmdline_user_args().has("props"):
 		for i in 3:
 			var post := Checkpoint.new()
@@ -49,7 +56,7 @@ func _run_all() -> void:
 		level.add_child(gate)
 	if OS.get_cmdline_user_args().has("boss"):
 		level.spawn_enemy("B", Vector2(x + 900, floor_y))
-	var hanging := level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))
+	var hanging := null if OS.get_cmdline_user_args().has("live") else level.spawn_enemy("a", Vector2(x + 260, floor_y - 300))
 	var _keep := [partner, hanging]
 	level.camera.follow([_player, partner], 0.0, true)
 	await _frames(20)

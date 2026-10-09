@@ -137,8 +137,8 @@ func _test_exit_finishes_level() -> void:
 	for child in _level.hud.get_children():
 		panel = panel or child is ResultsPanel
 	_check(_level.completed and panel, "выход завершает уровень и показывает итоги")
-	_check(int(SaveGame.data["unlocked"]) == 3 and _level.next_scene.ends_with("world1_ending.tscn"),
-		"после последней зоны мира — концовка мира, прогресс сохранён")
+	_check(int(SaveGame.data["unlocked"]) == 4 and _level.next_scene.ends_with("world1_ending.tscn"),
+		"после последней зоны мира — концовка мира, открыт мир 2")
 
 
 func _boss() -> SludgeBoss:

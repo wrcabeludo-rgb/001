@@ -23,6 +23,10 @@ TRACKS = {
     "zone_1_3": ("Noise Attack", -16.0),
     "boss": ("Summon the Rawk", -15.0),
     "shop": ("RetroFuture Dirty", -17.0),
+    "zone_2_1": ("Volatile Reaction", -16.0),
+    "zone_2_2": ("Malicious", -16.0),
+    "zone_2_3": ("Industrial Revolution", -16.0),
+    "boss_2": ("Killers", -15.0),
 }
 
 

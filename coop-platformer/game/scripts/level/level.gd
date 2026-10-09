@@ -440,12 +440,15 @@ func complete_level() -> void:
 	panel.closed.connect(func() -> void: get_tree().change_scene_to_file(next_scene))
 
 
-## Where the game goes after this zone: the shop before the next zone, or
-## the world's ending after the last one.
+## Where the game goes after this zone: the world's ending comic after its
+## last zone, else the shop before the next zone (the title after the very last).
 func after_zone_scene() -> String:
 	var index := SaveGame.zone_index(zone_id)
+	var zone: Dictionary = SaveGame.ZONES[index] if index >= 0 else {}
+	if zone.has("ending"):
+		return zone["ending"]
 	if index >= SaveGame.ZONES.size() - 1:
-		return "res://scenes/world1_ending.tscn"
+		return "res://scenes/title.tscn"
 	return "res://scenes/shop.tscn"
 
 
@@ -805,7 +808,7 @@ func _add_ground_tops(walls: StaticBody2D, map: Array, row: int, from_col: int, 
 
 
 static func is_ground_top(map: Array, row: int, col: int) -> bool:
-	return _at(map, col, row - 1) not in ["#", "s", ""]
+	return _at(map, col, row - 1) not in SOLID_CELLS + ["s", ""]
 
 
 ## Parallax layers from `backgrounds`, scaled to the screen height.

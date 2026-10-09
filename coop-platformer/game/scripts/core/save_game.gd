@@ -5,11 +5,14 @@ extends Node
 
 const VERSION := 1
 
-## Zones of world 1, in order: scene, title, music.
+## Zones in order: scene, title; "ending" — the comic shown after the last
+## zone of a world (instead of the trader).
 const ZONES := [
 	{"id": "1-1", "scene": "res://scenes/slums_level.tscn", "title": "Мир 1-1 · Трущобы"},
 	{"id": "1-2", "scene": "res://scenes/metro_level.tscn", "title": "Мир 1-2 · Затопленное метро"},
-	{"id": "1-3", "scene": "res://scenes/drain_level.tscn", "title": "Мир 1-3 · Главный сток"},
+	{"id": "1-3", "scene": "res://scenes/drain_level.tscn", "title": "Мир 1-3 · Главный сток",
+		"ending": "res://scenes/world1_ending.tscn"},
+	{"id": "2-1", "scene": "res://scenes/assembly_level.tscn", "title": "Мир 2-1 · Сборочный цех"},
 ]
 
 var path := "user://save.json"

@@ -18,6 +18,10 @@ Kevin MacLeod, [incompetech.com](https://incompetech.com).
 | 1-3 Главный сток | `music/zone_1_3.ogg` | «Noise Attack» |
 | Босс | `music/boss.ogg` | «Summon the Rawk» |
 | Лавка | `music/shop.ogg` | «RetroFuture Dirty» |
+| 2-1 Сборочный цех | `music/zone_2_1.ogg` | «Volatile Reaction» |
+| 2-2 Литейная | `music/zone_2_2.ogg` | «Malicious» |
+| 2-3 Насосная станция | `music/zone_2_3.ogg` | «Industrial Revolution» |
+| Погоня (босс мира 2) | `music/boss_2.ogg` | «Killers» |
 
 ## Звуки
 

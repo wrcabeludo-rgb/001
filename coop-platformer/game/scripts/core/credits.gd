@@ -9,6 +9,10 @@ const MUSIC := [
 	["1-3 Главный сток", "Noise Attack"],
 	["Босс", "Summon the Rawk"],
 	["Лавка", "RetroFuture Dirty"],
+	["2-1 Сборочный цех", "Volatile Reaction"],
+	["2-2 Литейная", "Malicious"],
+	["2-3 Насосная станция", "Industrial Revolution"],
+	["Погоня", "Killers"],
 ]
 
 
