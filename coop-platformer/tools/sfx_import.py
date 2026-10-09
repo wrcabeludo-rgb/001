@@ -72,6 +72,12 @@ SOUNDS = {
     "lever": ("rpg", "metalClick.ogg", 0.5, -2),
     "laser": ("scifi", "laserLarge_002.ogg", 0.8, -4),
     "flame": ("scifi", "thrusterFire_002.ogg", 1.0, -3),
+    # The flamethrower: a roaring burst of gas with a low rumble; plays every quarter second.
+    "flamer": ([("scifi", "thrusterFire_003.ogg", 0, 0.8), ("scifi", "lowFrequency_explosion_001.ogg", -14, 1.6)],
+               "", 0.4, -4),
+    # The shock baton landing: a sharp electric zap over a dull hit.
+    "shock": ([("digital", "zap2.ogg", 0, 0.9), ("scifi", "forceField_001.ogg", -4, 1.3),
+               ("impact", "impactPunch_medium_001.ogg", -6, 0.9)], "", 0.45, -2),
     "crumble": ("impact", "impactMining_000.ogg", 0.8, -2),
     "splash": ("splash", "splash_01.ogg", 1.0, -3),
     "arena": ("impact", "impactBell_heavy_000.ogg", 1.8, -2),

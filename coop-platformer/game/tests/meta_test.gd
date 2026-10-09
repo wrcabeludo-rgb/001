@@ -9,6 +9,9 @@ func _run_all() -> void:
 	await _test_shop_goods_change_heroes()
 	await _test_shotgun()
 	await _test_heavy_blade()
+	await _test_new_weapons_on_sale()
+	await _test_flamethrower()
+	await _test_shock_baton()
 	await _test_power_ups()
 	await _test_secret_room()
 	await _test_pause_menu()
@@ -84,6 +87,91 @@ func _test_heavy_blade() -> void:
 	await _spawn(Heroes.Id.SWORDSMAN, Vector2(OPEN_X, FLOOR_Y))
 	var sword := _player.combat as SwordsmanCombat
 	_check(sword.heavy and sword._damage(3) == 5, "тяжёлый клинок бьёт сильнее (3 → %d)" % sword._damage(3))
+
+
+func _test_new_weapons_on_sale() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	var flamer: Dictionary = ShopItems.ITEMS[Heroes.Id.SHOOTER].filter(func(item: Dictionary) -> bool:
+		return item["id"] == "flamethrower")[0]
+	var closed := not ShopItems.is_on_sale(flamer)
+	SaveGame.complete_zone("1-3", 300.0)
+	_check(closed and ShopItems.is_on_sale(flamer), "огнемёт продаётся только после босса мира 1")
+
+
+## A walker that stands still and does not hurt, with plenty of health.
+func _target(x: float) -> Walker:
+	var walker := Walker.new()
+	walker.max_health = 100
+	walker.walk_speed = 0.0
+	walker.chase_speed = 0.0
+	walker.contact_damage = 0
+	walker.position = Vector2(x, 1020.0 - walker.body_size.y / 2.0)
+	_room.add_child(walker)
+	return walker
+
+
+func _test_flamethrower() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	SaveGame.add_item(Heroes.Id.SHOOTER, "flamethrower")
+	SaveGame.set_weapon(Heroes.Id.SHOOTER, "flamer")
+	await _spawn(Heroes.Id.SHOOTER, Vector2(OPEN_X, FLOOR_Y))
+	var gun := _player.combat as ShooterCombat
+	var walker := _target(OPEN_X + 180.0)
+	await _frames(3)
+	var ammo := gun.ammo
+	await _press("attack", 30)
+	var licked := walker.health.current
+	_check(walker.is_burning() and licked < 100, "струя огнемёта поджигает врага (здоровье %d)" % licked)
+	_check(gun.ammo == ammo - 2, "огнемёт тратит патрон в четверть секунды (%d → %d)" % [ammo, gun.ammo])
+	await _frames(200)
+	var burnt := licked - walker.health.current
+	_check(not walker.is_burning() and burnt >= 5 and burnt <= 6,
+		"враг горит 3 секунды и теряет %d здоровья" % burnt)
+	gun.ammo = 1
+	await _press("attack", 30)
+	_check(gun.weapon == "rifle" and gun.ammo == 0, "кончились патроны у огнемёта — снова винтовка")
+	walker.queue_free()
+
+
+func _test_shock_baton() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	SaveGame.add_item(Heroes.Id.SWORDSMAN, "shock_baton")
+	SaveGame.set_weapon(Heroes.Id.SWORDSMAN, "shock")
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(OPEN_X, FLOOR_Y))
+	var sword := _player.combat as SwordsmanCombat
+	var walker := _target(OPEN_X + 80.0)
+	await _frames(3)
+	await _press("attack")
+	await _frames(10)
+	_check(sword.shocking and walker.is_shocked() and walker.stun_timer > 1.5,
+		"удар электрошоком оглушает врага (оглушение %.1f с)" % walker.stun_timer)
+	await _frames(115)
+	var released := not walker.is_shocked() and walker.stun_timer <= 0.0
+	await _press("attack")
+	await _frames(10)
+	_check(released and not walker.is_shocked(), "оглушение длится 2 секунды, потом 3 секунды иммунитета")
+	await _frames(200)
+	walker.queue_free()
+	# The finisher's discharge jumps to the next enemy.
+	var first := _target(OPEN_X + 80.0)
+	var second := _target(OPEN_X + 230.0)
+	await _frames(3)
+	for i in 3:
+		await _press("attack")
+		await _frames(13)
+	_check(first.is_shocked() and second.is_shocked() and second.health.current < 100,
+		"третий удар перескакивает разрядом на соседнего врага")
+	first.queue_free()
+	second.queue_free()
+	# A boss is not stunned, but takes more damage from the current.
+	var boss := _target(OPEN_X - 300.0)
+	boss.can_be_shocked = false
+	await _frames(2)
+	var hit := Hit.make(4, Vector2.ZERO, boss.global_position)
+	hit.shock = 2.0
+	boss.receive_hit(hit)
+	_check(not boss.is_shocked() and boss.health.current == 94, "босса ток не оглушает, но бьёт в 1,5 раза сильнее")
+	boss.queue_free()
 
 
 func _test_power_ups() -> void:

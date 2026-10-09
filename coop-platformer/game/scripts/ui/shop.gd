@@ -10,12 +10,14 @@ const TRADER := preload("res://assets/art/props/trader.png")
 ## Pictures of the goods (art/ui/<name>.png); an item without one shows the
 ## weapon in hand instead.
 const ITEM_ICONS := {
-	"shotgun": "weapon_shotgun", "heavy_blade": "weapon_heavy_blade", "armor1": "item_armor1",
+	"shotgun": "weapon_shotgun", "heavy_blade": "weapon_heavy_blade", "flamethrower": "weapon_flamethrower",
+	"shock_baton": "weapon_shock_baton", "armor1": "item_armor1",
 	"armor2": "item_armor2", "pouch": "item_pouch", "quick_charge": "item_quick_charge",
 	"quick_dash": "item_quick_dash", "iron_block": "item_iron_block",
 }
 const WEAPON_ICONS := {
 	"rifle": "weapon_rifle", "shotgun": "weapon_shotgun", "blade": "weapon_blade", "heavy": "weapon_heavy_blade",
+	"flamer": "weapon_flamethrower", "shock": "weapon_shock_baton",
 }
 const STALL_SCALE := 0.82
 ## The street level: the stall stands on it.
@@ -302,6 +304,8 @@ func _item_entry(item: Dictionary) -> Dictionary:
 func _item_text(item: Dictionary) -> String:
 	if SaveGame.has_item(hero, item["id"]):
 		return "%s — есть" % item["name"]
+	if not ShopItems.is_on_sale(item):
+		return "%s — после босса мира 1" % item["name"]
 	if item.has("needs") and not SaveGame.has_item(hero, item["needs"]):
 		return "%s — %d (сначала %s)" % [item["name"], item["price"], _item_name(item["needs"])]
 	return "%s — %d" % [item["name"], item["price"]]
@@ -317,6 +321,10 @@ func _item_name(item_id: String) -> String:
 func _buy(item: Dictionary) -> void:
 	if SaveGame.has_item(hero, item["id"]):
 		return
+	if not ShopItems.is_on_sale(item):
+		_hint.text = "Привезут, когда падёт Хозяин стока"
+		Sound.play("block", 0.0)
+		return
 	if item.has("needs") and not SaveGame.has_item(hero, item["needs"]):
 		_hint.text = "Сначала нужно купить «%s»" % _item_name(item["needs"])
 		Sound.play("block", 0.0)
@@ -327,8 +335,9 @@ func _buy(item: Dictionary) -> void:
 		return
 	SaveGame.set_scrap(hero, SaveGame.scrap(hero) - item["price"])
 	SaveGame.add_item(hero, item["id"])
-	if item["id"] in ["shotgun", "heavy_blade"]:
-		SaveGame.set_weapon(hero, "shotgun" if item["id"] == "shotgun" else "heavy")
+	var weapon := ShopItems.weapon_of_item(hero, item["id"])
+	if weapon != "":
+		SaveGame.set_weapon(hero, weapon)
 	SaveGame.save()
 	Sound.play("coin_shop", 0.0)
 	_build.call_deferred(_menu.selected)

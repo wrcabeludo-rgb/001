@@ -424,7 +424,7 @@ def build_shop_backdrop():
 
 # art_source/ui/<name>_original.png -> ui/<name>.png, fitted into ICON_SIZE.
 # Enclosed white (inside a rifle's sling) goes too.
-ICONS = ["weapon_rifle", "weapon_shotgun", "weapon_blade", "weapon_heavy_blade",
+ICONS = ["weapon_rifle", "weapon_shotgun", "weapon_blade", "weapon_heavy_blade", "weapon_flamethrower", "weapon_shock_baton",
          "item_armor1", "item_armor2", "item_pouch", "item_quick_charge", "item_quick_dash", "item_iron_block"]
 ICON_SIZE = 360
 

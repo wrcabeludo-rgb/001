@@ -5,6 +5,9 @@ extends HeroCombat
 ## Skill: a short kick that pushes enemies away.
 ## Extra: switch weapons (the shotgun is bought in the shop): five pellets in
 ## a fan, short range, one ammo per shot; without ammo it fires the rifle.
+## The flamethrower (also from the shop): hold attack for a jet of fire that
+## goes through enemies and sets them burning; it burns one ammo every quarter
+## second.
 
 const SHOT_COLOR := Color(0.3, 0.95, 1.0)
 const CHARGED_COLOR := Color(0.7, 1.0, 1.0)
@@ -15,7 +18,7 @@ const MUZZLE_HEIGHT := -36.0
 const CROUCH_MUZZLE_HEIGHT := 2.0
 
 var ammo := 0
-## "rifle" or "shotgun".
+## "rifle", "shotgun" or "flamer".
 var weapon := "rifle"
 
 const SHOTGUN_PELLETS := 5
@@ -23,10 +26,23 @@ const SHOTGUN_SPREAD := 0.5
 const SHOTGUN_COOLDOWN := 0.5
 const SHOTGUN_LIFETIME := 0.22
 
+## The flamethrower's jet: how far it reaches, how often it licks the enemies
+## in it, how long they burn afterwards, how long one ammo lasts.
+const FLAME_RANGE := 300.0
+const FLAME_WIDTH := 70.0
+const FLAME_TICK := 0.25
+const FLAME_DAMAGE := 1
+const FLAME_BURN := 3.0
+const FLAME_FUEL_TIME := 0.25
+
 var _fire_cooldown := 0.0
 var _kick_cooldown := 0.0
 var _charge := 0.0
 var _kick: Hitbox
+var _flame: Hitbox
+var _jet: CPUParticles2D
+var _flame_tick := 0.0
+var _fuel_timer := 0.0
 
 
 func setup(p_player: Player) -> void:
@@ -40,6 +56,11 @@ func setup(p_player: Player) -> void:
 	_kick.setup(Layers.Team.PLAYERS, Vector2(62, 48), Vector2(52, 12), SHOT_COLOR)
 	_kick.show_flash = false
 	_kick.landed.connect(func(_target: Hurtbox) -> void: player.hitstop())
+	_flame = Hitbox.new()
+	add_child(_flame)
+	_flame.setup(Layers.Team.PLAYERS, Vector2(FLAME_RANGE, FLAME_WIDTH), Vector2(FLAME_RANGE / 2.0, 0), SHOT_COLOR)
+	_flame.show_flash = false
+	_flame.burn = FLAME_BURN
 
 
 func update(delta: float) -> void:
@@ -48,11 +69,14 @@ func update(delta: float) -> void:
 	var input := player.input
 	if player.is_stunned():
 		_charge = 0.0
+		_update_flamer(delta, false)
 		return
 
 	if input.just_pressed("extra") and not input.is_held("down"):
 		_switch_weapon()
-	if input.just_pressed("attack") and _fire_cooldown <= 0.0:
+	var flamer := weapon == "flamer" and ammo > 0
+	_update_flamer(delta, flamer and input.is_held("attack"))
+	if input.just_pressed("attack") and _fire_cooldown <= 0.0 and not flamer:
 		if weapon == "shotgun" and ammo > 0:
 			_fire_cooldown = SHOTGUN_COOLDOWN
 			ammo -= 1
@@ -173,7 +197,70 @@ func _shotgun() -> void:
 		260.0, 5.0, 0.6, 1400.0, false, Vector2(-direction.x * 0.5, -1.0), 15.0)
 
 
-## The shotgun ran dry: back to the rifle (which never runs out).
+## The jet of fire while attack is held: it follows the aim, licks everything
+## in front of the barrel and burns ammo.
+func _update_flamer(delta: float, on: bool) -> void:
+	if not on:
+		if _jet != null:
+			_jet.emitting = false
+		_flame_tick = 0.0
+		_fuel_timer = 0.0
+		return
+	if _jet == null:
+		_jet = _make_jet()
+	var direction := aim_direction()
+	var start := player.global_position + Vector2(0, muzzle_height()) + direction * MUZZLE_DISTANCE
+	_jet.global_position = start
+	_jet.direction = direction
+	_jet.emitting = true
+	_flame.global_position = start
+	_flame.rotation = direction.angle()
+	_fuel_timer -= delta
+	if _fuel_timer <= 0.0:
+		_fuel_timer += FLAME_FUEL_TIME
+		ammo -= 1
+		player.animate_attack(0.5)
+		Sound.play("flamer", 0.06)
+		if ammo <= 0:
+			ammo = 0
+			_jet.emitting = false
+			_out_of_shells()
+			return
+	_flame_tick -= delta
+	if _flame_tick <= 0.0:
+		_flame_tick = FLAME_TICK
+		_flame.activate(0.06, roundi(FLAME_DAMAGE * player.damage_multiplier()), Vector2.ZERO, 1)
+
+
+## Tongues of fire: white-hot at the nozzle, swelling into orange and red,
+## then a little smoke. They stay in the world, so the jet bends as the hero moves.
+func _make_jet() -> CPUParticles2D:
+	var jet := CPUParticles2D.new()
+	jet.amount = 48
+	jet.lifetime = 0.36
+	jet.local_coords = false
+	jet.spread = 7.0
+	jet.initial_velocity_min = 560.0
+	jet.initial_velocity_max = 640.0
+	jet.damping_min = 700.0
+	jet.damping_max = 850.0
+	jet.gravity = Vector2(0, -320)
+	jet.scale_amount_min = 20.0
+	jet.scale_amount_max = 28.0
+	jet.scale_amount_curve = Curve.new()
+	jet.scale_amount_curve.add_point(Vector2(0, 0.25))
+	jet.scale_amount_curve.add_point(Vector2(0.5, 0.85))
+	jet.scale_amount_curve.add_point(Vector2(1, 1.0))
+	jet.color_ramp = Fx.ramp([Color(1, 1, 0.85), Color(1.0, 0.75, 0.25), Color(1.0, 0.4, 0.08),
+		Color(0.75, 0.12, 0.04, 0.6), Color(0.15, 0.12, 0.12, 0.0)])
+	jet.material = Fx.additive()
+	jet.z_index = 3
+	jet.emitting = false
+	add_child(Fx.soften(jet))
+	return jet
+
+
+## The shotgun or the flamethrower ran dry: back to the rifle (which never runs out).
 func _out_of_shells() -> void:
 	weapon = "rifle"
 	_charge = 0.0

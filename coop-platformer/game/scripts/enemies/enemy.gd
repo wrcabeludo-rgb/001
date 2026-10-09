@@ -14,6 +14,15 @@ const MAX_FALL_SPEED := 1300.0
 const MUTANT_COLOR := Color(0.42, 0.7, 0.3)
 const ROBOT_COLOR := Color(0.5, 0.58, 0.7)
 
+## Burning (the flamethrower): 1 damage every half second while it lasts.
+const BURN_TICK := 0.5
+const BURN_DAMAGE := 1
+const BURN_COLOR := Color(1.0, 0.5, 0.15)
+## After an electric stun the enemy cannot be stunned again for this long.
+const SHOCK_IMMUNITY := 3.0
+## Enemies that cannot be stunned (bosses) take this much more from shocks.
+const SHOCK_RESIST_DAMAGE := 1.5
+
 @export var max_health := 6
 @export var body_size := Vector2(56, 70)
 @export var color := MUTANT_COLOR
@@ -41,6 +50,15 @@ var facing := -1
 var stun_timer := 0.0
 ## While true, hits do not interrupt the enemy (a heavy one mid-attack).
 var super_armor := false
+## False for bosses: an electric hit does more damage instead of stunning.
+var can_be_shocked := true
+
+var _burn_timer := 0.0
+var _burn_tick := 0.0
+var _shock_timer := 0.0
+var _shock_immunity := 0.0
+var _flames: CPUParticles2D
+var _sparks: Electric.Sparks
 
 var _flash_timer := 0.0
 var _telegraph_timer := 0.0
@@ -146,8 +164,15 @@ func is_alive() -> bool:
 func receive_hit(hit: Hit) -> bool:
 	if not is_alive():
 		return false
-	health.damage(hit.damage)
+	var resisted := hit.shock > 0.0 and not can_be_shocked
+	health.damage(roundi(hit.damage * SHOCK_RESIST_DAMAGE) if resisted else hit.damage)
 	_flash_timer = 0.1
+	if hit.burn > 0.0 and is_alive():
+		ignite(hit.burn)
+		# A jet of fire licks the enemy many times a second: it burns, but is not
+		# thrown about or stopped by every lick.
+		_flash_timer = 0.04
+		return true
 	# Flinch: squashed by the blow and knocked back a little.
 	_squash = Vector2(0.14, -0.16)
 	_hit_tilt = clampf(hit.knockback.x / 2000.0, -0.3, 0.3)
@@ -157,7 +182,36 @@ func receive_hit(hit: Hit) -> bool:
 		velocity = hit.knockback * (1.0 - knockback_resistance)
 		stun_timer = hit_stun
 		_on_interrupted()
+	if hit.shock > 0.0 and is_alive():
+		shock(hit.shock)
 	return true
+
+
+func is_burning() -> bool:
+	return _burn_timer > 0.0
+
+
+func is_shocked() -> bool:
+	return _shock_timer > 0.0
+
+
+## Sets the enemy on fire for `duration` seconds (a new flame restarts the time).
+func ignite(duration: float) -> void:
+	if _burn_timer <= 0.0:
+		_burn_tick = BURN_TICK
+	_burn_timer = duration
+
+
+## Stuns with electricity for `duration` seconds, through any armour; then the
+## enemy shrugs off shocks for a while. Bosses are not stunned.
+func shock(duration: float) -> void:
+	if not can_be_shocked or _shock_immunity > 0.0 or not is_alive():
+		return
+	_shock_timer = duration
+	_shock_immunity = duration + SHOCK_IMMUNITY
+	stun_timer = maxf(stun_timer, duration)
+	_telegraph_timer = 0.0
+	_on_interrupted()
 
 
 func is_telegraphing() -> bool:
@@ -176,6 +230,9 @@ func _physics_process(delta: float) -> void:
 	stun_timer -= delta
 	_flash_timer -= delta
 	_telegraph_timer -= delta
+	_update_status(delta)
+	if not is_alive():
+		return
 	if uses_gravity and not is_on_floor():
 		velocity.y = minf(velocity.y + GRAVITY * delta, MAX_FALL_SPEED)
 	if stun_timer > 0.0:
@@ -187,6 +244,68 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_deal_contact_damage()
 	_update_look()
+
+
+## Burning ticks away health; flames and sparks show what is going on.
+func _update_status(delta: float) -> void:
+	_shock_timer -= delta
+	_shock_immunity -= delta
+	if _burn_timer > 0.0:
+		_burn_timer -= delta
+		_burn_tick -= delta
+		if _burn_tick <= 0.0:
+			_burn_tick += BURN_TICK
+			_flash_timer = maxf(_flash_timer, 0.05)
+			health.damage(BURN_DAMAGE)
+			if not is_alive():
+				return
+	if _burn_timer > 0.0 and _flames == null:
+		_flames = _make_flames()
+	if _flames != null:
+		_flames.emitting = _burn_timer > 0.0
+	if _shock_immunity > 0.0 and _sparks == null:
+		_sparks = Electric.Sparks.new()
+		_sparks.size = _status_area().size
+		_sparks.position = _status_area().get_center()
+		add_child(_sparks)
+	if _sparks != null:
+		# Full crackle while stunned, then dying sparks while it cannot be stunned again.
+		_sparks.strength = 1.0 if _shock_timer > 0.0 else clampf(_shock_immunity / SHOCK_IMMUNITY, 0.0, 1.0) * 0.35
+
+
+## Where the enemy is on screen (its picture, or its body), relative to it.
+func _status_area() -> Rect2:
+	var drawn := art_drawn_size()
+	var center := _sprite_rest if _sprite != null else Vector2.ZERO
+	return Rect2(center - drawn * 0.35, drawn * 0.7)
+
+
+func _make_flames() -> CPUParticles2D:
+	var area := _status_area()
+	var flames := CPUParticles2D.new()
+	flames.position = area.get_center() + Vector2(0, area.size.y * 0.2)
+	flames.amount = 18
+	flames.lifetime = 0.55
+	flames.local_coords = false
+	flames.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	flames.emission_rect_extents = Vector2(area.size.x * 0.45, area.size.y * 0.3)
+	flames.direction = Vector2.UP
+	flames.spread = 15.0
+	flames.initial_velocity_min = 40.0
+	flames.initial_velocity_max = 110.0
+	flames.gravity = Vector2(0, -260)
+	flames.scale_amount_min = 10.0
+	flames.scale_amount_max = 22.0
+	flames.scale_amount_curve = Curve.new()
+	flames.scale_amount_curve.add_point(Vector2(0, 0.6))
+	flames.scale_amount_curve.add_point(Vector2(0.3, 1.0))
+	flames.scale_amount_curve.add_point(Vector2(1, 0.1))
+	flames.color_ramp = Fx.ramp([Color(1, 0.95, 0.6), Color(1.0, 0.55, 0.12), Color(0.85, 0.18, 0.05, 0.6),
+		Color(0.2, 0.15, 0.15, 0.0)])
+	flames.material = Fx.additive()
+	flames.z_index = 2
+	add_child(Fx.soften(flames))
+	return flames
 
 
 ## The enemy's behaviour for one physics frame (not called while stunned).
@@ -260,14 +379,23 @@ func _update_look() -> void:
 	if _sprite != null:
 		_animate_sprite()
 	var look := color
+	var flicker := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.025)
 	if _flash_timer > 0.0:
 		look = Color.WHITE
+	elif is_shocked():
+		look = Electric.COLOR if flicker > 0.5 else Electric.CORE
+	elif is_burning():
+		look = color.lerp(BURN_COLOR, 0.4 + 0.3 * flicker)
 	elif is_telegraphing() and int(Time.get_ticks_msec() / 80) % 2 == 0:
 		look = TELEGRAPH_COLOR
 	_body.color = look
 	if _sprite != null:
 		if _flash_timer > 0.0:
 			Flash.set_flash(_sprite, Color.WHITE, 0.8)
+		elif is_shocked():
+			Flash.set_flash(_sprite, Electric.COLOR, 0.15 + 0.3 * flicker)
+		elif is_burning():
+			Flash.set_flash(_sprite, BURN_COLOR, 0.2 + 0.25 * flicker)
 		elif is_telegraphing() and int(Time.get_ticks_msec() / 80) % 2 == 0:
 			Flash.set_flash(_sprite, TELEGRAPH_COLOR, 0.55)
 		else:
@@ -313,6 +441,10 @@ func _animate_sprite() -> void:
 		lean += facing * -0.12
 		stretch += Vector2(0.05, -0.07)
 		shake = Vector2(randf_range(-2, 2), 0)
+	if is_shocked():
+		# Jolted by the current: twitching all over.
+		shake = Vector2(randf_range(-3, 3), randf_range(-2, 2))
+		stretch += Vector2(randf_range(-0.03, 0.03), randf_range(-0.03, 0.03))
 	_squash = _squash.move_toward(Vector2.ZERO, delta * 1.2)
 	_hit_tilt = move_toward(_hit_tilt, 0.0, delta * 2.0)
 	var total := stretch + _squash

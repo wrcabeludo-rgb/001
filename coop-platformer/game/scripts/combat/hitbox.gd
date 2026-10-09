@@ -14,6 +14,9 @@ var direction := 1
 var offset := Vector2.ZERO
 ## False when the attack draws its own effect (a slash arc) instead of the flash.
 var show_flash := true
+## Passed on to every hit (see Hit): seconds of burning / of electric stun.
+var burn := 0.0
+var shock := 0.0
 var _active_time := 0.0
 var _already_hit := {}
 var _shape: CollisionShape2D
@@ -65,6 +68,8 @@ func _physics_process(delta: float) -> void:
 			continue
 		_already_hit[hurtbox] = true
 		var hit := Hit.make(damage, Vector2(knockback.x * direction, knockback.y), global_position)
+		hit.burn = burn
+		hit.shock = shock
 		if hurtbox.take_hit(hit):
 			landed.emit(hurtbox)
 	if _active_time <= 0.0:

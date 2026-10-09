@@ -60,6 +60,7 @@ func _ready() -> void:
 	super._ready()
 	add_to_group("bosses")
 	super_armor = true
+	can_be_shocked = false
 	Sound.music("boss")
 	if _sprite != null:
 		_art_scale = _sprite.scale
