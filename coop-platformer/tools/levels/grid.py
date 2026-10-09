@@ -10,9 +10,11 @@ import re
 import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "game")
-SOLID = set("#x")
-STANDABLE_TOP = set("#x=")
-ENEMIES = set("wfghcaB")
+SOLID = set("#x<>e")
+STANDABLE_TOP = set("#x=<>e")
+# Molten metal, acid and spikes: never stood on.
+DEADLY = set("^~%")
+ENEMIES = set("wfghcaBWGRtKnO")
 
 
 class Grid:
@@ -57,15 +59,15 @@ class Grid:
                 below = self.at(r + 1, c)
                 if not (self._free(r, c) and self._free(r - 1, c)):
                     continue
-                if self.at(r, c) in "^~" or below in "^~":
+                if self.at(r, c) in DEADLY or below in DEADLY:
                     continue
-                if below in STANDABLE_TOP or self.at(r, c) in "HrML*":
+                if below in STANDABLE_TOP or self.at(r, c) in "HrMLY*":
                     spots.add((r, c))
         # Moving platforms and lifts: every cell along their path can be stood on.
         for r in range(self.h):
             for c in range(self.w):
                 ch = self.at(r, c)
-                if ch == "M":
+                if ch in "MY":
                     for cc in range(self.w):
                         if self.at(r, cc) == "*":
                             for x in range(min(c, cc), max(c, cc) + 1):
@@ -104,6 +106,12 @@ class Grid:
                     yield (r + dr, c)
         if self.at(r, c) == "H" and self.at(r - 1, c) not in "H":
             yield (r - 1, c)
+        # A steam vent throws a hero about five cells up.
+        if self.at(r, c) == "V":
+            for dr in range(-6, 0):
+                for dc in range(-3, 4):
+                    if (r + dr, c + dc) in spots and self._clear_column(r, r + dr, c):
+                        yield (r + dr, c + dc)
         for dr in range(-2, self.h):
             for dc in range(-7, 8):
                 nr, nc = r + dr, c + dc
@@ -145,6 +153,8 @@ class Grid:
                   "d": (140, 90, 200), "/": (255, 220, 80), "+": (255, 70, 90), "p": (80, 220, 255),
                   "b": (230, 60, 30), "k": (100, 140, 110), "F": (255, 140, 30), "v": (180, 160, 140),
                   "M": (130, 160, 220), "*": (130, 160, 220), "L": (230, 200, 60), "z": (255, 50, 120),
+                  ">": (60, 60, 70), "<": (60, 60, 70), "e": (90, 160, 255), "%": (255, 120, 20),
+                  "P": (200, 200, 210), "Q": (170, 110, 60), "V": (230, 230, 230), "Y": (230, 180, 40),
                   "1": (80, 230, 255), "2": (255, 160, 60), "s": (60, 60, 120), "$": (255, 215, 0), "U": (255, 255, 255)}
         img = Image.new("RGB", (self.w * scale, self.h * scale))
         px = img.load()

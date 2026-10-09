@@ -20,6 +20,13 @@ func _run_all() -> void:
 	await _test_turret_warns_then_fires()
 	await _test_ambusher_drops()
 	await _test_level_brings_enemies_back()
+	await _test_welder_burns()
+	await _test_shield_guard()
+	await _test_scout_drone_aims_then_fires()
+	await _test_ceiling_turret_bursts()
+	await _test_kamikaze()
+	await _test_repair_drone()
+	await _test_loader_brute()
 
 
 func _test_walker_stays_on_platform() -> void:
@@ -179,6 +186,122 @@ func _test_level_brings_enemies_back() -> void:
 			count += 1
 	_check(count == 1, "после гибели команды враги возвращаются (%d)" % count)
 	level._enemy_spots.clear()
+
+
+func _test_welder_burns() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var welder := _enemy(Welder.new(), HERO_X + 90.0) as Welder
+	await _frames(15)
+	var warned := welder.is_telegraphing() and _player.health.current == _player.health.maximum
+	await _frames(40)
+	_check(warned and _player.health.current < _player.health.maximum, "сварщик замахивается горелкой и обжигает")
+
+
+func _test_shield_guard() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var guard := _enemy(ShieldGuard.new(), HERO_X + 400.0) as ShieldGuard
+	guard.walk_speed = 0.0
+	guard.chase_speed = 0.0
+	await _frames(5)
+	guard.facing = -1
+	var full := guard.health.current
+	guard.receive_hit(Hit.make(3, Vector2(300, 0), Vector2(HERO_X, guard.global_position.y)))
+	_check(guard.health.current == full, "щитоносец спереди неуязвим")
+	guard.receive_hit(Hit.make(3, Vector2(-300, 0), guard.global_position + Vector2(200, 0)))
+	_check(guard.health.current == full - 3, "сзади щитоносца ранить можно")
+	var shock := Hit.make(1, Vector2(300, 0), Vector2(HERO_X, guard.global_position.y))
+	shock.shock = 2.0
+	guard.receive_hit(shock)
+	var after_shock := guard.health.current
+	guard.facing = -1
+	guard.receive_hit(Hit.make(3, Vector2(300, 0), Vector2(HERO_X, guard.global_position.y)))
+	_check(not guard.is_shielded() and after_shock == full - 4 and guard.health.current == full - 7,
+		"удар током выключает щит щитоносца")
+
+
+func _test_scout_drone_aims_then_fires() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var drone := _enemy_at(ScoutDrone.new(), Vector2(HERO_X + 350.0, 700.0)) as ScoutDrone
+	var aimed_at := -1
+	var fired_at := -1
+	for i in 120:
+		await _frames(1)
+		if aimed_at < 0 and drone.state == ScoutDrone.State.AIM:
+			aimed_at = i
+		if fired_at < 0 and _enemy_bullets() > 0:
+			fired_at = i
+	_check(aimed_at >= 0 and fired_at - aimed_at >= 35, "дрон-разведчик целится и только потом стреляет (%d → %d)" % [aimed_at, fired_at])
+
+
+func _test_ceiling_turret_bursts() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	_enemy_at(CeilingTurret.new(), Vector2(HERO_X + 300.0, 700.0))
+	var most := 0
+	for i in 150:
+		await _frames(1)
+		most = maxi(most, _enemy_bullets())
+	_check(most == 3, "потолочная турель стреляет очередью из трёх пуль (%d)" % most)
+
+
+func _test_kamikaze() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var bomb := _enemy(Kamikaze.new(), HERO_X + 400.0) as Kamikaze
+	var armed := false
+	for i in 150:
+		await _frames(1)
+		armed = armed or (is_instance_valid(bomb) and bomb.armed)
+	_check(armed and not is_instance_valid(bomb) and _player.health.current < _player.health.maximum,
+		"камикадзе катится к герою, мигает и взрывается")
+	# Batted away by a kick it blows up a robot instead.
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var target := _enemy(Walker.new(), HERO_X + 400.0) as Walker
+	target.walk_speed = 0.0
+	target.chase_speed = 0.0
+	target.contact_damage = 0
+	var bomb2 := _enemy(Kamikaze.new(), HERO_X + 70.0) as Kamikaze
+	bomb2.roll_speed = 0.0
+	await _frames(2)
+	var hero_health := _player.health.current
+	await _press("skill")
+	await _frames(60)
+	_check(not is_instance_valid(bomb2) and (not is_instance_valid(target) or target.health.current < target.health.maximum),
+		"пинок отбивает камикадзе, и он взрывается на другом роботе")
+	_check(_player.health.current == hero_health, "отбитый камикадзе не ранит героя")
+
+
+func _test_repair_drone() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(400, FLOOR_Y))
+	var walker := _enemy(Walker.new(), HERO_X + 200.0) as Walker
+	walker.walk_speed = 0.0
+	walker.chase_speed = 0.0
+	walker.sight = 0.0
+	var medic := _enemy_at(RepairDrone.new(), Vector2(HERO_X, 700.0)) as RepairDrone
+	await _frames(2)
+	walker.health.damage(4)
+	var hurt := walker.health.current
+	await _frames(150)
+	_check(walker.health.current > hurt, "ремонтный дрон чинит раненого робота (%d → %d)" % [hurt, walker.health.current])
+	medic.shock(2.0)
+	var before := walker.health.current
+	walker.health.damage(1)
+	await _frames(60)
+	_check(walker.health.current == before - 1, "оглушённый током ремонтный дрон не чинит")
+
+
+func _test_loader_brute() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(HERO_X, FLOOR_Y))
+	var brute := _enemy(LoaderBrute.new(), HERO_X + 150.0) as LoaderBrute
+	await _frames(100)
+	_check(brute.health.maximum >= 26 and _player.health.current <= _player.health.maximum - brute.slam_damage,
+		"погрузчик-громила бьёт манипулятором")
 
 
 ## An enemy standing on the floor (top at `floor_top`) at `x`.

@@ -29,6 +29,13 @@ func _run_all() -> void:
 	await _test_lever_opens_door()
 	await _test_arena()
 	await _test_team_wipe_restores_mechanics()
+	await _test_conveyor()
+	await _test_crates_ride_conveyor()
+	await _test_press()
+	await _test_steam_vent()
+	await _test_electro_floor()
+	await _test_molten()
+	await _test_crane()
 
 
 func _test_one_way_platform() -> void:
@@ -305,6 +312,128 @@ func _test_team_wipe_restores_mechanics() -> void:
 	_level.reset_mechanics()
 	await _frames(3)
 	_check(barrel.state == Barrel.State.READY and barrel.visible, "после гибели команды бочки возвращаются")
+
+
+func _test_conveyor() -> void:
+	_clear()
+	var belt := Conveyor.new()
+	belt.setup(Rect2(1260, 900, 480, 60), 1)
+	_add(belt)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(1320, 900 - Player.SIZE.y / 2.0 - 1.0))
+	await _frames(60)
+	var carried := _player.global_position.x - 1320.0
+	_check(_player.is_on_floor() and carried > 150.0 and carried < 260.0,
+		"конвейер везёт стоящего героя (%.0f px за секунду)" % carried)
+	_player.global_position = Vector2(1680, 900 - Player.SIZE.y / 2.0 - 1.0)
+	await _frames(10)
+	var start := _player.global_position.x
+	_input.set_virtual("left", true)
+	await _frames(60)
+	_input.set_virtual("left", false)
+	var walked := start - _player.global_position.x
+	_check(walked > 120.0 and walked < 320.0, "против хода ленты идти можно, но медленно (%.0f px за секунду)" % walked)
+	# A belt that ends in the air drops whoever stands still.
+	_player.global_position = Vector2(1700, 900 - Player.SIZE.y / 2.0 - 1.0)
+	await _frames(40)
+	_check(_feet() > 960.0, "лента сбрасывает героя с края (ноги на %.0f)" % _feet())
+
+
+func _test_crates_ride_conveyor() -> void:
+	_clear()
+	var belt := Conveyor.new()
+	belt.setup(Rect2(1260, 900, 480, 60), 1)
+	_add(belt)
+	var chute := CrateChute.new()
+	chute.interval = 10.0
+	chute.setup(Vector2(1320, 600), 9.9)
+	_add(chute)
+	await _frames(40)
+	var crates := get_tree().get_nodes_in_group("crates")
+	var crate: Node2D = crates[0] if not crates.is_empty() else null
+	var landed_x := crate.global_position.x if crate != null else 0.0
+	var on_belt := crate != null and absf(crate.global_position.y + 28.0 - 900.0) < 4.0
+	await _frames(30)
+	_check(on_belt and crate.global_position.x > landed_x + 60.0, "ящик падает из люка на ленту и едет по ней")
+	crate.queue_free()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(1400, FLOOR_Y))
+	belt.queue_free()
+	chute.setup(Vector2(1400, 700), 9.95)
+	await _frames(30)
+	_check(_player.health.current < _player.health.maximum, "падающий ящик ранит героя")
+	for node in get_tree().get_nodes_in_group("crates"):
+		node.queue_free()
+
+
+func _test_press() -> void:
+	_clear()
+	var press := Press.new()
+	press.up_time = 0.2
+	press.setup(Vector2(COL_X, 600), 120.0, 420.0)
+	_add(press)
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(COL_X, FLOOR_Y))
+	await _frames(20)
+	var warned := press.state == Press.State.WARNING and _player.health.current == _player.health.maximum
+	await _frames(40)
+	_check(warned, "пресс сначала мигает лампой и не ранит")
+	_check(_player.health.current == _player.health.maximum - press.hero_damage,
+		"пресс бьёт стоящего под ним героя (здоровье %d)" % _player.health.current)
+	_check(absf(_player.global_position.x - COL_X) > 40.0, "пресс отбрасывает героя в сторону")
+
+
+func _test_steam_vent() -> void:
+	_clear()
+	var vent := SteamVent.new()
+	vent.idle_time = 0.1
+	vent.warning_time = 0.1
+	vent.setup(Vector2(COL_X, FLOOR_TOP))
+	_add(vent)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(COL_X, FLOOR_Y))
+	var highest := FLOOR_TOP
+	for i in 70:
+		await _frames(1)
+		highest = minf(highest, _feet())
+	_check(FLOOR_TOP - highest > 280.0 and _player.health.current == _player.health.maximum,
+		"паровой клапан подбрасывает героя высоко вверх (на %.0f px) и не ранит" % (FLOOR_TOP - highest))
+
+
+func _test_electro_floor() -> void:
+	_clear()
+	var electro := ElectroFloor.new()
+	electro.off_time = 0.2
+	electro.setup(Rect2(1440, 900, 300, 60))
+	_add(electro)
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(1560, 900 - Player.SIZE.y / 2.0 - 1.0))
+	await _frames(30)
+	var warned := electro.state == ElectroFloor.State.WARNING and _player.health.current == _player.health.maximum
+	await _frames(40)
+	_check(warned, "электропол сначала мигает и не бьёт")
+	_check(_player.health.current < _player.health.maximum, "потом электропол бьёт током стоящего на нём")
+
+
+func _test_molten() -> void:
+	_clear()
+	var molten := Hazard.new()
+	molten.setup(Hazard.Kind.MOLTEN, Rect2(1440, 960, 300, 60))
+	_add(molten)
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(1600, 900))
+	var lowest := 0.0
+	for i in 30:
+		await _frames(1)
+		lowest = minf(lowest, _player.velocity.y)
+	_check(_player.health.current == _player.health.maximum - 3 and lowest < -900.0,
+		"расплав ранит сильнее кислоты и подбрасывает выше")
+
+
+func _test_crane() -> void:
+	_clear()
+	var crane := Crane.new()
+	crane.setup(MovingPlatform.Mode.SHUTTLE, Vector2(1320, 940), Vector2(1700, 940), 180)
+	crane.rail_y = 600.0
+	_add(crane)
+	crane.pause_time = 0.0
+	await _spawn(Heroes.Id.SHOOTER, Vector2(1320, 940 - Player.SIZE.y / 2.0 - 1.0))
+	await _frames(120)
+	_check(_player.is_on_floor() and _player.global_position.x > 1500.0, "кран везёт героя (x %.0f)" % _player.global_position.x)
 
 
 func _feet() -> float:

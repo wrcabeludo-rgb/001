@@ -408,6 +408,15 @@ func _try_jump(on_floor: bool) -> void:
 		Sound.play("double_jump")
 
 
+## Thrown up by the level (a steam vent): like a jump the player cannot cut short.
+func launch(vertical_velocity: float) -> void:
+	if is_climbing():
+		_release_climb()
+	velocity.y = minf(velocity.y, vertical_velocity)
+	_jump_rising = false
+	_coyote_timer = 0.0
+
+
 func _jump(vertical_velocity: float) -> void:
 	velocity.y = vertical_velocity
 	_jump_rising = true

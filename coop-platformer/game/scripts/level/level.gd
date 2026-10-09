@@ -10,7 +10,10 @@ extends Node2D
 ## Map legend: '#' wall, '1' / '2' start of player 1 / 2, 'C' checkpoint,
 ## 'D' training dummy, 'T' practice turret; enemies: 'w' walker, 'f' drone
 ## (flying), 'g' gun turret, 'h' heavy, 'c' charger, 'a' ambusher (hangs from
-## the ceiling of its cell). Other objects stand on the bottom of their cell.
+## the ceiling of its cell); robots of world 2: 'W' welder, 'G' shield guard,
+## 'R' scout drone and 'n' repair drone (flying), 't' ceiling turret (hangs from
+## the ceiling), 'K' kamikaze, 'O' loader brute. Other objects stand on the
+## bottom of their cell.
 ## Level mechanics:
 ##   '=' one-way platform (top of the cell)   'x' crumbling block
 ##   'M' moving platform, shuttles to the '*' in the same row
@@ -24,6 +27,12 @@ extends Node2D
 ##   'U' power-up (rage / shield / haste by column)   '$' cache of 10 scrap
 ##   's' false wall: looks solid, hides a secret room (fill the whole room with
 ##       's'; loot letters inside it are covered as well)
+## Factory (world 2):
+##   '>' / '<' conveyor belt running right / left (solid; carries what stands on it)
+##   'e' electrified floor (solid, zaps on a timer)   '%' molten metal
+##   'P' press under the ceiling (a run of 'P' = a wider plate), slams to the floor
+##   'Q' crate hatch in the ceiling   'V' steam vent on the floor (throws heroes up)
+##   'Y' crane: a platform hanging from a rail, shuttles to the '*' in the same row
 ## Bosses only appear in arena waves: 'B' the Sludge Master.
 
 const TILE := 60
@@ -363,12 +372,19 @@ func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 		"c": enemy = Charger.new()
 		"a": enemy = Ambusher.new()
 		"B": enemy = SludgeBoss.new()
+		"W": enemy = Welder.new()
+		"G": enemy = ShieldGuard.new()
+		"R": enemy = ScoutDrone.new()
+		"n": enemy = RepairDrone.new()
+		"t": enemy = CeilingTurret.new()
+		"K": enemy = Kamikaze.new()
+		"O": enemy = LoaderBrute.new()
 		_: return null
 	var half_height := enemy.body_size.y / 2.0
 	match letter:
-		"f":
+		"f", "R", "n":
 			enemy.position = floor_point - Vector2(0, TILE / 2.0)
-		"a":
+		"a", "t":
 			enemy.position = floor_point - Vector2(0, TILE - half_height)
 		_:
 			enemy.position = floor_point - Vector2(0, half_height)
@@ -468,7 +484,7 @@ func _build_level() -> void:
 				"T":
 					if spawn_targets:
 						_add_object(TurretDummy.new(), floor_point - Vector2(0, 25))
-				"w", "f", "g", "h", "c", "a":
+				"w", "f", "g", "h", "c", "a", "W", "G", "R", "n", "t", "K", "O":
 					if spawn_targets:
 						_enemy_spots.append([cell, floor_point])
 						spawn_enemy(cell, floor_point)
@@ -521,6 +537,8 @@ func _build_mechanics(map: Array) -> void:
 	var gates: Array[Door] = []
 	var lasers := 0
 	var flamers := 0
+	var presses := 0
+	var timed := 0
 
 	for row in map.size():
 		var line: String = map[row]
@@ -528,13 +546,32 @@ func _build_mechanics(map: Array) -> void:
 		while col < line.length():
 			var cell := line[col]
 			# Letters that form horizontal runs.
-			if cell in ["=", "^", "~"]:
+			if cell in ["=", "^", "~", ">", "<", "e", "%", "P"]:
 				var start := col
 				while col < line.length() and line[col] == cell:
 					col += 1
 				var run := Rect2(start * TILE, row * TILE, (col - start) * TILE, TILE)
 				if cell == "=":
 					add_one_way(one_way, run)
+				elif cell == ">" or cell == "<":
+					var belt := Conveyor.new()
+					belt.setup(run, 1 if cell == ">" else -1)
+					add_child(belt)
+				elif cell == "e":
+					var electro := ElectroFloor.new()
+					electro.setup(run, (timed % 2) * electro.cycle_time() / 2.0)
+					timed += 1
+					add_child(electro)
+				elif cell == "P":
+					var press := Press.new()
+					press.setup(Vector2(run.get_center().x, run.position.y), run.size.x,
+						(_wall_below(map, start, row) - row) * TILE, (presses % 2) * press.cycle_time() / 2.0)
+					presses += 1
+					add_child(press)
+				elif cell == "%":
+					var molten := Hazard.new()
+					molten.setup(Hazard.Kind.MOLTEN, run)
+					add_child(molten)
 				else:
 					var hazard := Hazard.new()
 					hazard.setup(Hazard.Kind.SPIKES if cell == "^" else Hazard.Kind.ACID, run)
@@ -560,13 +597,25 @@ func _build_mechanics(map: Array) -> void:
 					block.setup(rect)
 					block.look_material = ground_material if is_ground_top(map, row, col) else wall_material
 					add_child(block)
-				"M", "L":
+				"M", "L", "Y":
 					var target := _find_marker(map, col, row, cell == "L")
-					var platform := MovingPlatform.new()
+					var platform := MovingPlatform.new() if cell != "Y" else Crane.new()
 					var mode := MovingPlatform.Mode.LIFT if cell == "L" else MovingPlatform.Mode.SHUTTLE
 					var raise := Vector2(0, -MovingPlatform.THICKNESS)
 					platform.setup(mode, bottom + raise, Level.cell_floor(target.x, target.y) + raise, TILE * 3)
+					if cell == "Y":
+						(platform as Crane).rail_y = _wall_above(map, col, row) * TILE
 					add_child(platform)
+				"Q":
+					var chute := CrateChute.new()
+					chute.setup(Vector2(rect.get_center().x, rect.position.y), (timed % 3) * 1.1)
+					timed += 1
+					add_child(chute)
+				"V":
+					var vent := SteamVent.new()
+					vent.setup(bottom, (timed % 2) * 1.5)
+					timed += 1
+					add_child(vent)
 				"z":
 					var laser := Laser.new()
 					laser.setup(rect.position + Vector2(TILE / 2.0, 0), (_wall_below(map, col, row) - row) * TILE,
@@ -681,12 +730,24 @@ static func _at(map: Array, col: int, row: int) -> String:
 	return map[row][col]
 
 
+## Cells that are solid ground: walls, conveyors and electrified floor.
+const SOLID_CELLS := ["#", ">", "<", "e"]
+
+
 ## The row of the first wall below a cell (or the bottom of the map).
 static func _wall_below(map: Array, col: int, row: int) -> int:
 	var r := row + 1
-	while r < map.size() and _at(map, col, r) != "#":
+	while r < map.size() and _at(map, col, r) not in SOLID_CELLS:
 		r += 1
 	return r
+
+
+## The row just below the first wall above a cell (0 if there is none).
+static func _wall_above(map: Array, col: int, row: int) -> int:
+	var r := row - 1
+	while r >= 0 and _at(map, col, r) not in SOLID_CELLS:
+		r -= 1
+	return r + 1
 
 
 ## The '*' that ends the path of a moving platform: the nearest one in the same
