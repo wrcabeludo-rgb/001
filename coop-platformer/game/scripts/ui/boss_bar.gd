@@ -26,9 +26,9 @@ func _ready() -> void:
 
 ## Shows the first living boss in the scene, or hides the bar.
 func refresh() -> void:
-	var boss: SludgeBoss = null
+	var boss: Enemy = null
 	for node in get_tree().get_nodes_in_group("bosses"):
-		if node is SludgeBoss and not node.is_queued_for_deletion() and node.is_alive():
+		if node is Enemy and node.has_method("display_name") and not node.is_queued_for_deletion() and node.is_alive():
 			boss = node
 			break
 	visible = boss != null

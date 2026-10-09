@@ -46,6 +46,9 @@ class FallingCrate:
 	const LIFE := 6.0
 	const DAMAGE := 2
 
+	## Sideways speed while flying (a crate thrown by the loader); 0 once it lands.
+	var drift := 0.0
+
 	var _age := 0.0
 	var _landed := false
 	var _hit := {}
@@ -76,8 +79,9 @@ class FallingCrate:
 		# Blinks before it goes.
 		visible = _age < LIFE - 1.0 or int(_age * 10.0) % 2 == 0
 		velocity.y = minf(velocity.y + GRAVITY * delta, 1400.0)
-		velocity.x = 0.0
-		var falling_fast := velocity.y > 300.0
+		velocity.x = 0.0 if _landed else drift
+		# Dangerous while falling fast, or anywhere in its flight when thrown.
+		var falling_fast := not _landed and (velocity.y > 300.0 or drift != 0.0)
 		move_and_slide()
 		if falling_fast:
 			var rect := Rect2(global_position - SIZE / 2.0, SIZE)

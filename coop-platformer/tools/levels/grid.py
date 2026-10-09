@@ -106,9 +106,9 @@ class Grid:
                     yield (r + dr, c)
         if self.at(r, c) == "H" and self.at(r - 1, c) not in "H":
             yield (r - 1, c)
-        # A steam vent throws a hero about five cells up.
+        # A steam vent throws a hero about seven cells up.
         if self.at(r, c) == "V":
-            for dr in range(-6, 0):
+            for dr in range(-7, 0):
                 for dc in range(-3, 4):
                     if (r + dr, c + dc) in spots and self._clear_column(r, r + dr, c):
                         yield (r + dr, c + dc)

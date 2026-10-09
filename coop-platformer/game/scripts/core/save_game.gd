@@ -13,6 +13,9 @@ const ZONES := [
 	{"id": "1-3", "scene": "res://scenes/drain_level.tscn", "title": "Мир 1-3 · Главный сток",
 		"ending": "res://scenes/world1_ending.tscn"},
 	{"id": "2-1", "scene": "res://scenes/assembly_level.tscn", "title": "Мир 2-1 · Сборочный цех"},
+	{"id": "2-2", "scene": "res://scenes/foundry_level.tscn", "title": "Мир 2-2 · Литейная"},
+	{"id": "2-3", "scene": "res://scenes/pumping_level.tscn", "title": "Мир 2-3 · Насосная станция",
+		"ending": "res://scenes/world2_ending.tscn"},
 ]
 
 var path := "user://save.json"

@@ -33,7 +33,9 @@ extends Node2D
 ##   'P' press under the ceiling (a run of 'P' = a wider plate), slams to the floor
 ##   'Q' crate hatch in the ceiling   'V' steam vent on the floor (throws heroes up)
 ##   'Y' crane: a platform hanging from a rail, shuttles to the '*' in the same row
-## Bosses only appear in arena waves: 'B' the Sludge Master.
+##   'X' the chase: when a hero passes this column, the giant loader rolls in
+##       behind the team and chases it up to the next arena gate '['
+## Bosses only appear in arena waves: 'B' the Sludge Master, 'Z' the Lumen loader.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -379,6 +381,7 @@ func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 		"t": enemy = CeilingTurret.new()
 		"K": enemy = Kamikaze.new()
 		"O": enemy = LoaderBrute.new()
+		"Z": enemy = LoaderBoss.new()
 		_: return null
 	var half_height := enemy.body_size.y / 2.0
 	match letter:
@@ -614,6 +617,16 @@ func _build_mechanics(map: Array) -> void:
 					chute.setup(Vector2(rect.get_center().x, rect.position.y), (timed % 3) * 1.1)
 					timed += 1
 					add_child(chute)
+				"X":
+					# The chase ends at the nearest arena gate to the right, in any row.
+					var gate: int = line.length()
+					for gate_row in map:
+						var found: int = (gate_row as String).find("[", col)
+						if found >= 0:
+							gate = mini(gate, found)
+					var chase := Chase.new()
+					chase.setup(rect.position.x, rect.position.x - 22.0 * TILE, gate * TILE, bottom.y)
+					add_child(chase)
 				"V":
 					var vent := SteamVent.new()
 					vent.setup(bottom, (timed % 2) * 1.5)
