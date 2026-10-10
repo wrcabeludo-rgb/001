@@ -582,6 +582,7 @@ BACKGROUNDS = {
     "backgrounds/bg_mid_world1_3.png": ("backgrounds/bg_mid_world1_3_original.png", True, 360),
     "backgrounds/bg_far_2-1.png": ("backgrounds/bg_far_2-1_original.png", False, 400),
     "backgrounds/bg_mid_2-2.png": ("backgrounds/bg_mid_2-2_original.png", True, 360),
+    "backgrounds/bg_far_2-2.png": ("backgrounds/bg_far_2-2_original.png", False, 400),
 }
 
 
@@ -593,8 +594,27 @@ def build_backgrounds():
             continue
         img = Image.open(path)
         img = white_to_alpha(img) if white_sky else img.convert("RGBA")
+        if name in FADE_TOP:
+            img = _fade_top(img, 140)
         img, _ = make_seamless(img, overlap)
         save(img, name)
+
+
+# Mid layers whose picture starts with a straight cut: the top edge melts into the fog.
+FADE_TOP = {"backgrounds/bg_mid_2-2.png", "backgrounds/bg_mid_2-3.png"}
+
+
+def _fade_top(img, height):
+    alpha = np.asarray(img.getchannel("A")).astype(np.float32)
+    rows = np.nonzero(alpha.mean(axis=1) > 200)[0]
+    if len(rows) == 0:
+        return img
+    top = rows[0]
+    ramp = np.clip((np.arange(alpha.shape[0]) - top) / float(height), 0.0, 1.0)
+    alpha *= ramp[:, None]
+    img = img.copy()
+    img.putalpha(Image.fromarray(alpha.astype(np.uint8)))
+    return img
 
 
 # ---------------------------------------------------------------- moving sky of zone 1-1

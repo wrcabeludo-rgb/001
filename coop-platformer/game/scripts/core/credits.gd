@@ -9,7 +9,6 @@ const MUSIC := [
 	["1-3 Главный сток", "Noise Attack"],
 	["Босс", "Summon the Rawk"],
 	["Лавка", "RetroFuture Dirty"],
-	["2-1 Сборочный цех", "Volatile Reaction"],
 	["2-2 Литейная", "Malicious"],
 	["2-3 Насосная станция", "Industrial Revolution"],
 	["Погоня", "Killers"],
@@ -24,6 +23,8 @@ static func text() -> String:
 	lines.append("Kevin MacLeod (incompetech.com)")
 	lines.append("Licensed under Creative Commons: By Attribution 4.0")
 	lines.append("creativecommons.org/licenses/by/4.0/")
+	lines.append("")
+	lines.append("2-1 Сборочный цех — «Cyber Factory Rush» (WarmingLetter, Flow Music)")
 	lines.append("")
 	lines.append("ЗВУКИ: Kenney, Dread Knight, qubodup, MedicineStorm, rockseller, Snabisch,")
 	lines.append("Bonsaiheldin, LarkPay (OpenGameArt.org, CC0)")
