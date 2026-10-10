@@ -32,6 +32,10 @@ var _claw_x := 0.0
 var _floor_y := 0.0
 var _mark: Node2D
 var _last_attack := -1
+## The open reactor on the drawing's back, shown while the core is open.
+var _core: Sprite2D
+## Where the reactor hatch is on the boss drawing (share of its size from the top-left).
+const CORE_AT := Vector2(0.73, 0.39)
 var _look: LoaderLook
 
 
@@ -65,6 +69,15 @@ func _ready() -> void:
 		_look.size = Vector2(body_size.x * 1.5, body_size.y * 1.3)
 		_look.position = Vector2(0, body_size.y / 2.0 - _look.size.y / 2.0)
 		add_child(_look)
+	var core_path := "res://assets/art/enemies/boss_loader_core.png"
+	if _sprite != null and ResourceLoader.exists(core_path):
+		_core = Sprite2D.new()
+		_core.texture = load(core_path)
+		_core.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var factor := art_drawn_size().x * 0.24 / _core.texture.get_width()
+		_core.scale = Vector2(factor, factor)
+		_core.visible = false
+		add_child(_core)
 	_mark = ClawMark.new()
 	_mark.visible = false
 	_mark.top_level = true
@@ -260,7 +273,13 @@ func _update_status(delta: float) -> void:
 
 func _update_look() -> void:
 	super._update_look()
-	if _sprite != null and is_core_open():
+	if _core != null:
+		_core.visible = is_core_open()
+		var drawn := art_drawn_size()
+		_core.flip_h = _sprite.flip_h
+		_core.position = _sprite.position + Vector2(-facing * (CORE_AT.x - 0.5) * drawn.x, (CORE_AT.y - 0.5) * drawn.y)
+		_core.modulate = Color(1.3, 1.3, 1.3) if int(Time.get_ticks_msec() / 120) % 2 == 0 else Color.WHITE
+	elif _sprite != null and is_core_open():
 		Flash.set_flash(_sprite, Color(1.0, 0.6, 0.2), 0.25 + 0.2 * sin(Time.get_ticks_msec() * 0.02))
 	if _look != null:
 		_look.scale.x = float(facing)

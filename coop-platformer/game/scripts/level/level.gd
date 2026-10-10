@@ -68,6 +68,8 @@ var backgrounds: Array = []
 ## Ash falling over the background, and now and then a flash of lightning.
 var ash := false
 var lightning := false
+## Which look the checkpoints, exits and gates have ("" or "factory", see Harm.skin).
+var prop_skin := ""
 ## The catwalk strip drawn on one-way and moving platforms.
 var platform_texture := Harm.PLATFORM_TEXTURE
 ## Colour of walls and floors (used when there is no texture).
@@ -132,6 +134,7 @@ func get_signs() -> Array:
 func _ready() -> void:
 	# Runs after the heroes have moved, so screen edges and falls see final positions.
 	process_priority = 10
+	Harm.skin = prop_skin
 	_build_background()
 	if ash:
 		_build_ash()

@@ -39,7 +39,7 @@ func _ready() -> void:
 	_look = Harm.box(-size / 2.0, size, color)
 	_look.clip_contents = true
 	add_child(_look)
-	var art_path := "res://assets/art/props/%s.png" % ("gate" if gate else "door")
+	var art_path := Harm.prop_path("gate" if gate else "door")
 	if ResourceLoader.exists(art_path):
 		# The picture is stretched over the door; it slides up with it.
 		_look.color = Color.TRANSPARENT

@@ -75,6 +75,7 @@ func _init() -> void:
 	wall_texture = Factory.tile("2-2_wall")
 	ground_texture = Factory.tile("2-2_ground")
 	platform_texture = Factory.PLATFORM
+	prop_skin = "factory"
 	other_scene = "res://scenes/test_room.tscn"
 
 

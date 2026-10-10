@@ -67,10 +67,24 @@ static func plank(at: Vector2, width: float, fallback: Color, texture := PLATFOR
 	return strip
 
 
+## The look of the current world's props: "" (world 1) or "factory" (world 2).
+## A prop drawn for it ("checkpoint_factory") replaces the plain one. Set by Level.
+static var skin := ""
+
+
+## Path of a prop's picture, in the current world's look when it has one.
+static func prop_path(prop: String) -> String:
+	if skin != "":
+		var skinned := "res://assets/art/props/%s_%s.png" % [prop, skin]
+		if ResourceLoader.exists(skinned):
+			return skinned
+	return "res://assets/art/props/%s.png" % prop
+
+
 ## A prop's picture from assets/art/props, standing on the bottom of a box of
 ## `size` centred on the origin (null if the picture is not drawn yet).
 static func prop_sprite(prop: String, size: Vector2) -> Sprite2D:
-	var path := "res://assets/art/props/%s.png" % prop
+	var path := prop_path(prop)
 	if not ResourceLoader.exists(path):
 		return null
 	var sprite := Sprite2D.new()

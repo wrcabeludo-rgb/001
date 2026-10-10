@@ -122,6 +122,7 @@ ENEMIES = {
     # Smoke over the stacks is painted out (the game puffs its own).
     "enemies/loader_brute.png": ("enemies/enemy_loader_brute_original.png", 340),
     "enemies/boss_loader.png": ("enemies/boss_loader_original.png", 840),
+    "enemies/boss_loader_core.png": ("enemies/boss_loader_core_original.png", 300),
 }
 
 
@@ -558,6 +559,11 @@ PROPS = {
     "props/molten_vat.png": ("props/prop_molten_vat_original.png", (0, 179, 2000, 491), 120),
     "props/electro_floor.png": ("props/prop_electro_floor_original.png", (48, 180, 1952, 472), 120),
     "props/steam_vent.png": ("props/prop_steam_vent_original.png", (150, 55, 1195, 1185), 200),
+    # World 2 versions of the checkpoint, the exit and the arena gate (Level.prop_skin = "factory").
+    # The gate is stretched over a narrow doorway, so only its slats are kept.
+    "props/checkpoint_factory.png": ("props/prop_checkpoint_factory_original.png", (270, 15, 800, 1515), 340),
+    "props/exit_factory.png": ("props/prop_exit_factory_original.png", (0, 20, 1024, 1465), 420),
+    "props/gate_factory.png": ("props/prop_gate_factory_original.png", (205, 280, 690, 1700), 600),
 }
 
 
@@ -607,6 +613,7 @@ BACKGROUNDS = {
     "backgrounds/bg_mid_2-2.png": ("backgrounds/bg_mid_2-2_original.png", True, 360),
     "backgrounds/bg_far_2-2.png": ("backgrounds/bg_far_2-2_original.png", False, 400),
     "backgrounds/bg_far_2-3.png": ("backgrounds/bg_far_2-3_original.png", False, 400),
+    "backgrounds/bg_mid_2-1.png": ("backgrounds/bg_mid_2-1_original.png", True, 360),
     "backgrounds/bg_mid_2-3.png": ("backgrounds/bg_mid_2-3_original.png", True, 360),
 }
 
@@ -626,7 +633,7 @@ def build_backgrounds():
 
 
 # Mid layers whose picture starts with a straight cut: the top edge melts into the fog.
-FADE_TOP = {"backgrounds/bg_mid_2-2.png", "backgrounds/bg_mid_2-3.png"}
+FADE_TOP = {"backgrounds/bg_mid_2-1.png", "backgrounds/bg_mid_2-2.png", "backgrounds/bg_mid_2-3.png"}
 
 
 def _fade_top(img, height):
