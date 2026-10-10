@@ -112,6 +112,12 @@ ENEMIES = {
     # The spit stream of the original picture is cut off: in the game it is a projectile.
     "enemies/spitter.png": ("enemies/enemy_spitter_original.png", 200),
     "enemies/boss.png": ("enemies/boss_sludge_master_original.png", 600),
+    # World 2: robots.
+    "enemies/welder.png": ("enemies/enemy_welder_original.png", 240),
+    "enemies/shield_guard.png": ("enemies/enemy_shield_guard_original.png", 260),
+    "enemies/scout_drone.png": ("enemies/enemy_scout_drone_original.png", 160),
+    "enemies/ceiling_turret.png": ("enemies/enemy_ceiling_turret_original.png", 200),
+    "enemies/kamikaze.png": ("enemies/enemy_kamikaze_original.png", 160),
 }
 
 

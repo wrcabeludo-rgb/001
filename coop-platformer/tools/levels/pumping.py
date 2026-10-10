@@ -5,10 +5,10 @@ g = Grid(580)
 put, fill, ground = g.put, g.fill, g.ground
 
 # A. The pump room entrance
-fill(0, 9, 1, 40)
+fill(0, 9, 1, 40); fill(10, 13, 24, 40)
 ground(1, 43, 26)
 put(25, 3, "1"); put(25, 5, "2")
-put(25, 22, "W"); put(10, 30, "t"); put(25, 36, "W")
+put(25, 22, "W"); put(14, 30, "t"); put(25, 36, "W")
 # B. Electrified floors (taking turns) with catwalks above as the safe way
 fill(0, 9, 41, 100)
 ground(44, 100, 26)
@@ -39,7 +39,8 @@ ground(213, 262, 26)
 put(25, 215, "V")
 fill(19, 25, 218, 234)
 fill(19, 20, 228, 232, "s"); put(20, 229, "$"); put(20, 231, "U")
-put(18, 222, "G"); put(10, 226, "t")
+fill(10, 12, 222, 234)
+put(18, 222, "G"); put(13, 226, "t")
 # F. The pump hall arena
 put(25, 238, "C"); put(25, 239, "+"); put(25, 240, "p")
 fill(0, 21, 244, 244); put(22, 244, "[")

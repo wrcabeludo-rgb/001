@@ -52,11 +52,12 @@ fill(0, 21, 294, 294); put(22, 294, "]")
 fill(22, 22, 264, 267, "="); fill(22, 22, 285, 288, "="); fill(19, 19, 274, 278, "=")
 # G. Two levels of the line: a belt below, a catwalk above, turrets on the ceiling,
 #    a lever up top opens the door ahead; a second hidden cellar
-fill(0, 9, 295, 372)
+# A low ceiling, so the turrets hanging from it stay on screen.
+fill(0, 9, 295, 372); fill(10, 13, 300, 362)
 ground(301, 372, 26)
 fill(26, 26, 305, 340, "<")
 fill(20, 20, 312, 362, "=")
-put(10, 322, "t"); put(10, 352, "t")
+put(14, 322, "t"); put(14, 352, "t")
 put(19, 318, "W"); put(19, 340, "W"); put(19, 358, "/")
 fill(21, 25, 364, 364, "H")
 put(25, 344, "G"); put(25, 330, "W")

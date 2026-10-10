@@ -6,6 +6,8 @@ extends "res://tests/test_harness.gd"
 var _out := "/tmp/shot"
 ## Where the heroes stand: column and the row of the floor surface.
 var _spot := Vector2i(10, 26)
+## Enemy letters to line up (lineup=W,G,K), instead of the default lineup.
+var _lineup: PackedStringArray = []
 
 
 func _init() -> void:
@@ -15,6 +17,8 @@ func _init() -> void:
 			_out = arg.substr(4)
 		elif arg.begins_with("scene="):
 			room_scene = load("res://scenes/%s.tscn" % arg.substr(6))
+		elif arg.begins_with("lineup="):
+			_lineup = arg.substr(7).split(",")
 		elif arg.begins_with("spot="):
 			var parts := arg.substr(5).split(",")
 			_spot = Vector2i(int(parts[0]), int(parts[1]))
@@ -32,6 +36,15 @@ func _run_all() -> void:
 		for row in map.size():
 			for col in range(maxi(0, _spot.x - 10), mini(map[row].length(), _spot.x + 30)):
 				level.spawn_enemy(map[row][col], Level.cell_floor(col, row))
+	elif _lineup.size() > 0:
+		# Chosen enemies in a row; fliers float, ceiling turrets hang from row 10.
+		for i in _lineup.size():
+			var at := Vector2(x + 300 + i * 190, floor_y)
+			if _lineup[i] in ["R", "n", "f"]:
+				at.y -= 260
+			elif _lineup[i] == "t":
+				at.y = 11 * 60.0
+			level.spawn_enemy(_lineup[i], at)
 	else:
 		var lineup := ["w", "c", "h", "g"]
 		for i in lineup.size():

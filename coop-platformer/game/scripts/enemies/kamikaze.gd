@@ -28,7 +28,7 @@ func _init() -> void:
 	color = ROBOT_COLOR.lerp(Color(0.8, 0.3, 0.2), 0.4)
 	contact_damage = 0
 	art = "kamikaze"
-	art_height = 64.0
+	art_height = 80.0
 	health_drop_chance = 0.0
 	ammo_drop_chance = 0.15
 	scrap_min = 0
