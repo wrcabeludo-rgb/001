@@ -535,6 +535,10 @@ PROPS = {
     "props/pickup_scrap.png": ("props/pickup_scrap_original.png", (40, 180, 1220, 1060), 80),
     # The white gap between the awning and the counter has to go too.
     "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 120),
+    # World 2. The belt strip repeats sideways; the end drum sits at the belt's ends.
+    "props/conveyor.png": ("props/prop_conveyor_original.png", (0, 194, 2000, 477), 120),
+    "props/conveyor_end.png": ("props/prop_conveyor_end_original.png", (600, 160, 1254, 1040), 200),
+    "props/press.png": ("props/prop_press_original.png", (0, 0, 887, 1774), 480),
 }
 
 
@@ -583,6 +587,8 @@ BACKGROUNDS = {
     "backgrounds/bg_far_2-1.png": ("backgrounds/bg_far_2-1_original.png", False, 400),
     "backgrounds/bg_mid_2-2.png": ("backgrounds/bg_mid_2-2_original.png", True, 360),
     "backgrounds/bg_far_2-2.png": ("backgrounds/bg_far_2-2_original.png", False, 400),
+    "backgrounds/bg_far_2-3.png": ("backgrounds/bg_far_2-3_original.png", False, 400),
+    "backgrounds/bg_mid_2-3.png": ("backgrounds/bg_mid_2-3_original.png", True, 360),
 }
 
 

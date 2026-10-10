@@ -133,8 +133,10 @@ func _draw() -> void:
 	var local := Rect2(rect.position - position, rect.size)
 	var rod_top := top - position
 	# The rod from the ceiling to the plate, with two hoses.
-	draw_rect(Rect2(rod_top.x - 12.0, rod_top.y, 24.0, local.position.y - rod_top.y), Color(0.62, 0.65, 0.72))
-	draw_rect(Rect2(rod_top.x - 12.0, rod_top.y, 5.0, local.position.y - rod_top.y), Color(0.8, 0.83, 0.9))
+	# With the drawing, the rod above it matches the drawing's darker steel.
+	var rod := Color(0.62, 0.65, 0.72) if _art == null else Color(0.3, 0.31, 0.34)
+	draw_rect(Rect2(rod_top.x - 12.0, rod_top.y, 24.0, local.position.y - rod_top.y), rod)
+	draw_rect(Rect2(rod_top.x - 12.0, rod_top.y, 5.0, local.position.y - rod_top.y), rod.lightened(0.3))
 	draw_line(rod_top + Vector2(-22, 0), local.position + Vector2(width / 2.0 - 22.0, 0), DARK, 4.0)
 	draw_line(rod_top + Vector2(22, 0), local.position + Vector2(width / 2.0 + 22.0, 0), DARK, 4.0)
 	draw_rect(Rect2(rod_top.x - width * 0.3, rod_top.y, width * 0.6, 14.0), DARK)

@@ -59,6 +59,24 @@ func _ready() -> void:
 			_art_strip.texture.get_height())
 		_art_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_art.add_child(_art_strip)
+	_add_ends()
+
+
+## The big drums at both ends of the belt (the drawing has its drum on the right).
+func _add_ends() -> void:
+	var path := "res://assets/art/props/conveyor_end.png"
+	if not ResourceLoader.exists(path):
+		return
+	for side in [-1, 1]:
+		var drum := Sprite2D.new()
+		drum.texture = load(path)
+		drum.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var factor := rect.size.y * 1.45 / drum.texture.get_height()
+		drum.scale = Vector2(factor * side, factor)
+		var size := drum.texture.get_size() * factor
+		var edge := rect.end.x if side > 0 else rect.position.x
+		drum.position = Vector2(edge - side * size.x * 0.32, rect.end.y - size.y / 2.0 + rect.size.y * 0.12)
+		add_child(drum)
 
 
 ## Turns the belt around (a lever can do it).
