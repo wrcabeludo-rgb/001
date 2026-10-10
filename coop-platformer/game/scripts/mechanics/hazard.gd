@@ -47,6 +47,10 @@ func _ready() -> void:
 		pool.size = rect.size
 		add_child(pool)
 	else:
+		# The cast-iron vat holding the metal, its rim just under the surface.
+		var vat := Harm.tiled_prop("molten_vat", Vector2(rect.position.x, rect.end.y - 10.0), Vector2(rect.size.x, 60.0))
+		if vat != null:
+			add_child(vat)
 		var molten := MoltenLook.new()
 		molten.position = rect.position
 		molten.size = rect.size

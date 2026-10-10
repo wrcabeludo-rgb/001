@@ -33,13 +33,19 @@ func setup(floor_point: Vector2, phase := 0.0) -> void:
 
 func _ready() -> void:
 	var art := Harm.prop_sprite("steam_vent", Vector2(60, 60))
+	var nozzle := Vector2(0, -34)
 	if art != null:
-		var factor := 60.0 / art.texture.get_width()
+		# The pipe is left of the drawing's middle (the valve wheel is on its right).
+		var factor := 92.0 / art.texture.get_width()
 		art.scale = Vector2(factor, factor)
-		art.position = Vector2(0, -art.texture.get_height() * factor / 2.0)
+		var drawn := art.texture.get_size() * factor
+		art.position = Vector2(drawn.x * 0.146, -drawn.y / 2.0)
 		add_child(art)
+		nozzle = Vector2(0, -drawn.y + 6.0)
 	_steam = _make_steam(40, 0.75, 700.0, 18.0, 46.0)
 	_puffs = _make_steam(6, 0.5, 160.0, 8.0, 18.0)
+	_steam.position = nozzle
+	_puffs.position = nozzle
 
 
 func _make_steam(amount: int, lifetime: float, speed: float, size_min: float, size_max: float) -> CPUParticles2D:

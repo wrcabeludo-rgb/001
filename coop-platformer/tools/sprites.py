@@ -539,6 +539,15 @@ PROPS = {
     "props/conveyor.png": ("props/prop_conveyor_original.png", (0, 194, 2000, 477), 120),
     "props/conveyor_end.png": ("props/prop_conveyor_end_original.png", (600, 160, 1254, 1040), 200),
     "props/press.png": ("props/prop_press_original.png", (0, 0, 887, 1774), 480),
+    # The crane in two parts (the cables between them are drawn by the game, any length):
+    # the trolley on its rail, and the platform with its shackles.
+    "props/crane_top.png": ("props/prop_crane_original.png", (0, 13, 1024, 410), 185),
+    "props/crane_bottom.png": ("props/prop_crane_original.png", (50, 880, 975, 1395), 240),
+    "props/crate_lumen.png": ("props/prop_crate_lumen_original.png", (30, 185, 1230, 1075), 130),
+    # Seamless strips: the vat under molten metal, the electrified floor (without its end caps).
+    "props/molten_vat.png": ("props/prop_molten_vat_original.png", (0, 179, 2000, 491), 120),
+    "props/electro_floor.png": ("props/prop_electro_floor_original.png", (48, 180, 1952, 472), 120),
+    "props/steam_vent.png": ("props/prop_steam_vent_original.png", (150, 55, 1195, 1185), 200),
 }
 
 

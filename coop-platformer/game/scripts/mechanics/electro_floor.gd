@@ -37,8 +37,10 @@ func _ready() -> void:
 	collision.shape = shape
 	collision.position = rect.get_center()
 	add_child(collision)
-	var art := Harm.tiled_prop("electro_floor", rect.position, Vector2(rect.size.x, 40.0))
+	var art := Harm.tiled_prop("electro_floor", rect.position, Vector2(rect.size.x, rect.size.y))
 	if art != null:
+		# Under the glow and the sparks drawn here.
+		art.show_behind_parent = true
 		add_child(art)
 
 
@@ -92,12 +94,14 @@ func _draw() -> void:
 		draw_rect(Rect2(rect.position + Vector2(0, 14), Vector2(rect.size.x, 5)), COPPER.darkened(0.3))
 		for end in [rect.position.x, rect.end.x - 14.0]:
 			draw_rect(Rect2(end, rect.position.y, 14.0, rect.size.y), Conveyor.HAZARD_YELLOW.darkened(0.2))
-	# Blue indicator lights along the strip.
+	# Blue indicator lights along the strip (the drawing has its own; they glow brighter).
 	var lit := state == State.ON or (state == State.WARNING and int(Time.get_ticks_msec() / 80) % 2 == 0)
 	var x := rect.position.x + 40.0
-	while x < rect.end.x - 20.0:
+	while x < rect.end.x - 20.0 and get_child_count() < 2:
 		draw_circle(Vector2(x, rect.position.y + 28.0), 4.0, Electric.COLOR if lit else Electric.COLOR.darkened(0.7))
 		x += 60.0
+	if lit and get_child_count() >= 2:
+		draw_rect(Rect2(rect.position + Vector2(0, 4), Vector2(rect.size.x, 6)), Color(Electric.COLOR, 0.35))
 	if state == State.ON:
 		draw_rect(Rect2(rect.position - Vector2(0, 10), Vector2(rect.size.x, 12)), Color(Electric.COLOR, 0.2))
 	for points in _bolts:

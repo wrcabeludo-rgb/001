@@ -41,7 +41,7 @@ func _draw() -> void:
 class FallingCrate:
 	extends CharacterBody2D
 
-	const SIZE := Vector2(56, 56)
+	const SIZE := Vector2(76, 56)
 	const GRAVITY := 2200.0
 	const LIFE := 6.0
 	const DAMAGE := 2
@@ -66,7 +66,7 @@ class FallingCrate:
 		if art == null:
 			art = Harm.prop_sprite("crate", SIZE)
 		if art != null:
-			var factor := SIZE.x * 1.1 / art.texture.get_width()
+			var factor := SIZE.x * 1.06 / art.texture.get_width()
 			art.scale = Vector2(factor, factor)
 			art.position = Vector2(0, SIZE.y / 2.0 - art.texture.get_height() * factor / 2.0)
 			add_child(art)
