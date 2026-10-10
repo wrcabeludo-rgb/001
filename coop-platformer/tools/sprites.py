@@ -451,7 +451,7 @@ def build_icons():
         rgba = np.asarray(img).copy()
         rgb = rgba[:, :, :3].astype(np.int16)
         neutral = (rgb.min(axis=2) >= 240) & (rgb.max(axis=2) - rgb.min(axis=2) <= 8)
-        if name in ("weapon_rifle", "weapon_shotgun"):  # blades have white-hot slot cores
+        if name in ("weapon_rifle", "weapon_shotgun", "weapon_flamethrower"):  # blades have white-hot slot cores
             rgba[neutral, 3] = 0
         img, _ = crop(Image.fromarray(rgba))
         factor = ICON_SIZE / max(img.size)
