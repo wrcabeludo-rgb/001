@@ -118,6 +118,10 @@ ENEMIES = {
     "enemies/scout_drone.png": ("enemies/enemy_scout_drone_original.png", 160),
     "enemies/ceiling_turret.png": ("enemies/enemy_ceiling_turret_original.png", 200),
     "enemies/kamikaze.png": ("enemies/enemy_kamikaze_original.png", 160),
+    "enemies/repair_drone.png": ("enemies/enemy_repair_drone_original.png", 152),
+    # Smoke over the stacks is painted out (the game puffs its own).
+    "enemies/loader_brute.png": ("enemies/enemy_loader_brute_original.png", 340),
+    "enemies/boss_loader.png": ("enemies/boss_loader_original.png", 840),
 }
 
 

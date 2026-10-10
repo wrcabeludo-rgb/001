@@ -34,6 +34,9 @@ var _shake_timer := 0.0
 var _time := 0.0
 var _art: Sprite2D
 var _dust: CPUParticles2D
+var _smoke: CPUParticles2D
+## Half the machine's width (the drawing's, once it is drawn).
+var _half_width := LOOK_SIZE.x / 2.0
 
 
 func setup(p_trigger_x: float, p_start_x: float, p_stop_x: float, p_floor_y: float) -> void:
@@ -55,6 +58,13 @@ func _ready() -> void:
 		var factor := LOOK_SIZE.y / _art.texture.get_height()
 		_art.scale = Vector2(factor, factor)
 		add_child(_art)
+		var drawn := _art.texture.get_size() * factor
+		_half_width = drawn.x / 2.0
+		# Flipped to face right: the stacks are at the back, on the left.
+		_smoke = Fx.smoke(14, 30.0)
+		_smoke.position = Vector2(-0.36 * drawn.x, -0.2 * drawn.y)
+		_smoke.emitting = false
+		add_child(_smoke)
 	_dust = CPUParticles2D.new()
 	_dust.amount = 30
 	_dust.lifetime = 0.9
@@ -76,7 +86,7 @@ func _ready() -> void:
 
 ## The loader's front (its forks), in world x.
 func front_x() -> float:
-	return _x + LOOK_SIZE.x / 2.0
+	return _x + _half_width
 
 
 func reset() -> void:
@@ -84,6 +94,8 @@ func reset() -> void:
 	finished = false
 	visible = false
 	_dust.emitting = false
+	if _smoke != null:
+		_smoke.emitting = false
 
 
 func _physics_process(delta: float) -> void:
@@ -131,8 +143,10 @@ func _start() -> void:
 	_x = start_x
 	_throw_timer = 1.2
 	position = Vector2(_x, floor_y - LOOK_SIZE.y / 2.0)
-	_dust.position = Vector2(LOOK_SIZE.x / 2.0, 0)
+	_dust.position = Vector2(_half_width, 0)
 	_dust.emitting = true
+	if _smoke != null:
+		_smoke.emitting = true
 	Sound.play("boss_roar", 0.0, 0.0, 0.7)
 	Sound.music("boss_2")
 	get_tree().call_group("cameras", "shake", 14.0)
@@ -161,6 +175,8 @@ func _finish() -> void:
 	finished = true
 	running = false
 	_dust.emitting = false
+	if _smoke != null:
+		_smoke.emitting = false
 	Fx.burst(get_parent(), Vector2(front_x(), floor_y - 100.0), [Color(0.6, 0.58, 0.55, 0.9), Color(0.4, 0.38, 0.36, 0.0)],
 		30, 500.0, 14.0, 1.0, 300.0, false, Vector2.UP, 90.0)
 	var tween := create_tween()

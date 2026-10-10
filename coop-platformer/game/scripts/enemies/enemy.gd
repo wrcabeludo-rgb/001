@@ -59,6 +59,10 @@ var _shock_timer := 0.0
 var _shock_immunity := 0.0
 var _flames: CPUParticles2D
 var _sparks: Electric.Sparks
+## Where the drawing's smoke stack is, as a share of its size from the
+## top-left (the drawing faces left); none when x < 0.
+var smoke_stack := Vector2(-1, 0)
+var _smoke: CPUParticles2D
 
 var _flash_timer := 0.0
 var _telegraph_timer := 0.0
@@ -378,6 +382,7 @@ func _deal_contact_damage() -> void:
 func _update_look() -> void:
 	if _sprite != null:
 		_animate_sprite()
+		_update_smoke()
 	var look := color
 	var flicker := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.025)
 	if _flash_timer > 0.0:
@@ -402,6 +407,19 @@ func _update_look() -> void:
 			Flash.set_flash(_sprite, Color.WHITE, 0.0)
 	_alert.visible = is_telegraphing()
 	_eye.position = Vector2(facing * (body_size.x / 2.0 - 14.0) - 5.0, -body_size.y / 2.0 + 12.0)
+
+
+## Smoke puffing from the drawing's stack, which moves with the picture.
+func _update_smoke() -> void:
+	if smoke_stack.x < 0.0:
+		return
+	if _smoke == null:
+		_smoke = Fx.smoke(10, art_drawn_size().y * 0.08)
+		add_child(_smoke)
+		_smoke.emitting = true
+	var drawn := art_drawn_size()
+	_smoke.position = _sprite.position + Vector2(-facing * (smoke_stack.x - 0.5) * drawn.x,
+		(smoke_stack.y - 0.5) * drawn.y)
 
 
 ## The picture's motion, made from the one drawing: it faces the way the

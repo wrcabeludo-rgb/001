@@ -19,3 +19,4 @@ func _init() -> void:
 	slam_reach = 190.0
 	windup_time = 0.85
 	slam_damage = 4
+	smoke_stack = Vector2(0.8, 0.13)

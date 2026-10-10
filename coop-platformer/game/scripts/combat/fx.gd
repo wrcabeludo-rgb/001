@@ -75,6 +75,26 @@ static func explosion(parent: Node, at: Vector2, radius: float) -> void:
 		1200.0, false)
 
 
+## Black smoke rising from a smoke stack, for as long as the emitter lives.
+static func smoke(amount := 10, size := 18.0) -> CPUParticles2D:
+	var puffs := CPUParticles2D.new()
+	puffs.amount = amount
+	puffs.lifetime = 1.6
+	puffs.local_coords = false
+	puffs.direction = Vector2(0.3, -1)
+	puffs.spread = 14.0
+	puffs.initial_velocity_min = 50.0
+	puffs.initial_velocity_max = 90.0
+	puffs.gravity = Vector2(10, -20)
+	puffs.scale_amount_min = size * 0.6
+	puffs.scale_amount_max = size
+	puffs.scale_amount_curve = Curve.new()
+	puffs.scale_amount_curve.add_point(Vector2(0, 0.4))
+	puffs.scale_amount_curve.add_point(Vector2(1, 1.6))
+	puffs.color_ramp = ramp([Color(0.15, 0.14, 0.14, 0.0), Color(0.15, 0.14, 0.14, 0.75), Color(0.25, 0.24, 0.24, 0.0)])
+	return soften(puffs)
+
+
 ## Colours over a particle's life, evenly spaced.
 static func ramp(colors: Array) -> Gradient:
 	var offsets := PackedFloat32Array()

@@ -48,6 +48,7 @@ func _init() -> void:
 	scrap_max = 18
 	art = "boss_loader"
 	art_height = 340.0
+	smoke_stack = Vector2(0.86, 0.3)
 
 
 func _ready() -> void:
