@@ -68,6 +68,8 @@ var backgrounds: Array = []
 ## Ash falling over the background, and now and then a flash of lightning.
 var ash := false
 var lightning := false
+## The catwalk strip drawn on one-way and moving platforms.
+var platform_texture := Harm.PLATFORM_TEXTURE
 ## Colour of walls and floors (used when there is no texture).
 var wall_color := COLOR_WALL
 ## Seamless textures of the zone: the inside of walls, and the walkable top
@@ -736,7 +738,7 @@ func add_one_way(body: StaticBody2D, cells: Rect2) -> void:
 	collision.one_way_collision = true
 	collision.position = cells.position + Vector2(cells.size.x / 2.0, MovingPlatform.THICKNESS / 2.0)
 	body.add_child(collision)
-	body.add_child(Harm.plank(cells.position, cells.size.x, Color(0.5, 0.55, 0.62)))
+	body.add_child(Harm.plank(cells.position, cells.size.x, Color(0.5, 0.55, 0.62), platform_texture))
 	body.add_child(Harm.box(cells.position, Vector2(cells.size.x, 3), Color(1, 1, 1, 0.25)))
 
 

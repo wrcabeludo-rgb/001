@@ -562,6 +562,14 @@ def build_platform():
     band = Image.open(path).convert("RGB").crop((0, 100, 1254, 335))
     factor = PLATFORM_HEIGHT / band.height
     save(band.resize((round(band.width * factor), PLATFORM_HEIGHT), Image.LANCZOS), "tiles/platform.png")
+    # World 2: a factory catwalk strip drawn on white; keep just the strip.
+    path = os.path.join(SRC, "tiles", "tile_2_platform_source.png")
+    if os.path.exists(path):
+        img = Image.open(path).convert("RGB")
+        rows = [y for y in range(img.height) if min(img.getpixel((img.width // 2, y))) < 200]
+        band = img.crop((0, rows[0], img.width, rows[-1] + 1))
+        factor = PLATFORM_HEIGHT / band.height
+        save(band.resize((round(band.width * factor), PLATFORM_HEIGHT), Image.LANCZOS), "tiles/platform_2.png")
 
 
 # ---------------------------------------------------------------- backgrounds
@@ -573,6 +581,7 @@ BACKGROUNDS = {
     "backgrounds/bg_far_world1_3.png": ("backgrounds/bg_far_world1_3_original.png", True, 400),
     "backgrounds/bg_mid_world1_3.png": ("backgrounds/bg_mid_world1_3_original.png", True, 360),
     "backgrounds/bg_far_2-1.png": ("backgrounds/bg_far_2-1_original.png", False, 400),
+    "backgrounds/bg_mid_2-2.png": ("backgrounds/bg_mid_2-2_original.png", True, 360),
 }
 
 

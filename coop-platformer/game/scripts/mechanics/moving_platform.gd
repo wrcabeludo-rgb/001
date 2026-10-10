@@ -57,7 +57,9 @@ func _ready() -> void:
 		lift_art.position = Vector2(0, drawn.y * factor / 2.0 - drawn.y * factor * 0.3)
 		add_child(lift_art)
 		return
-	add_child(Harm.plank(Vector2(-width / 2.0, 0), width, COLOR))
+	var level := get_parent() as Level
+	add_child(Harm.plank(Vector2(-width / 2.0, 0), width, COLOR,
+		level.platform_texture if level != null else Harm.PLATFORM_TEXTURE))
 	if mode == Mode.LIFT:
 		# A lift has a yellow warning edge.
 		add_child(Harm.box(Vector2(-width / 2.0, 0), Vector2(width, 5), LIFT_COLOR))

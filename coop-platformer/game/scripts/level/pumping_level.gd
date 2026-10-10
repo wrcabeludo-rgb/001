@@ -77,6 +77,7 @@ func _init() -> void:
 	backgrounds = Factory.backgrounds(BG_FAR, BG_MID, 3)
 	wall_texture = Factory.tile("2-3_wall")
 	ground_texture = Factory.tile("2-3_ground")
+	platform_texture = Factory.PLATFORM
 	other_scene = "res://scenes/test_room.tscn"
 
 

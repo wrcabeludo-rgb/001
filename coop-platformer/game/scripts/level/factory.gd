@@ -20,6 +20,10 @@ static func texture(path: String) -> Texture2D:
 	return load(path) if ResourceLoader.exists(path) else null
 
 
+## The factory catwalk for one-way platforms, cranes and shuttles.
+const PLATFORM := "res://assets/art/tiles/platform_2.png"
+
+
 ## A zone tile ("2-1_wall"...): the painted one, or the stand-in steel plates.
 static func tile(name: String) -> Texture2D:
 	var painted := texture("res://assets/art/tiles/%s.png" % name)

@@ -55,11 +55,11 @@ const PLATFORM_TEXTURE := "res://assets/art/tiles/platform.png"
 
 
 ## The look of a platform plank: the catwalk strip tiled sideways, or a plain bar.
-static func plank(at: Vector2, width: float, fallback: Color) -> Control:
-	if not ResourceLoader.exists(PLATFORM_TEXTURE):
+static func plank(at: Vector2, width: float, fallback: Color, texture := PLATFORM_TEXTURE) -> Control:
+	if not ResourceLoader.exists(texture):
 		return box(at, Vector2(width, 20), fallback)
 	var strip := TextureRect.new()
-	strip.texture = load(PLATFORM_TEXTURE)
+	strip.texture = load(texture)
 	strip.stretch_mode = TextureRect.STRETCH_TILE
 	strip.position = at
 	strip.size = Vector2(width, strip.texture.get_height())
