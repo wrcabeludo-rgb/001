@@ -12,7 +12,7 @@ static func backgrounds(far_path: String, mid_path: String, zone: int) -> Array:
 		far = load("res://assets/art/placeholders/factory_far_%d.png" % zone)
 	if mid == null:
 		mid = load("res://assets/art/placeholders/factory_mid_%d.png" % zone)
-	return [[far, 0.1, Color(0.5, 0.5, 0.55)], [mid, 0.3, Color(0.6, 0.6, 0.65)]]
+	return [[far, 0.1, Color(0.42, 0.42, 0.48)], [mid, 0.3, Color(0.6, 0.6, 0.65)]]
 
 
 ## The texture at `path`, or null while it is not drawn yet.

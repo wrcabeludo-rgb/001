@@ -572,6 +572,7 @@ BACKGROUNDS = {
     "backgrounds/bg_mid_world1_2.png": ("backgrounds/bg_mid_world1_2_original.png", True, 360),
     "backgrounds/bg_far_world1_3.png": ("backgrounds/bg_far_world1_3_original.png", True, 400),
     "backgrounds/bg_mid_world1_3.png": ("backgrounds/bg_mid_world1_3_original.png", True, 360),
+    "backgrounds/bg_far_2-1.png": ("backgrounds/bg_far_2-1_original.png", False, 400),
 }
 
 
