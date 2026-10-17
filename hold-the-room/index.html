@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Удержи зал</title>
+  <meta name="description" content="Ты музыкант в баре. Удержи публику до конца песни.">
+  <meta name="theme-color" content="#1a0f09">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Удержи зал">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="overlay-start" class="overlay">
+    <div class="panel">
+      <div class="logo">Удержи зал</div>
+      <p class="lead">Ты начинающий музыкант в баре. Зрители потихоньку теряют интерес и уходят. Удержи как можно больше людей до конца песни.</p>
+      <ul class="rules">
+        <li><b>Веди пальцем</b> — музыкант идёт за ним. Рядом с тобой зрителям интереснее.</li>
+        <li><b>Собирай эмоции</b> довольных зрителей — они заряжают драйв.</li>
+        <li><b>Полный драйв</b> — новый уровень и карта на выбор.</li>
+        <li>Песня идёт 3 минуты, к финалу зал устаёт всё быстрее.</li>
+      </ul>
+      <button id="btn-start" class="btn">Начать</button>
+    </div>
+  </div>
+
+  <div id="overlay-levelup" class="overlay hidden">
+    <div class="panel wide">
+      <div class="title">Уровень <span id="lvl-num">1</span>!</div>
+      <p class="sub">Выбери карту</p>
+      <div id="cards"></div>
+    </div>
+  </div>
+
+  <div id="overlay-results" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Песня окончена</div>
+      <p id="res-verdict" class="sub"></p>
+      <div class="res-row"><span>Осталось зрителей</span><b id="res-left"></b></div>
+      <div class="res-row"><span>Заработано</span><b id="res-money"></b></div>
+      <p id="res-money-note" class="note"></p>
+      <div class="res-label">Взятые карты</div>
+      <div id="res-cards"></div>
+      <button id="btn-again" class="btn">Сыграть ещё раз</button>
+    </div>
+  </div>
+
+  <script src="./game.js"></script>
+</body>
+</html>
