@@ -10,9 +10,16 @@ const CONFIG = {
   worldHeightMin: 600,
   worldHeightMax: 780,
 
+  // Уровни по нарастанию сложности. decayMul умножает спад интереса из decayPhases.
+  levels: [
+    { name: 'Пустой вторник', desc: 'Свои люди, никто не торопится домой.', viewers: 36, startInterest: 65, decayMul: 0.80 },
+    { name: 'Пятничный бар', desc: 'Обычный вечер: публика добрая, но не бесконечно.', viewers: 40, startInterest: 60, decayMul: 1.00 },
+    { name: 'Студенческая вечеринка', desc: 'Народу больше, внимание короче.', viewers: 44, startInterest: 60, decayMul: 1.18 },
+    { name: 'Клуб для своих', desc: 'Тут слышали всё. Удивить сложно.', viewers: 44, startInterest: 55, decayMul: 1.30 },
+    { name: 'Городской фестиваль', desc: 'Огромный зал, и все смотрят в телефоны.', viewers: 48, startInterest: 55, decayMul: 1.45 },
+  ],
+
   viewers: {
-    count: 40,
-    startInterest: 60,
     decayVariance: 0.25,   // личный множитель спада: 1 ± 0.25
     happyThreshold: 60,    // выше — зритель доволен и выпускает эмоции
     boredThreshold: 25,    // ниже — серый и бредёт к выходу
@@ -148,23 +155,25 @@ function makeLayout(worldH) {
   };
 }
 
-function newGame(seed, worldH) {
+function newGame(seed, worldH, levelIndex) {
+  const levelNo = clamp(levelIndex | 0, 0, CONFIG.levels.length - 1);
+  const LV = CONFIG.levels[levelNo];
   const rnd = mulberry32(seed == null ? (Math.random() * 1e9) | 0 : seed);
   const L = makeLayout(worldH || 680);
   const V = CONFIG.viewers;
   const viewers = [];
-  const cols = 8, rows = Math.ceil(V.count / cols);
+  const cols = 8, rows = Math.ceil(LV.viewers / cols);
   const cellW = (L.W - 40) / cols;
   const cellH = (L.hallBottom - L.hallTop - 30) / rows;
   const shirts = ['#ff5d8f', '#3de0ff', '#ffb03a', '#9b7bff', '#5dff9e', '#ff7a3d', '#ffd23d'];
   const skins = ['#f1c9a5', '#d9a47a', '#a8714d', '#7a4e33', '#f5d6c0'];
-  for (let i = 0; i < V.count; i++) {
+  for (let i = 0; i < LV.viewers; i++) {
     const c = i % cols, r = Math.floor(i / cols);
     const x = 20 + cellW * (c + 0.5) + (rnd() - 0.5) * cellW * 0.6;
     const y = L.hallTop + 20 + cellH * (r + 0.5) + (rnd() - 0.5) * cellH * 0.6;
     viewers.push({
       id: i, x, y, homeX: x, homeY: y, tx: x, ty: y,
-      interest: V.startInterest,
+      interest: LV.startInterest,
       decayMul: 1 + (rnd() * 2 - 1) * V.decayVariance,
       emitTimer: 0.5 + rnd() * CONFIG.emotion.intervalMax,
       wanderTimer: rnd() * 2,
@@ -176,6 +185,7 @@ function newGame(seed, worldH) {
   }
   G = {
     rnd, L,
+    levelNo, lv: LV, total: LV.viewers,
     t: 0, over: false,
     viewers,
     emotions: [],
@@ -349,7 +359,7 @@ function updateCards(dt) {
 
 function updateViewers(dt, ph) {
   const V = CONFIG.viewers, L = G.L, p = G.player;
-  const baseRate = CONFIG.decayPhases[ph].rate;
+  const baseRate = CONFIG.decayPhases[ph].rate * G.lv.decayMul;
   const smokeR = smokeRadius();
   const smokeMul = smokeR ? C.smoke.decayMul[lvl('smoke') - 1] : 1;
   const auraR = auraRadius();
@@ -433,13 +443,15 @@ function updateEmotions(dt) {
 
 function results() {
   const left = viewersInHall();
-  const total = CONFIG.viewers.count;
+  const total = G.total;
   const bonus = left > total / 2 ? CONFIG.money.halfBonus : 0;
   return {
     left, total, bonus,
     money: left * CONFIG.money.perViewer + bonus,
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
     levels: G.level,
+    levelNo: G.levelNo,
+    passed: bonus > 0,
   };
 }
 
@@ -485,14 +497,31 @@ if (typeof window !== 'undefined') (function () {
     offY = (cssH - H * scale) / 2;
   }
 
-  function startGame() {
-    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight));
+  function startGame(levelNo) {
+    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo);
     fx = []; particles = []; smoke = []; banners = [];
     resize();
     state = 'play';
     show(null);
-    banners.push({ text: 'Разогрев: зал добрый, собирай эмоции!', t: 0, life: 3 });
+    banners.push({ text: `Уровень ${G.levelNo + 1}: ${G.lv.name}`, t: 0, life: 2.6, color: PAL.pink });
+    banners.push({ text: 'Разогрев: собирай эмоции!', t: 0, life: 3.2 });
   }
+
+  const LEVEL_COLORS = ['#5dff9e', '#3de0ff', '#ffd23d', '#ff7a3d', '#ff3d8b'];
+  function buildLevelMenu() {
+    const box = $('levels');
+    box.innerHTML = '';
+    CONFIG.levels.forEach((lv, i) => {
+      const b = document.createElement('button');
+      b.className = 'lvl';
+      b.style.setProperty('--c', LEVEL_COLORS[i % LEVEL_COLORS.length]);
+      b.innerHTML = `<span class="lvl-num">${i + 1}</span><span><div class="lvl-name">${lv.name}</div>` +
+        `<div class="lvl-desc">${lv.desc} Зрителей: ${lv.viewers}.</div></span>`;
+      b.addEventListener('click', () => startGame(i));
+      box.appendChild(b);
+    });
+  }
+  buildLevelMenu();
 
   // ---------- ввод ----------
   function toWorld(e) { return { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale }; }
@@ -515,7 +544,8 @@ if (typeof window !== 'undefined') (function () {
   const endPointer = e => { if (e.pointerId === pointerId) pointerId = null; };
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  // окна меню можно прокручивать, всё остальное — нет
+  document.addEventListener('touchmove', e => { if (!e.target.closest('.panel')) e.preventDefault(); }, { passive: false });
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('resize', resize);
@@ -541,7 +571,6 @@ if (typeof window !== 'undefined') (function () {
     const box = $('cards');
     box.innerHTML = '';
     box.classList.remove('armed');
-    $('lvl-num').textContent = G.level - G.pendingLevelUps + 1;
     for (const id of G.choice) {
       const def = CARD_DEFS[id], l = lvl(id);
       const b = document.createElement('button');
@@ -575,10 +604,15 @@ if (typeof window !== 'undefined') (function () {
     $('res-left').textContent = `${r.left} из ${r.total}`;
     $('res-money').textContent = `${r.money} ₽`;
     $('res-money-note').textContent = `${r.left} × ${CONFIG.money.perViewer}` + (r.bonus ? ` + ${r.bonus} бонус: осталось больше половины` : ' (бонус +100, если осталось больше половины)');
+    const share = r.left / r.total;
+    const last = r.levelNo >= CONFIG.levels.length - 1;
+    $('res-title').textContent = r.passed ? (last ? 'Все уровни пройдены!' : 'Уровень пройден!') : 'Песня окончена';
+    $('res-level').textContent = `Уровень ${r.levelNo + 1}: ${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
     $('res-verdict').textContent =
-      r.left >= 30 ? 'Зал твой! Тебя зовут снова.' :
-      r.left > 20 ? 'Хороший сет, бармен доволен.' :
-      r.left >= 10 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.';
+      share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :
+      share > 0.5 ? 'Хороший сет, бармен доволен.' :
+      share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.';
+    $('btn-next').classList.toggle('hidden', !r.passed || last);
     const list = $('res-cards');
     list.innerHTML = '';
     if (!r.cards.length) list.innerHTML = '<span class="muted">Без карт</span>';
@@ -593,8 +627,9 @@ if (typeof window !== 'undefined') (function () {
     show('overlay-results');
   }
 
-  $('btn-start').addEventListener('click', startGame);
-  $('btn-again').addEventListener('click', startGame);
+  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1));
+  $('btn-again').addEventListener('click', () => startGame(G.levelNo));
+  $('btn-menu').addEventListener('click', () => show('overlay-start'));
 
   // ---------- визуальные события ----------
   function spawnParticles(x, y, n, color, speed, life, size, gravity) {
@@ -1013,10 +1048,10 @@ if (typeof window !== 'undefined') (function () {
     // зрители
     const n = viewersInHall();
     ctx.textAlign = 'right';
-    ctx.fillStyle = n > CONFIG.viewers.count / 2 ? PAL.text : PAL.pink;
+    ctx.fillStyle = n > G.total / 2 ? PAL.text : PAL.pink;
     ctx.fillText(`${n}`, L.W - 34, 23);
     ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillStyle = PAL.dim;
-    ctx.fillText(`/${CONFIG.viewers.count}`, L.W - 10, 26);
+    ctx.fillText(`/${G.total}`, L.W - 10, 26);
     // иконка человечка
     const ix = L.W - 76 - (n >= 10 ? 8 : 0);
     ctx.fillStyle = PAL.text;
@@ -1036,7 +1071,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.fillStyle = PAL.pink; ctx.fillRect(bx, by, bw * k, bh);
     ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(bx, by, bw * k, 3);
     ctx.textAlign = 'right'; ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.fillText(`ур. ${G.level}`, L.W - 8, y0 + 13);
+    ctx.fillText(`ур. ${G.levelNo + 1}`, L.W - 8, y0 + 13);
     // слоты карт: 4 активных + 4 пассивных
     const act = G.cardOrder.filter(id => CARD_DEFS[id].type === 'active');
     const pas = G.cardOrder.filter(id => CARD_DEFS[id].type === 'passive');
