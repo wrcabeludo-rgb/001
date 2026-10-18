@@ -71,6 +71,7 @@ function defaultSave() {
     v: 1,
     career: newCareer(),
     records: { levels: [], careers: 1, bestWinDay: null, totalEarned: 0, gigs: 0 },
+    settings: { music: true },
   };
 }
 
@@ -87,6 +88,7 @@ function loadSave(storage) {
       v: 1,
       career: Object.assign(newCareer(), data.career),
       records: Object.assign(base.records, data.records),
+      settings: Object.assign(base.settings, data.settings),
     };
   } catch (_) {
     return base;

@@ -232,3 +232,23 @@ html, body {
 .rec-row small { display: block; font-size: 12px; color: #a08a70; }
 .rec-head { font-size: 13px; color: #a08a70; margin: 14px 0 2px; }
 #res-career:not(:empty) { margin-bottom: 14px; }
+
+/* кнопка музыки поверх верхней плашки HUD */
+.sound-btn {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid #3a2416;
+  border-radius: 50%;
+  background: #1a0f09;
+  color: #ffb03a;
+  cursor: pointer;
+}
+.sound-btn svg { width: 62%; height: 62%; }
+.sound-btn .slash { display: none; }
+.sound-btn.off { color: #5b5a60; }
+.sound-btn.off .slash { display: inline; }
+.credits { margin-top: 10px; }
