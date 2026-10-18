@@ -11,12 +11,18 @@ const CONFIG = {
   worldHeightMax: 780,
 
   // Уровни по нарастанию сложности. decayMul умножает спад интереса из decayPhases.
+  // Музыка: Kevin MacLeod (incompetech.com), CC BY 4.0 — см. music/CREDITS.txt
   levels: [
-    { name: 'Пустой вторник', desc: 'Свои люди, никто не торопится домой.', viewers: 36, startInterest: 65, decayMul: 0.80 },
-    { name: 'Пятничный бар', desc: 'Обычный вечер: публика добрая, но не бесконечно.', viewers: 40, startInterest: 60, decayMul: 1.00 },
-    { name: 'Студенческая вечеринка', desc: 'Народу больше, внимание короче.', viewers: 44, startInterest: 60, decayMul: 1.18 },
-    { name: 'Клуб для своих', desc: 'Тут слышали всё. Удивить сложно.', viewers: 44, startInterest: 55, decayMul: 1.30 },
-    { name: 'Городской фестиваль', desc: 'Огромный зал, и все смотрят в телефоны.', viewers: 48, startInterest: 55, decayMul: 1.45 },
+    { name: 'Пустой вторник', desc: 'Свои люди, никто не торопится домой.', viewers: 36, startInterest: 65, decayMul: 0.80,
+      music: './music/level1-bossa-antigua.mp3', track: 'Bossa Antigua' },
+    { name: 'Пятничный бар', desc: 'Обычный вечер: публика добрая, но не бесконечно.', viewers: 40, startInterest: 60, decayMul: 1.00,
+      music: './music/level2-backbay-lounge.mp3', track: 'Backbay Lounge' },
+    { name: 'Студенческая вечеринка', desc: 'Народу больше, внимание короче.', viewers: 44, startInterest: 60, decayMul: 1.18,
+      music: './music/level3-funkorama.mp3', track: 'Funkorama' },
+    { name: 'Клуб для своих', desc: 'Тут слышали всё. Удивить сложно.', viewers: 44, startInterest: 55, decayMul: 1.30,
+      music: './music/level4-hep-cats.mp3', track: 'Hep Cats' },
+    { name: 'Городской фестиваль', desc: 'Огромный зал, и все смотрят в телефоны.', viewers: 48, startInterest: 55, decayMul: 1.45,
+      music: './music/level5-volatile-reaction.mp3', track: 'Volatile Reaction' },
   ],
 
   viewers: {
@@ -612,6 +618,7 @@ if (typeof window !== 'undefined') (function () {
     scale = Math.min(cssW / CONFIG.worldWidth, cssH / H);
     offX = (cssW - CONFIG.worldWidth * scale) / 2;
     offY = (cssH - H * scale) / 2;
+    placeSoundButton();
   }
 
   // ---------- режимы, карьера, сохранения ----------
@@ -619,6 +626,98 @@ if (typeof window !== 'undefined') (function () {
   let SAVE = loadSave(storage());
   let mode = 'free'; // free | career
   const persist = () => writeSave(storage(), SAVE);
+
+  // ---------- музыка ----------
+  // Web Audio вместо <audio>: файл берётся обычным fetch, поэтому его отдаёт кэш
+  // service worker'а и музыка работает офлайн.
+  const MUSIC_VOLUME = 0.55;
+  let actx = null, gainNode = null, source = null, musicToken = 0;
+  let loadedTrack = { url: null, buffer: null };
+
+  function audio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      actx = new AC();
+      gainNode = actx.createGain();
+      gainNode.connect(actx.destination);
+    }
+    return actx;
+  }
+
+  function loadTrack(url) {
+    if (loadedTrack.url === url) return Promise.resolve(loadedTrack.buffer);
+    return fetch(url)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then(data => new Promise((res, rej) => actx.decodeAudioData(data, res, rej)))
+      .then(buffer => { loadedTrack = { url, buffer }; return buffer; });
+  }
+
+  function stopMusic() {
+    musicToken++;
+    if (source) { try { source.stop(); } catch (_) { /* уже остановлен */ } source = null; }
+  }
+
+  function playMusic(levelNo) {
+    stopMusic();
+    if (!SAVE.settings.music) return;
+    const ctx = audio();
+    if (!ctx) return;
+    ctx.resume();
+    const token = musicToken;
+    loadTrack(CONFIG.levels[levelNo].music).then(buffer => {
+      if (token !== musicToken || state !== 'play' && state !== 'levelup') return;
+      source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.connect(gainNode);
+      const t = ctx.currentTime;
+      gainNode.gain.cancelScheduledValues(t);
+      gainNode.gain.setValueAtTime(0, t);
+      gainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, t + 1.5);
+      source.start();
+      if (state === 'levelup') ctx.suspend();
+    }).catch(() => { /* без музыки игра работает так же */ });
+  }
+
+  function fadeOutMusic(sec) {
+    if (!actx || !source) return;
+    const t = actx.currentTime;
+    gainNode.gain.cancelScheduledValues(t);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, t);
+    gainNode.gain.linearRampToValueAtTime(0, t + sec);
+    const s = source;
+    source = null;
+    try { s.stop(t + sec + 0.05); } catch (_) { /* уже остановлен */ }
+  }
+
+  function pauseMusic() { if (actx) actx.suspend(); }
+  function resumeMusic() { if (actx && SAVE.settings.music) actx.resume(); }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseMusic(); else if (state === 'play' || state === 'ending') resumeMusic();
+  });
+
+  const soundBtn = $('btn-sound');
+  function syncSoundButton() {
+    soundBtn.classList.toggle('off', !SAVE.settings.music);
+    soundBtn.setAttribute('aria-label', SAVE.settings.music ? 'Выключить музыку' : 'Включить музыку');
+  }
+  function placeSoundButton() {
+    // в верхней плашке HUD между полосой песни и счётчиком зрителей
+    const size = Math.max(32, 30 * scale);
+    soundBtn.style.width = soundBtn.style.height = size + 'px';
+    soundBtn.style.left = (offX + 222 * scale - size / 2) + 'px';
+    soundBtn.style.top = (offY + 22 * scale - size / 2) + 'px';
+  }
+  soundBtn.addEventListener('click', () => {
+    SAVE.settings.music = !SAVE.settings.music;
+    persist();
+    syncSoundButton();
+    if (!SAVE.settings.music) stopMusic();
+    else if (G && (state === 'play' || state === 'levelup')) playMusic(G.levelNo);
+  });
+  syncSoundButton();
 
   function startGame(levelNo, gameMode) {
     mode = gameMode || 'free';
@@ -628,6 +727,7 @@ if (typeof window !== 'undefined') (function () {
     resize();
     state = 'play';
     show(null);
+    playMusic(levelNo);
     const head = mode === 'career' ? `День ${SAVE.career.day}: ${G.lv.name}` : `Уровень ${G.levelNo + 1}: ${G.lv.name}`;
     banners.push({ text: head, t: 0, life: 2.6, color: PAL.pink });
     banners.push({ text: 'Разогрев: собирай эмоции!', t: 0, life: 3.2 });
@@ -785,6 +885,7 @@ if (typeof window !== 'undefined') (function () {
 
   // ---------- оверлеи ----------
   function show(id) {
+    soundBtn.classList.toggle('hidden', id !== null);
     for (const o of document.querySelectorAll('.overlay')) o.classList.toggle('hidden', o.id !== id);
   }
 
@@ -800,6 +901,7 @@ if (typeof window !== 'undefined') (function () {
 
   function openLevelUp() {
     state = 'levelup';
+    pauseMusic();
     pointerId = null;
     const box = $('cards');
     box.innerHTML = '';
@@ -820,6 +922,7 @@ if (typeof window !== 'undefined') (function () {
       b.addEventListener('click', () => {
         if (!box.classList.contains('armed')) return;
         chooseCard(id);
+        resumeMusic();
         state = 'play';
         show(null);
         banners.push({ text: `${def.name}${l ? ' — ур. ' + (l + 1) : ''}!`, t: 0, life: 1.6, color: def.color });
@@ -939,6 +1042,7 @@ if (typeof window !== 'undefined') (function () {
         openLevelUp();
       } else if (ev.type === 'end') {
         setTimeout(openResults, 600);
+        fadeOutMusic(2.5);
         state = 'ending';
         banners.push({ text: 'Песня окончена!', t: 0, life: 3, color: PAL.pink });
       }

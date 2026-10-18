@@ -1,5 +1,5 @@
 // При изменении файлов игры увеличивайте версию — так клиенты подхватят обновление.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const PREFIX = 'hold-the-room-';
 const CACHE = PREFIX + VERSION;
 const FILES = [
@@ -11,6 +11,11 @@ const FILES = [
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './music/level1-bossa-antigua.mp3',
+  './music/level2-backbay-lounge.mp3',
+  './music/level3-funkorama.mp3',
+  './music/level4-hep-cats.mp3',
+  './music/level5-volatile-reaction.mp3',
 ];
 
 self.addEventListener('install', e => {

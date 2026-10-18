@@ -1,0 +1,13 @@
+Музыка в игре «Удержи зал»
+
+Все треки: Kevin MacLeod (incompetech.com)
+Лицензия: Creative Commons Attribution 4.0 — https://creativecommons.org/licenses/by/4.0/
+
+Уровень 1, «Пустой вторник»       — Bossa Antigua
+Уровень 2, «Пятничный бар»        — Backbay Lounge
+Уровень 3, «Студенческая вечеринка» — Funkorama
+Уровень 4, «Клуб для своих»       — Hep Cats
+Уровень 5, «Городской фестиваль»  — Volatile Reaction
+
+Изменения: файлы пережаты в моно 64 кбит/с; первые четыре трека обрезаны до 3 минут
+с затуханием в конце.
