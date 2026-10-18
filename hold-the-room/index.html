@@ -21,16 +21,62 @@
   <div id="overlay-start" class="overlay">
     <div class="panel">
       <div class="logo">Удержи зал</div>
-      <div class="res-label">Выбери уровень</div>
-      <div id="levels"></div>
+      <button id="btn-career" class="btn menu-btn">Карьера<small id="career-sub"></small></button>
+      <button id="btn-free" class="btn alt menu-btn">Свободная игра<small>любой уровень, без денег</small></button>
+      <button id="btn-records" class="btn ghost">Рекорды</button>
       <div class="res-label how">Как играть</div>
       <p class="lead">Ты начинающий музыкант в баре. Зрители потихоньку теряют интерес и уходят. Удержи как можно больше людей до конца песни.</p>
       <ul class="rules">
         <li><b>Веди пальцем</b> — музыкант идёт за ним. Рядом с тобой зрителям интереснее.</li>
         <li><b>Собирай эмоции</b> довольных зрителей: <span class="emo e1">&#9829;&#xFE0E;</span> <span class="emo e2">&#9834;&#xFE0E;</span> <span class="emo e3">&#10038;&#xFE0E;</span> (сердце, нота, хлопок). Все три дают драйв, чем крупнее значок, тем больше.</li>
         <li><b>Полная шкала драйва</b> — новая карта на выбор.</li>
+        <li><b>Происшествия:</b> порвалась струна — беги к усилителю слева на сцене; дебошир — подойди и постой рядом; вырубили свет — держи тех, кого видно.</li>
         <li>Песня идёт 3 минуты, к финалу зал устаёт всё быстрее.</li>
+        <li><b>В карьере</b> каждый вечер — концерт: гонорар минус дорога и аренда. Известность открывает новые залы, деньги идут на улучшения. Цель — покорить городской фестиваль.</li>
       </ul>
+    </div>
+  </div>
+
+  <div id="overlay-free" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Свободная игра</div>
+      <p class="sub">Без денег и улучшений. Рекорды сохраняются.</p>
+      <div id="levels"></div>
+      <button class="btn ghost" data-go="overlay-start">Назад</button>
+    </div>
+  </div>
+
+  <div id="overlay-career" class="overlay hidden">
+    <div class="panel">
+      <div id="day-title" class="title">День 1</div>
+      <div class="stats">
+        <div><span>Деньги</span><b id="day-money"></b></div>
+        <div><span>Известность</span><b id="day-rep"></b></div>
+        <div><span>Аренда сегодня</span><b id="day-rent"></b></div>
+      </div>
+      <p id="day-note" class="note center"></p>
+      <div class="res-label">Афиша: где играем сегодня?</div>
+      <div id="venues"></div>
+      <button id="btn-shop" class="btn alt">Магазин</button>
+      <button class="btn ghost" data-go="overlay-start">В меню</button>
+      <button id="btn-reset" class="link-btn">Начать карьеру заново</button>
+    </div>
+  </div>
+
+  <div id="overlay-shop" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Магазин</div>
+      <p class="sub">Улучшения действуют на все концерты карьеры. Деньги: <b id="shop-money"></b></p>
+      <div id="shop"></div>
+      <button class="btn ghost" data-go="overlay-career">Назад</button>
+    </div>
+  </div>
+
+  <div id="overlay-records" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Рекорды</div>
+      <div id="records"></div>
+      <button class="btn ghost" data-go="overlay-start">Назад</button>
     </div>
   </div>
 
@@ -47,17 +93,21 @@
       <div id="res-title" class="title">Песня окончена</div>
       <p id="res-level" class="note center"></p>
       <p id="res-verdict" class="sub"></p>
+      <div id="res-stars" class="stars-big"></div>
       <div class="res-row"><span>Осталось зрителей</span><b id="res-left"></b></div>
-      <div class="res-row"><span>Заработано</span><b id="res-money"></b></div>
+      <div class="res-row"><span id="res-money-label">Заработано</span><b id="res-money"></b></div>
       <p id="res-money-note" class="note"></p>
+      <div id="res-career"></div>
       <div class="res-label">Взятые карты</div>
       <div id="res-cards"></div>
+      <button id="btn-day" class="btn">Дальше</button>
       <button id="btn-next" class="btn">Следующий уровень</button>
       <button id="btn-again" class="btn alt">Сыграть ещё раз</button>
       <button id="btn-menu" class="btn ghost">Выбрать уровень</button>
     </div>
   </div>
 
+  <script src="./career.js"></script>
   <script src="./game.js"></script>
 </body>
 </html>
