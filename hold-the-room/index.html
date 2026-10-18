@@ -22,18 +22,18 @@
   <div id="overlay-start" class="overlay">
     <div class="panel">
       <div class="logo">Удержи зал</div>
-      <button id="btn-career" class="btn menu-btn">Карьера<small id="career-sub"></small></button>
-      <button id="btn-free" class="btn alt menu-btn">Свободная игра<small>любой уровень, без денег</small></button>
+      <button id="btn-play" class="btn menu-btn">Играть<small>выбери зал</small></button>
+      <button id="btn-calibrate" class="btn alt menu-btn">Калибровка ритма<small id="calib-sub"></small></button>
       <button id="btn-records" class="btn ghost">Рекорды</button>
       <div class="res-label how">Как играть</div>
-      <p class="lead">Ты начинающий музыкант в баре. Зрители потихоньку теряют интерес и уходят. Удержи как можно больше людей до конца песни.</p>
+      <p class="lead">Музыкант много лет играет на автопилоте: тело стоит на сцене, а душа давно ушла. Ты — его душа. Удержи зал до конца песни.</p>
       <ul class="rules">
-        <li><b>Веди пальцем</b> — музыкант идёт за ним. Рядом с тобой зрителям интереснее.</li>
-        <li><b>Собирай эмоции</b> довольных зрителей: <span class="emo e1">&#9829;&#xFE0E;</span> <span class="emo e2">&#9834;&#xFE0E;</span> <span class="emo e3">&#10038;&#xFE0E;</span> (сердце, нота, хлопок). Все три дают драйв, чем крупнее значок, тем больше.</li>
-        <li><b>Полная шкала драйва</b> — новая карта на выбор.</li>
-        <li><b>Происшествия:</b> порвалась струна — беги к усилителю слева на сцене; дебошир — подойди и постой рядом; вырубили свет — держи тех, кого видно.</li>
-        <li>Песня идёт 3 минуты, к финалу зал устаёт всё быстрее.</li>
-        <li><b>В карьере</b> каждый вечер — концерт: гонорар минус дорога и аренда. Известность открывает новые залы, деньги идут на улучшения. Цель — покорить городской фестиваль.</li>
+        <li><b>Тапни в точку зала</b> — душа полетит туда. Рядом с ней зрителям интереснее.</li>
+        <li><b>Тапай в такт музыке</b>: душа делает рывок, а в точке приземления расходится волна — она поднимает интерес и собирает эмоции. Кольцо вокруг души сжимается к доле.</li>
+        <li><b>Попадания подряд</b> растят комбо (до ×2) и ускоряют перезарядку карт. Промах снимает ступень комбо.</li>
+        <li><b>Собирай эмоции</b> довольных зрителей: <span class="emo e1">&#9829;&#xFE0E;</span> <span class="emo e2">&#9834;&#xFE0E;</span> <span class="emo e3">&#10038;&#xFE0E;</span>. Полная шкала драйва — новая карта на выбор.</li>
+        <li><b>Происшествия:</b> порвалась струна — верни душу к телу на сцене; дебошир — подлети и побудь рядом; вырубили свет — держи тех, кого видно.</li>
+        <li>Песня идёт 2 минуты. Удержишь 80% зала — будет <b>бис</b>: ливень эмоций и двойная касса.</li>
       </ul>
       <p class="note credits">Музыка: Kevin MacLeod (incompetech.com), лицензия CC BY 4.0. Треки: Bossa Antigua, Backbay Lounge, Funkorama, Hep Cats, Volatile Reaction.</p>
     </div>
@@ -41,36 +41,21 @@
 
   <div id="overlay-free" class="overlay hidden">
     <div class="panel">
-      <div class="title">Свободная игра</div>
-      <p class="sub">Без денег и улучшений. Рекорды сохраняются.</p>
+      <div class="title">Выбери зал</div>
+      <p class="sub">Прототип «душа + ритм». Туры появятся позже.</p>
       <div id="levels"></div>
       <button class="btn ghost" data-go="overlay-start">Назад</button>
     </div>
   </div>
 
-  <div id="overlay-career" class="overlay hidden">
+  <div id="overlay-calib" class="overlay hidden">
     <div class="panel">
-      <div id="day-title" class="title">День 1</div>
-      <div class="stats">
-        <div><span>Деньги</span><b id="day-money"></b></div>
-        <div><span>Известность</span><b id="day-rep"></b></div>
-        <div><span>Аренда сегодня</span><b id="day-rent"></b></div>
-      </div>
-      <p id="day-note" class="note center"></p>
-      <div class="res-label">Афиша: где играем сегодня?</div>
-      <div id="venues"></div>
-      <button id="btn-shop" class="btn alt">Магазин</button>
-      <button class="btn ghost" data-go="overlay-start">В меню</button>
-      <button id="btn-reset" class="link-btn">Начать карьеру заново</button>
-    </div>
-  </div>
-
-  <div id="overlay-shop" class="overlay hidden">
-    <div class="panel">
-      <div class="title">Магазин</div>
-      <p class="sub">Улучшения действуют на все концерты карьеры. Деньги: <b id="shop-money"></b></p>
-      <div id="shop"></div>
-      <button class="btn ghost" data-go="overlay-career">Назад</button>
+      <div class="title">Калибровка ритма</div>
+      <p class="sub">Наушники и телефоны запаздывают со звуком по-разному. Тапай по кругу ровно в момент щелчка — игра запомнит задержку.</p>
+      <button id="calib-pad" class="calib-pad" aria-label="Тапай в такт щелчкам"><span id="calib-text">Начать</span></button>
+      <p id="calib-result" class="note center"></p>
+      <button id="calib-done" class="btn">Готово</button>
+      <button id="calib-skip" class="btn ghost">Пропустить</button>
     </div>
   </div>
 
@@ -97,19 +82,20 @@
       <p id="res-verdict" class="sub"></p>
       <div id="res-stars" class="stars-big"></div>
       <div class="res-row"><span>Осталось зрителей</span><b id="res-left"></b></div>
-      <div class="res-row"><span id="res-money-label">Заработано</span><b id="res-money"></b></div>
+      <div class="res-row"><span>Касса</span><b id="res-money"></b></div>
       <p id="res-money-note" class="note"></p>
-      <div id="res-career"></div>
+      <div class="res-row"><span>Попаданий в такт</span><b id="res-hits"></b></div>
+      <div class="res-row"><span>Лучшее комбо</span><b id="res-combo"></b></div>
+      <p id="res-hits-note" class="note"></p>
       <div class="res-label">Взятые карты</div>
       <div id="res-cards"></div>
-      <button id="btn-day" class="btn">Дальше</button>
-      <button id="btn-next" class="btn">Следующий уровень</button>
+      <button id="btn-next" class="btn">Следующий зал</button>
       <button id="btn-again" class="btn alt">Сыграть ещё раз</button>
-      <button id="btn-menu" class="btn ghost">Выбрать уровень</button>
+      <button id="btn-menu" class="btn ghost">Выбрать зал</button>
     </div>
   </div>
 
-  <script src="./career.js"></script>
+  <script src="./save.js"></script>
   <script src="./game.js"></script>
 </body>
 </html>

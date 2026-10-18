@@ -1,12 +1,12 @@
 // При изменении файлов игры увеличивайте версию — так клиенты подхватят обновление.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const PREFIX = 'hold-the-room-';
 const CACHE = PREFIX + VERSION;
 const FILES = [
   './',
   './index.html',
   './style.css',
-  './career.js',
+  './save.js',
   './game.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
