@@ -5,7 +5,7 @@
 //  Единицы расстояния — условные пиксели мира шириной 360.
 // =====================================================================
 const CONFIG = {
-  songDuration: 180, // секунд
+  songDuration: 120, // секунд (концерт босса будет 180)
   worldWidth: 360,
   worldHeightMin: 600,
   worldHeightMax: 780,
@@ -14,15 +14,15 @@ const CONFIG = {
   // Музыка: Kevin MacLeod (incompetech.com), CC BY 4.0 — см. music/CREDITS.txt
   levels: [
     { name: 'Пустой вторник', desc: 'Свои люди, никто не торопится домой.', viewers: 36, startInterest: 65, decayMul: 0.80,
-      music: './music/level1-bossa-antigua.mp3', track: 'Bossa Antigua' },
+      music: './music/level1-bossa-antigua.mp3', bpm: 140, beatOffset: 0.410, beatsPerTap: 2, track: 'Bossa Antigua' },
     { name: 'Пятничный бар', desc: 'Обычный вечер: публика добрая, но не бесконечно.', viewers: 40, startInterest: 60, decayMul: 1.00,
-      music: './music/level2-backbay-lounge.mp3', track: 'Backbay Lounge' },
+      music: './music/level2-backbay-lounge.mp3', bpm: 120, beatOffset: 0.480, track: 'Backbay Lounge' },
     { name: 'Студенческая вечеринка', desc: 'Народу больше, внимание короче.', viewers: 44, startInterest: 60, decayMul: 1.18,
-      music: './music/level3-funkorama.mp3', track: 'Funkorama' },
+      music: './music/level3-funkorama.mp3', bpm: 101, beatOffset: 0.585, track: 'Funkorama' },
     { name: 'Клуб для своих', desc: 'Тут слышали всё. Удивить сложно.', viewers: 44, startInterest: 55, decayMul: 1.30,
-      music: './music/level4-hep-cats.mp3', track: 'Hep Cats' },
+      music: './music/level4-hep-cats.mp3', bpm: 90, beatOffset: 0.325, track: 'Hep Cats' },
     { name: 'Городской фестиваль', desc: 'Огромный зал, и все смотрят в телефоны.', viewers: 48, startInterest: 55, decayMul: 1.45,
-      music: './music/level5-volatile-reaction.mp3', track: 'Volatile Reaction' },
+      music: './music/level5-volatile-reaction.mp3', bpm: 155, beatOffset: 0.380, beatsPerTap: 2, track: 'Volatile Reaction' },
   ],
 
   viewers: {
@@ -37,21 +37,38 @@ const CONFIG = {
 
   // Базовый спад интереса в секунду по фазам песни
   decayPhases: [
-    { until: 30, rate: 0.30, banner: '' },
-    { until: 90, rate: 0.95, banner: 'Куплет: зал привыкает' },
-    { until: 150, rate: 1.35, banner: 'Внимание тает быстрее!' },
-    { until: 180, rate: 1.80, banner: 'Финал! Держи их!' },
+    { until: 20, rate: 0.45, banner: '' },
+    { until: 60, rate: 1.35, banner: 'Куплет: зал привыкает' },
+    { until: 100, rate: 1.95, banner: 'Внимание тает быстрее!' },
+    { until: 120, rate: 2.50, banner: 'Финал! Держи их!' },
   ],
 
   // Первые секунды зал благожелателен: эмоции идут и от «нейтральных»
-  warmup: { duration: 30, emitThreshold: 45 },
+  warmup: { duration: 20, emitThreshold: 45 },
 
+  // Душа музыканта: летит в точку касания. В такт — рывок и волна в точке приземления.
   player: {
-    speed: 230,
-    touchOffset: 55,   // герой держится выше пальца
-    auraRadius: 48,    // само присутствие музыканта рядом
+    speed: 150,        // плавный полёт после тапа вне такта
+    dashSpeed: 900,    // рывок после тапа в такт
+    auraRadius: 48,    // присутствие души рядом
     auraGain: 5,       // +интерес/с зрителям в ауре
   },
+
+  rhythm: {
+    perfect: 0.06,     // окно «Идеально», ± секунд
+    good: 0.12,        // окно «Хорошо»
+    waveRadius: 62,
+    waveGain: { perfect: 5, good: 3 },    // +интерес в волне при приземлении (× комбо)
+    drive: { perfect: 1.5, good: 1.0 },   // драйв за попадание (× комбо)
+    comboPoints: { perfect: 2, good: 1 },
+    comboSteps: [0, 4, 10, 20],           // очки комбо для ×1, ×1,5, ×2, ×3
+    comboMul: [1, 1.25, 1.5, 2],
+    comboIdleBeats: 4, // столько долей без попаданий — минус ступень комбо
+    cooldownCut: { perfect: 0.6, good: 0.3 }, // ускорение перезарядки карт, секунд
+  },
+
+  // Бис: если к концу песни в зале столько и больше — ещё немного музыки и ливень эмоций
+  encore: { threshold: 0.8, duration: 20, emitMin: 0.4, emitMax: 0.9, moneyMul: 2 },
 
   emotion: {
     intervalMin: 3.0,  // как часто довольный зритель выпускает эмоцию
@@ -66,8 +83,8 @@ const CONFIG = {
   },
 
   // Сколько драйва нужно на каждый следующий уровень
-  // (по симуляции: ~4-6 уровней за песню, 1-2 из них в разогреве)
-  drive: { thresholds: [40, 85, 130, 180, 240, 310, 390, 480], extraPerLevel: 100 },
+  // (по симуляции с ритм-ботом: ~4-8 уровней за песню у игрока с чувством ритма)
+  drive: { thresholds: [70, 140, 220, 310, 410, 520, 640, 770], extraPerLevel: 150 },
 
   slots: { active: 4, passive: 4 },
 
@@ -89,15 +106,16 @@ const CONFIG = {
   incidents: {
     count: [1, 1, 2, 2, 3],
     chance: 0.8,
-    window: [35, 160],   // в какие секунды песни могут начаться
-    minGap: 25,
-    string: { spot: { x: 34, y: 150 }, radius: 24, repairTime: 1.5 },
+    window: [25, 105],   // в какие секунды песни могут начаться
+    minGap: 18,
+    // струну чинит душа, вернувшись к телу на сцене
+    string: { spot: { x: 180, y: 150 }, radius: 26, repairTime: 1.5 },
     blackout: { duration: 10, decayMul: 1.7, light: 85 },
     drunk: { speed: 26, radius: 60, drain: 4, calmRadius: 32, calmTime: 1.8, maxTime: 40 },
   },
 };
 
-// Модификаторы от покупок в магазине карьеры (career.js). В свободной игре — нули.
+// Модификаторы от постоянных улучшений (будущее дерево способностей души).
 const DEFAULT_MODS = {
   auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0,
   perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
@@ -220,7 +238,15 @@ function newGame(seed, worldH, levelIndex, mods) {
     t: 0, over: false,
     viewers,
     emotions: [],
-    player: { x: L.W / 2, y: (L.wallBottom + L.stageBottom) / 2 + 4, tx: L.W / 2, ty: (L.wallBottom + L.stageBottom) / 2 + 4, dir: 1, moving: false },
+    // душа стартует перед сценой, тело музыканта стоит в центре сцены (только рисуется)
+    player: { x: L.W / 2, y: L.hallTop + 30, tx: L.W / 2, ty: L.hallTop + 30, dir: 1, moving: false, dash: false, pendingWave: null },
+    // такт для тапов; на быстрых треках — через долю, иначе случайные тапы попадают слишком часто
+    beat: { bpm: LV.bpm, offset: LV.beatOffset, period: 60 / LV.bpm * (LV.beatsPerTap || 1) },
+    musicTime: 0,       // позиция в треке, секунды; браузер подставляет время из аудио
+    externalClock: false,
+    combo: 0, comboBest: 0, lastHitBeat: -1, lastHitTime: 0,
+    hits: { perfect: 0, good: 0, miss: 0 },
+    encore: null, encored: false,
     drive: 0, level: 0, pendingLevelUps: 0,
     driveBySource: {},
     levelUpTimes: [],
@@ -282,6 +308,77 @@ function addDrive(amount, source) {
   }
 }
 
+// ---------------------------------------------------------------------
+//  Ритм
+// ---------------------------------------------------------------------
+function comboStep() {
+  const st = CONFIG.rhythm.comboSteps;
+  let i = 0;
+  while (i + 1 < st.length && G.combo >= st[i + 1]) i++;
+  return i;
+}
+function comboMul() { return CONFIG.rhythm.comboMul[comboStep()]; }
+function dropComboStep() {
+  const st = CONFIG.rhythm.comboSteps, i = comboStep();
+  G.combo = i > 0 ? st[i - 1] : 0;
+}
+
+// Ближайшая доля к моменту t (секунды трека): номер и отклонение
+function nearestBeat(t) {
+  const b = G.beat;
+  const k = Math.round((t - b.offset) / b.period);
+  return { k, delta: t - (b.offset + k * b.period) };
+}
+
+// Касание точки зала. t — время касания в секундах трека (уже с поправкой калибровки).
+function tap(x, y, t) {
+  if (G.over || G.choice) return null;
+  const R = CONFIG.rhythm, p = G.player;
+  p.tx = x; p.ty = y;
+  const nb = nearestBeat(t == null ? G.musicTime : t);
+  // вторая попытка на ту же долю — просто полёт, без оценки
+  if (nb.k === G.lastHitBeat) { p.dash = false; return null; }
+  const ad = Math.abs(nb.delta);
+  const grade = ad <= R.perfect ? 'perfect' : ad <= R.good ? 'good' : 'miss';
+  G.hits[grade]++;
+  if (grade === 'miss') {
+    p.dash = false; p.pendingWave = null;
+    dropComboStep();
+  } else {
+    G.lastHitBeat = nb.k;
+    G.lastHitTime = G.musicTime;
+    G.combo += R.comboPoints[grade];
+    G.comboBest = Math.max(G.comboBest, G.combo);
+    p.dash = true;
+    p.pendingWave = { grade, mul: comboMul() };
+    addDrive(R.drive[grade] * comboMul(), 'rhythm');
+    // попадания ускоряют перезарядку активных карт
+    for (const id of Object.keys(G.timers)) G.timers[id] -= R.cooldownCut[grade];
+  }
+  G.events.push({ type: 'judge', grade, x, y, delta: nb.delta });
+  return grade;
+}
+
+function landWave(w) {
+  const R = CONFIG.rhythm, p = G.player;
+  const r = R.waveRadius * radiusMul();
+  for (const v of G.viewers) {
+    if (inHall(v) && dist(v.x, v.y, p.x, p.y) <= r) { gainInterest(v, R.waveGain[w.grade] * w.mul); v.flash = 0.4; }
+  }
+  // волна притягивает эмоции, до которых достаёт
+  const dm = emotionDriveMul();
+  for (let i = G.emotions.length - 1; i >= 0; i--) {
+    const e = G.emotions[i];
+    if (dist(e.x, e.y, p.x, p.y) <= r) {
+      addDrive(e.drive * dm, 'emotion');
+      G.emotionsCollected++;
+      G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind });
+      G.emotions.splice(i, 1);
+    }
+  }
+  G.events.push({ type: 'wave', x: p.x, y: p.y, r, grade: w.grade });
+}
+
 function inHall(v) { return !v.leaving; }
 function viewersInHall() { let n = 0; for (const v of G.viewers) if (!v.leaving) n++; return n; }
 
@@ -336,7 +433,23 @@ function update(dt) {
   }
 
   G.t += dt;
-  if (G.t >= CONFIG.songDuration) { G.t = CONFIG.songDuration; G.over = true; G.events.push({ type: 'end' }); return; }
+  if (!G.externalClock) G.musicTime += dt;
+  if (G.encore) {
+    G.encore.t += dt;
+    if (G.encore.t >= CONFIG.encore.duration) { G.over = true; G.events.push({ type: 'end' }); return; }
+  } else if (G.t >= CONFIG.songDuration) {
+    G.t = CONFIG.songDuration;
+    if (viewersInHall() >= G.total * CONFIG.encore.threshold) {
+      G.encore = { t: 0 };
+      G.encored = true;
+      G.events.push({ type: 'encore' });
+    } else { G.over = true; G.events.push({ type: 'end' }); return; }
+  }
+  // без попаданий комбо постепенно гаснет
+  if (G.combo > 0 && G.musicTime - G.lastHitTime > CONFIG.rhythm.comboIdleBeats * G.beat.period) {
+    dropComboStep();
+    G.lastHitTime = G.musicTime;
+  }
 
   const ph = currentPhase();
   if (ph !== G.phaseIndex) {
@@ -356,9 +469,13 @@ function updatePlayer(dt) {
   p.tx = clamp(p.tx, 14, L.W - 14);
   p.ty = clamp(p.ty, L.wallBottom + 8, L.hallBottom - 6);
   const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-  const step = CONFIG.player.speed * G.mods.speedMul * dt;
+  const step = (p.dash ? CONFIG.player.dashSpeed : CONFIG.player.speed * G.mods.speedMul) * dt;
   p.moving = d > 1;
-  if (d <= step) { p.x = p.tx; p.y = p.ty; } else { p.x += dx / d * step; p.y += dy / d * step; }
+  if (d <= step) {
+    p.x = p.tx; p.y = p.ty;
+    p.dash = false;
+    if (p.pendingWave) { landWave(p.pendingWave); p.pendingWave = null; }
+  } else { p.x += dx / d * step; p.y += dy / d * step; }
   if (Math.abs(dx) > 2) p.dir = dx > 0 ? 1 : -1;
 }
 
@@ -405,7 +522,8 @@ function updateViewers(dt, ph) {
   const smokeMul = smokeR ? C.smoke.decayMul[lvl('smoke') - 1] : 1;
   const auraR = auraRadius();
   const warm = G.t < CONFIG.warmup.duration;
-  const emitThr = warm ? CONFIG.warmup.emitThreshold : V.happyThreshold;
+  const encore = !!G.encore;
+  const emitThr = warm || encore ? CONFIG.warmup.emitThreshold : V.happyThreshold;
 
   for (const v of G.viewers) {
     if (v.gone) continue;
@@ -417,7 +535,7 @@ function updateViewers(dt, ph) {
       continue;
     }
     const d = dist(v.x, v.y, p.x, p.y);
-    let rate = baseRate * v.decayMul;
+    let rate = encore ? 0 : baseRate * v.decayMul;
     if (smokeR && d <= smokeR) rate *= smokeMul;
     v.interest -= rate * dt;
     if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
@@ -447,7 +565,9 @@ function updateViewers(dt, ph) {
     v.emitTimer -= dt;
     if (v.emitTimer <= 0) {
       const E = CONFIG.emotion;
-      v.emitTimer = E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin);
+      v.emitTimer = encore
+        ? CONFIG.encore.emitMin + G.rnd() * (CONFIG.encore.emitMax - CONFIG.encore.emitMin)
+        : E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin);
       if (v.interest > emitThr) {
         const k = clamp((v.interest - emitThr) / (100 - emitThr), 0, 1);
         G.emotions.push({
@@ -508,7 +628,7 @@ function planIncidents(rnd, levelNo, M) {
 function stringBroken() { return !!(G.incident && G.incident.type === 'string'); }
 
 function startIncident(type) {
-  const I = CONFIG.incidents, L = G.L;
+  const L = G.L;
   const inc = { type, age: 0, progress: 0 };
   if (type === 'drunk') {
     inc.x = L.exit.x - 10; inc.y = L.exit.y;
@@ -527,7 +647,7 @@ function endIncident(text) {
 
 function updateIncidents(dt) {
   const I = CONFIG.incidents, p = G.player, L = G.L;
-  if (!G.incident && G.incidentPlan.length && G.t >= G.incidentPlan[0].t) startIncident(G.incidentPlan.shift().type);
+  if (!G.incident && !G.encore && G.incidentPlan.length && G.t >= G.incidentPlan[0].t) startIncident(G.incidentPlan.shift().type);
   const inc = G.incident;
   if (!inc) return;
   inc.age += dt;
@@ -569,7 +689,10 @@ function results() {
   return {
     left, total, bonus,
     perViewer: CONFIG.money.perViewer + G.mods.perViewer,
-    money: left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus,
+    money: (left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (G.encored ? CONFIG.encore.moneyMul : 1),
+    encored: G.encored,
+    hits: Object.assign({}, G.hits),
+    comboBest: G.comboBest,
     incidents: G.incidentsHappened.slice(),
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
     levels: G.level,
@@ -581,6 +704,7 @@ function results() {
 if (typeof module !== 'undefined') {
   module.exports = {
     CONFIG, CARD_DEFS, CARD_IDS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
+    tap, nearestBeat, comboMul,
     get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul,
   };
 }
@@ -601,8 +725,8 @@ if (typeof window !== 'undefined') (function () {
   const ctx = canvas.getContext('2d');
   const $ = id => document.getElementById(id);
   let dpr = 1, scale = 1, offX = 0, offY = 0, cssW = 0, cssH = 0;
-  let state = 'start'; // start | play | levelup | results
-  let fx = [], particles = [], smoke = [], banners = [];
+  let state = 'start'; // start | loading | play | levelup | ending | results
+  let fx = [], particles = [], smoke = [], banners = [], judges = [];
   let lastTs = 0, clock = 0, shake = 0;
 
   function worldHeightFor(w, h) {
@@ -621,26 +745,31 @@ if (typeof window !== 'undefined') (function () {
     placeSoundButton();
   }
 
-  // ---------- режимы, карьера, сохранения ----------
+  // ---------- сохранения ----------
   function storage() { try { return window.localStorage; } catch (_) { return null; } }
   let SAVE = loadSave(storage());
-  let mode = 'free'; // free | career
   const persist = () => writeSave(storage(), SAVE);
+  // задержка «доля → тап» из калибровки, секунды
+  const latency = () => (SAVE.settings.latency == null ? 0.05 : SAVE.settings.latency);
 
-  // ---------- музыка ----------
-  // Web Audio вместо <audio>: файл берётся обычным fetch, поэтому его отдаёт кэш
-  // service worker'а и музыка работает офлайн.
+  // ---------- аудио: музыка, часы ритма, звуки ----------
+  // Web Audio вместо <audio>: файл берётся обычным fetch (его отдаёт кэш service worker'а,
+  // музыка работает офлайн), а часы AudioContext дают точное время для ритма.
   const MUSIC_VOLUME = 0.55;
-  let actx = null, gainNode = null, source = null, musicToken = 0;
+  let actx = null, musicGain = null, sfxGain = null, source = null, musicToken = 0;
   let loadedTrack = { url: null, buffer: null };
+  let trackStart = 0, trackDur = 0; // момент старта трека по часам AudioContext и его длина
 
   function audio() {
     if (!actx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       actx = new AC();
-      gainNode = actx.createGain();
-      gainNode.connect(actx.destination);
+      musicGain = actx.createGain();
+      musicGain.connect(actx.destination);
+      sfxGain = actx.createGain();
+      sfxGain.gain.value = 0.35;
+      sfxGain.connect(actx.destination);
     }
     return actx;
   }
@@ -658,34 +787,38 @@ if (typeof window !== 'undefined') (function () {
     if (source) { try { source.stop(); } catch (_) { /* уже остановлен */ } source = null; }
   }
 
+  // Загружает и запускает трек уровня. Промис выполняется, когда музыка заиграла
+  // (или когда стало ясно, что её не будет).
   function playMusic(levelNo) {
     stopMusic();
-    if (!SAVE.settings.music) return;
+    if (!SAVE.settings.music) return Promise.resolve(false);
     const ctx = audio();
-    if (!ctx) return;
+    if (!ctx) return Promise.resolve(false);
     ctx.resume();
     const token = musicToken;
-    loadTrack(CONFIG.levels[levelNo].music).then(buffer => {
-      if (token !== musicToken || state !== 'play' && state !== 'levelup') return;
+    return loadTrack(CONFIG.levels[levelNo].music).then(buffer => {
+      if (token !== musicToken) return false;
       source = ctx.createBufferSource();
       source.buffer = buffer;
       source.loop = true;
-      source.connect(gainNode);
-      const t = ctx.currentTime;
-      gainNode.gain.cancelScheduledValues(t);
-      gainNode.gain.setValueAtTime(0, t);
-      gainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, t + 1.5);
-      source.start();
-      if (state === 'levelup') ctx.suspend();
-    }).catch(() => { /* без музыки игра работает так же */ });
+      source.connect(musicGain);
+      const t = ctx.currentTime + 0.05;
+      musicGain.gain.cancelScheduledValues(ctx.currentTime);
+      musicGain.gain.setValueAtTime(0, ctx.currentTime);
+      musicGain.gain.linearRampToValueAtTime(MUSIC_VOLUME, t + 1.0);
+      source.start(t);
+      trackStart = t;
+      trackDur = buffer.duration;
+      return true;
+    }).catch(() => false);
   }
 
   function fadeOutMusic(sec) {
     if (!actx || !source) return;
     const t = actx.currentTime;
-    gainNode.gain.cancelScheduledValues(t);
-    gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-    gainNode.gain.linearRampToValueAtTime(0, t + sec);
+    musicGain.gain.cancelScheduledValues(t);
+    musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+    musicGain.gain.linearRampToValueAtTime(0, t + sec);
     const s = source;
     source = null;
     try { s.stop(t + sec + 0.05); } catch (_) { /* уже остановлен */ }
@@ -694,6 +827,30 @@ if (typeof window !== 'undefined') (function () {
   function pauseMusic() { if (actx) actx.suspend(); }
   function resumeMusic() { if (actx && SAVE.settings.music) actx.resume(); }
 
+  // Позиция в треке по часам AudioContext; null — музыка не играет
+  function musicPos(ctxTime) {
+    if (!source || !actx) return null;
+    const t = (ctxTime == null ? actx.currentTime : ctxTime) - trackStart;
+    return t < 0 ? t : t % trackDur;
+  }
+
+  // Короткие синтезированные щелчки на попадания — без звуковых файлов
+  function blip(freq, dur, type, vol) {
+    if (!actx || !SAVE.settings.music || actx.state !== 'running') return;
+    const t = actx.currentTime;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  const SFX = {
+    perfect: () => { blip(1320, 0.09, 'triangle', 0.6); blip(1980, 0.06, 'sine', 0.3); },
+    good: () => blip(990, 0.08, 'triangle', 0.5),
+    miss: () => blip(180, 0.1, 'square', 0.25),
+  };
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pauseMusic(); else if (state === 'play' || state === 'ending') resumeMusic();
   });
@@ -701,7 +858,7 @@ if (typeof window !== 'undefined') (function () {
   const soundBtn = $('btn-sound');
   function syncSoundButton() {
     soundBtn.classList.toggle('off', !SAVE.settings.music);
-    soundBtn.setAttribute('aria-label', SAVE.settings.music ? 'Выключить музыку' : 'Включить музыку');
+    soundBtn.setAttribute('aria-label', SAVE.settings.music ? 'Выключить звук' : 'Включить звук');
   }
   function placeSoundButton() {
     // в верхней плашке HUD между полосой песни и счётчиком зрителей
@@ -714,39 +871,36 @@ if (typeof window !== 'undefined') (function () {
     SAVE.settings.music = !SAVE.settings.music;
     persist();
     syncSoundButton();
-    if (!SAVE.settings.music) stopMusic();
+    if (!SAVE.settings.music) { stopMusic(); if (G) G.externalClock = false; }
     else if (G && (state === 'play' || state === 'levelup')) playMusic(G.levelNo);
   });
   syncSoundButton();
 
-  function startGame(levelNo, gameMode) {
-    mode = gameMode || 'free';
-    const mods = mode === 'career' ? careerMods(SAVE.career) : null;
-    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo, mods);
-    fx = []; particles = []; smoke = []; banners = [];
+  // ---------- запуск песни ----------
+  function startGame(levelNo) {
+    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo);
+    fx = []; particles = []; smoke = []; banners = []; judges = [];
     resize();
-    state = 'play';
+    state = 'loading';
     show(null);
-    playMusic(levelNo);
-    const head = mode === 'career' ? `День ${SAVE.career.day}: ${G.lv.name}` : `Уровень ${G.levelNo + 1}: ${G.lv.name}`;
-    banners.push({ text: head, t: 0, life: 2.6, color: PAL.pink });
-    banners.push({ text: 'Разогрев: собирай эмоции!', t: 0, life: 3.2 });
+    banners.push({ text: `${G.levelNo + 1}. ${G.lv.name}`, t: 0, life: 2.6, color: PAL.pink });
+    // песня стартует, когда трек заиграл: часы ритма идут от музыки
+    const go = () => { if (state !== 'loading') return; state = 'play'; banners.push({ text: 'Тапай в такт!', t: 0, life: 2.4 }); };
+    playMusic(levelNo).then(go);
+    setTimeout(go, 4000); // если трек не грузится, играем без музыки
   }
 
   const LEVEL_COLORS = ['#5dff9e', '#3de0ff', '#ffd23d', '#ff7a3d', '#ff3d8b'];
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const starsHtml = n => [0, 1, 2].map(i => `<span class="star${i < n ? '' : ' off'}">&#9733;&#xFE0E;</span>`).join('');
-  const money = n => `${n < 0 ? '−' : ''}${Math.abs(Math.round(n))} ₽`;
-  const signed = n => Math.round(n) === 0 ? '0 ₽' : `${n < 0 ? '−' : '+'}${Math.abs(Math.round(n))} ₽`;
 
-  function levelButton(i, meta, onClick, disabled) {
+  function levelButton(i, meta, onClick) {
     const lv = CONFIG.levels[i];
     const b = document.createElement('button');
     b.className = 'lvl';
-    b.disabled = !!disabled;
     b.style.setProperty('--c', LEVEL_COLORS[i % LEVEL_COLORS.length]);
     b.innerHTML = `<span class="lvl-num">${i + 1}</span><span><div class="lvl-name">${esc(lv.name)}</div>` +
-      `<div class="lvl-desc">${esc(lv.desc)} Зрителей: ${lv.viewers}.</div>${meta ? `<div class="lvl-meta">${meta}</div>` : ''}</span>`;
+      `<div class="lvl-desc">${esc(lv.desc)} Зрителей: ${lv.viewers}. ${esc(lv.track)}, ${lv.bpm} BPM.</div>${meta ? `<div class="lvl-meta">${meta}</div>` : ''}</span>`;
     b.addEventListener('click', onClick);
     return b;
   }
@@ -756,127 +910,139 @@ if (typeof window !== 'undefined') (function () {
     box.innerHTML = '';
     CONFIG.levels.forEach((lv, i) => {
       const r = SAVE.records.levels[i];
-      const meta = r ? `Рекорд: ${r.bestLeft} из ${r.total} ${starsHtml(r.bestStars)}` : '';
-      box.appendChild(levelButton(i, meta, () => startGame(i, 'free')));
+      const meta = r ? `Рекорд: ${r.bestLeft} из ${r.total} ${starsHtml(r.bestStars)}` + (r.bestCombo ? ` · комбо ${r.bestCombo}` : '') : '';
+      // перед первой игрой — калибровка задержки звука
+      box.appendChild(levelButton(i, meta, () => (SAVE.settings.latency == null ? openCalibration(() => startGame(i)) : startGame(i))));
     });
   }
 
   function openMenu() {
-    const c = SAVE.career;
-    $('career-sub').textContent = c.gigs ? `день ${c.day} · ${money(c.money)} · известность ${c.rep}` : 'начать с пустого вторника';
+    const l = SAVE.settings.latency;
+    $('calib-sub').textContent = l == null ? 'ещё не настроена' : `задержка ${Math.round(l * 1000)} мс`;
     show('overlay-start');
-  }
-
-  function openCareer() {
-    const c = SAVE.career;
-    $('day-title').textContent = `День ${c.day}`;
-    $('day-money').textContent = money(c.money);
-    $('day-money').classList.toggle('neg', c.money < 0);
-    $('day-rep').textContent = c.rep;
-    $('day-rent').textContent = money(rentFor(c.day));
-    const next = CAREER.venues.findIndex((v, i) => !venueUnlocked(c, i));
-    $('day-note').textContent = c.won
-      ? `Фестиваль покорён на ${c.wonDay}-й день! Можно играть дальше и копить на улучшения.`
-      : c.money < 0 ? 'Ты в долгах: магазин закрыт, пока не выйдешь в плюс.'
-      : next >= 0 ? `Следующий зал откроется при известности ${CAREER.venues[next].rep}.` : 'Открыты все залы. Покори фестиваль!';
-    const box = $('venues');
-    box.innerHTML = '';
-    CAREER.venues.forEach((v, i) => {
-      const open = venueUnlocked(c, i);
-      const best = c.best[i] || 0;
-      const meta = open
-        ? `Гонорар ×${f1(v.pay)} · дорога ${v.travel} ₽ · ${starsHtml(best)}`
-        : `Закрыто: нужна известность ${v.rep}`;
-      box.appendChild(levelButton(i, meta, () => startGame(i, 'career'), !open));
-    });
-    show('overlay-career');
-  }
-
-  function openShop() {
-    const c = SAVE.career;
-    $('shop-money').textContent = money(c.money);
-    const box = $('shop');
-    box.innerHTML = '';
-    for (const u of CAREER.upgrades) {
-      const l = upgradeLevel(c, u.id), max = u.cost.length;
-      const price = upgradePrice(c, u.id);
-      const el = document.createElement('div');
-      el.className = 'shop-item';
-      const shown = u.values[Math.min(l, max - 1)];
-      el.innerHTML = `<div class="info"><div class="name">${esc(u.name)}</div>` +
-        `<div class="desc">${l >= max ? esc(u.desc(u.values[max - 1])) : (l ? 'Сейчас: ' + esc(u.desc(u.values[l - 1])) + ' Дальше: ' : '') + (l < max ? esc(u.desc(shown)) : '')}</div>` +
-        `<div class="card-pips">${u.cost.map((_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div></div>`;
-      const b = document.createElement('button');
-      b.className = 'buy';
-      b.textContent = price == null ? 'Куплено' : `${price} ₽`;
-      b.disabled = price == null || c.money < price;
-      b.addEventListener('click', () => { if (buyUpgrade(c, u.id)) { persist(); openShop(); } });
-      el.appendChild(b);
-      box.appendChild(el);
-    }
-    show('overlay-shop');
   }
 
   function openRecords() {
     const R = SAVE.records;
-    let html = '<div class="rec-head">Лучший результат по уровням</div>';
+    let html = '<div class="rec-head">Лучший результат по залам</div>';
     CONFIG.levels.forEach((lv, i) => {
       const r = R.levels[i];
-      html += `<div class="rec-row"><span>${i + 1}. ${esc(lv.name)}<small>${r ? 'сыграно ' + r.plays : 'ещё не играл'}</small></span>` +
+      html += `<div class="rec-row"><span>${i + 1}. ${esc(lv.name)}<small>${r ? 'сыграно ' + r.plays + (r.bestCombo ? ', лучшее комбо ' + r.bestCombo : '') : 'ещё не играл'}</small></span>` +
         `<b>${r ? `${r.bestLeft}/${r.total} ${starsHtml(r.bestStars)}` : '—'}</b></div>`;
     });
-    html += '<div class="rec-head">Карьера</div>';
-    const rows = [
-      ['Фестиваль покорён быстрее всего', R.bestWinDay ? `за ${R.bestWinDay} дн.` : '—'],
-      ['Сколько раз начинал карьеру', R.careers],
-      ['Всего концертов', R.gigs],
-      ['Заработано за всё время', money(R.totalEarned)],
-    ];
-    for (const [k, v] of rows) html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
+    html += '<div class="rec-head">Всего</div>';
+    for (const [k, v] of [['Концертов', R.gigs], ['Лучшее комбо', R.bestCombo || 0]]) {
+      html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
+    }
     $('records').innerHTML = html;
     show('overlay-records');
   }
 
-  for (const b of document.querySelectorAll('[data-go]')) {
-    b.addEventListener('click', () => {
-      const id = b.dataset.go;
-      if (id === 'overlay-start') openMenu(); else if (id === 'overlay-career') openCareer(); else show(id);
-    });
+  // ---------- калибровка задержки ----------
+  // Метроном 100 BPM через AudioContext; игрок тапает в щелчки, берём медиану отклонения.
+  const CAL = { bpm: 100, clicks: 16, warmup: 4 };
+  let calib = null;
+  function openCalibration(after) {
+    calib = { after: after || null, running: false };
+    $('calib-text').textContent = 'Начать';
+    $('calib-result').textContent = SAVE.settings.latency == null ? '' : `Сейчас: ${Math.round(SAVE.settings.latency * 1000)} мс`;
+    $('calib-done').classList.toggle('hidden', SAVE.settings.latency == null);
+    $('calib-skip').textContent = after ? 'Пропустить и играть' : 'Назад';
+    show('overlay-calib');
   }
-  $('btn-career').addEventListener('click', openCareer);
-  $('btn-free').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
-  $('btn-records').addEventListener('click', openRecords);
-  $('btn-shop').addEventListener('click', openShop);
-  $('btn-reset').addEventListener('click', () => {
-    if (!window.confirm('Начать карьеру заново? Деньги, известность и покупки обнулятся. Рекорды останутся.')) return;
-    SAVE.career = newCareer();
-    SAVE.records.careers++;
+  function startCalibration() {
+    const ctx = audio();
+    if (!ctx) { $('calib-result').textContent = 'Звук недоступен в этом браузере.'; return; }
+    ctx.resume();
+    const per = 60 / CAL.bpm, t0 = ctx.currentTime + 0.6;
+    calib.running = true; calib.t0 = t0; calib.per = per; calib.taps = [];
+    for (let i = 0; i < CAL.clicks; i++) {
+      const t = t0 + i * per;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = i % 4 === 0 ? 1500 : 1000;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.6, t + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t); o.stop(t + 0.08);
+    }
+    $('calib-text').textContent = 'Тапай!';
+    $('calib-result').textContent = 'Первые четыре щелчка просто послушай.';
+    const pad = $('calib-pad');
+    // подсветка круга на щелчках (визуальная подсказка, без учёта задержки)
+    const pulse = () => {
+      if (!calib || !calib.running) return;
+      const k = (ctx.currentTime - t0) / per;
+      pad.classList.toggle('beat', k >= -0.05 && k - Math.round(k) > -0.08 && k - Math.round(k) < 0.12);
+      if (k > CAL.clicks + 0.5) return finishCalibration();
+      requestAnimationFrame(pulse);
+    };
+    requestAnimationFrame(pulse);
+  }
+  function finishCalibration() {
+    calib.running = false;
+    $('calib-pad').classList.remove('beat');
+    const d = calib.taps.filter(x => x.k >= CAL.warmup).map(x => x.d).sort((a, b) => a - b);
+    if (d.length < 5) {
+      $('calib-text').textContent = 'Ещё раз';
+      $('calib-result').textContent = 'Слишком мало тапов. Попробуй ещё раз.';
+      return;
+    }
+    const med = d[d.length >> 1];
+    SAVE.settings.latency = clamp(med, -0.05, 0.4);
     persist();
-    openCareer();
+    $('calib-text').textContent = 'Ещё раз';
+    $('calib-result').textContent = `Готово: задержка ${Math.round(SAVE.settings.latency * 1000)} мс.`;
+    $('calib-done').classList.remove('hidden');
+  }
+  $('calib-pad').addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!calib) return;
+    if (!calib.running) { startCalibration(); return; }
+    const t = actx.currentTime - eventAge(e);
+    const k = Math.round((t - calib.t0) / calib.per);
+    if (k < 0 || k >= CAL.clicks) return;
+    calib.taps.push({ k, d: t - (calib.t0 + k * calib.per) });
+    const pad = $('calib-pad');
+    pad.classList.add('tapped'); setTimeout(() => pad.classList.remove('tapped'), 90);
   });
+  const leaveCalibration = () => {
+    const after = calib && calib.after;
+    if (calib) calib.running = false;
+    calib = null;
+    if (after) after(); else openMenu();
+  };
+  $('calib-done').addEventListener('click', leaveCalibration);
+  $('calib-skip').addEventListener('click', () => {
+    if (calib && calib.after && SAVE.settings.latency == null) { SAVE.settings.latency = 0.05; persist(); }
+    leaveCalibration();
+  });
+
+  for (const b of document.querySelectorAll('[data-go]')) {
+    b.addEventListener('click', () => { if (b.dataset.go === 'overlay-start') openMenu(); else show(b.dataset.go); });
+  }
+  $('btn-play').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
+  $('btn-calibrate').addEventListener('click', () => openCalibration(null));
+  $('btn-records').addEventListener('click', openRecords);
   openMenu();
 
-  // ---------- ввод ----------
+  // ---------- ввод: тап в точку зала ----------
   function toWorld(e) { return { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale }; }
-  let pointerId = null;
-  function setTarget(e) {
-    const w = toWorld(e);
-    const off = e.pointerType === 'mouse' ? 0 : CONFIG.player.touchOffset;
-    G.player.tx = w.x; G.player.ty = w.y - off;
+  // сколько секунд назад произошло касание (событие доходит до кода с задержкой кадра)
+  function eventAge(e) {
+    const age = (performance.now() - e.timeStamp) / 1000;
+    return age > 0 && age < 0.2 ? age : 0;
   }
   canvas.addEventListener('pointerdown', e => {
-    if (state !== 'play') return;
-    pointerId = e.pointerId;
-    try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* старые браузеры */ }
-    setTarget(e); e.preventDefault();
+    e.preventDefault();
+    if (state !== 'play' || !G) return;
+    const w = toWorld(e);
+    // время касания в секундах трека, с поправкой на задержку звука из калибровки
+    const pos = musicPos(actx ? actx.currentTime - eventAge(e) : null);
+    const t = pos != null ? pos - latency() : G.musicTime - eventAge(e);
+    const grade = tap(w.x, w.y, t);
+    if (grade) SFX[grade]();
   });
-  canvas.addEventListener('pointermove', e => {
-    if (state !== 'play') return;
-    if (e.pointerType === 'mouse' ? e.buttons : e.pointerId === pointerId) setTarget(e);
-  });
-  const endPointer = e => { if (e.pointerId === pointerId) pointerId = null; };
-  canvas.addEventListener('pointerup', endPointer);
-  canvas.addEventListener('pointercancel', endPointer);
   // окна меню можно прокручивать, всё остальное — нет
   document.addEventListener('touchmove', e => { if (!e.target.closest('.panel')) e.preventDefault(); }, { passive: false });
   document.addEventListener('gesturestart', e => e.preventDefault());
@@ -902,7 +1068,6 @@ if (typeof window !== 'undefined') (function () {
   function openLevelUp() {
     state = 'levelup';
     pauseMusic();
-    pointerId = null;
     const box = $('cards');
     box.innerHTML = '';
     box.classList.remove('armed');
@@ -939,51 +1104,26 @@ if (typeof window !== 'undefined') (function () {
     const r = results();
     const share = r.left / r.total;
     const last = r.levelNo >= CONFIG.levels.length - 1;
-    const career = mode === 'career';
-    const isRecord = recordGig(SAVE.records, r.levelNo, r, 0);
-    let st = null;
-    if (career) {
-      st = settleGig(SAVE.career, r.levelNo, r);
-      if (st.fee > 0) SAVE.records.totalEarned += st.fee;
-      if (st.won) SAVE.records.bestWinDay = Math.min(SAVE.records.bestWinDay || Infinity, st.day);
-    }
+    const isRecord = recordGig(SAVE.records, r.levelNo, r);
     persist();
 
-    $('res-title').textContent = st && st.won ? 'Фестиваль покорён!' :
-      r.passed ? (career ? 'Отличный вечер!' : last ? 'Все уровни пройдены!' : 'Уровень пройден!') : 'Песня окончена';
-    $('res-level').textContent = (career ? `День ${st.day}. ` : `Уровень ${r.levelNo + 1}. `) +
-      `${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
+    $('res-title').textContent = r.encored ? 'Бис! Зал твой!' : r.passed ? (last ? 'Все залы пройдены!' : 'Зал удержан!') : 'Песня окончена';
+    $('res-level').textContent = `${r.levelNo + 1}. ${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
     $('res-verdict').textContent = (isRecord ? 'Новый рекорд! ' : '') + (
       share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :
       share > 0.5 ? 'Хороший сет, бармен доволен.' :
-      share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.');
+      share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй ловить ритм.');
     $('res-stars').innerHTML = starsHtml(starsFor(r.left, r.total));
     $('res-left').textContent = `${r.left} из ${r.total}`;
-    $('res-money-label').textContent = career ? 'Касса зала' : 'Заработано';
     $('res-money').textContent = `${r.money} ₽`;
-    $('res-money-note').textContent = `${r.left} × ${r.perViewer}` + (r.bonus ? ` + ${r.bonus} бонус: осталось больше половины` : ' (бонус +100, если осталось больше половины)') +
-      (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
-
-    const box = $('res-career');
-    box.innerHTML = '';
-    if (st) {
-      const V = CAREER.venues[r.levelNo];
-      const rows = [
-        ['Гонорар', `×${f1(V.pay)}${r.passed ? '' : ', половина: зал не удержан'}`, signed(st.fee)],
-        ['Дорога', '', signed(-st.travel)],
-        ['Аренда', '', signed(-st.rent)],
-        ['Итого за вечер', '', signed(st.net)],
-        ['Известность', '', `+${st.repGain}`],
-        ['Деньги', '', money(SAVE.career.money)],
-      ];
-      box.innerHTML = rows.map(([k, n, v]) => `<div class="res-row"><span>${k}${n ? `<small class="muted"> ${n}</small>` : ''}</span><b>${v}</b></div>`).join('') +
-        st.unlocked.map(i => `<p class="note center">Открыт новый зал: <b>${esc(CONFIG.levels[i].name)}</b></p>`).join('') +
-        (st.won ? '<p class="note center">Ты звезда городского фестиваля! Карьера продолжается.</p>' : '');
-    }
-    $('btn-day').classList.toggle('hidden', !career);
-    $('btn-next').classList.toggle('hidden', career || !r.passed || last);
-    $('btn-again').classList.toggle('hidden', career);
-    $('btn-menu').classList.toggle('hidden', career);
+    $('res-money-note').textContent = `${r.left} × ${r.perViewer}` +
+      (r.bonus ? ` + ${r.bonus} бонус за полный зал` : ' (бонус +100, если осталось больше половины)') +
+      (r.encored ? ', ×2 за бис' : '') + (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
+    const h = r.hits, judged = h.perfect + h.good + h.miss;
+    $('res-hits').textContent = judged ? `${Math.round((h.perfect + h.good) / judged * 100)}%` : '—';
+    $('res-combo').textContent = r.comboBest;
+    $('res-hits-note').textContent = judged ? `Идеально: ${h.perfect}, хорошо: ${h.good}, мимо: ${h.miss}.` : 'Ты не тапал в такт — попробуй, это главный источник силы души.';
+    $('btn-next').classList.toggle('hidden', !r.passed || last);
 
     const list = $('res-cards');
     list.innerHTML = '';
@@ -999,10 +1139,9 @@ if (typeof window !== 'undefined') (function () {
     show('overlay-results');
   }
 
-  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1, 'free'));
-  $('btn-again').addEventListener('click', () => startGame(G.levelNo, 'free'));
+  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1));
+  $('btn-again').addEventListener('click', () => startGame(G.levelNo));
   $('btn-menu').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
-  $('btn-day').addEventListener('click', openCareer);
 
   // ---------- визуальные события ----------
   function spawnParticles(x, y, n, color, speed, life, size, gravity) {
@@ -1028,6 +1167,19 @@ if (typeof window !== 'undefined') (function () {
         }
       } else if (ev.type === 'pickup') {
         spawnParticles(ev.x, ev.y, 7, EMO_COLORS[ev.kind], 70, 0.45, 2.2);
+      } else if (ev.type === 'judge') {
+        const J = { perfect: ['Идеально!', PAL.cyan], good: ['Хорошо', PAL.green], miss: ['мимо', '#8a7a6a'] }[ev.grade];
+        judges.push({ text: J[0], color: J[1], x: ev.x, y: ev.y, t: 0, life: ev.grade === 'miss' ? 0.5 : 0.7 });
+        judges = judges.slice(-4);
+        if (ev.grade !== 'miss') fx.push({ type: 'tapMark', x: ev.x, y: ev.y, t: 0, life: 0.35, color: J[1] });
+      } else if (ev.type === 'wave') {
+        const col = ev.grade === 'perfect' ? PAL.cyan : PAL.green;
+        fx.push({ type: 'ring', x: ev.x, y: ev.y + 6, r: ev.r, t: 0, life: 0.45, color: col });
+        spawnParticles(ev.x, ev.y, ev.grade === 'perfect' ? 14 : 8, col, 120, 0.4, 2.4);
+      } else if (ev.type === 'encore') {
+        banners.push({ text: 'БИС! Зал просит ещё!', t: 0, life: 3, color: PAL.amber });
+        shake = 0.4;
+        for (let i = 0; i < 40; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? PAL.amber : PAL.pink, 160, 1.2, 3, 140);
       } else if (ev.type === 'leave') {
         fx.push({ type: 'leaveMark', x: ev.x, y: ev.y, t: 0, life: 1.0 });
       } else if (ev.type === 'incident') {
@@ -1056,6 +1208,16 @@ if (typeof window !== 'undefined') (function () {
     particles = particles.filter(p => p.life > 0);
     for (const b of banners) b.t += dt;
     banners = banners.filter(b => b.t < b.life).slice(-2);
+    for (const j of judges) j.t += dt;
+    judges = judges.filter(j => j.t < j.life);
+    // след души
+    if (G && (state === 'play' || state === 'ending')) {
+      const p = G.player;
+      if (Math.random() < dt * (p.dash ? 90 : 22)) {
+        particles.push({ x: p.x + (Math.random() - 0.5) * 8, y: p.y - 14 + (Math.random() - 0.5) * 8, vx: (Math.random() - 0.5) * 12, vy: -18 - Math.random() * 14,
+          life: 0.6, max: 0.6, color: soulColor(), size: 2.2 + Math.random() * 2, g: 0 });
+      }
+    }
     shake = Math.max(0, shake - dt);
     // дым вокруг героя
     const sr = smokeRadius();
@@ -1092,7 +1254,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.font = 'bold 20px system-ui, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = PAL.pink; ctx.shadowBlur = 12;
-    ctx.fillStyle = (Math.sin(clock * 1.7) > -0.95) ? PAL.pink : '#7a2246';
+    ctx.fillStyle = lerpColor('#a3275d', PAL.pink, 0.55 + 0.45 * pulse);
     ctx.fillText('ЖИВАЯ МУЗЫКА', L.W / 2, 74);
     ctx.restore();
     ctx.strokeStyle = PAL.pink; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
@@ -1116,7 +1278,7 @@ if (typeof window !== 'undefined') (function () {
     // край сцены с лампочками
     ctx.fillStyle = PAL.stageEdge; ctx.fillRect(0, L.stageBottom, L.W, L.hallTop - L.stageBottom);
     for (let x = 10, i = 0; x < L.W; x += 20, i++) {
-      ctx.fillStyle = ((i + Math.floor(clock * 3)) % 3 === 0) ? '#ffe28a' : '#8a5a20';
+      ctx.fillStyle = lerpColor('#8a5a20', '#ffe28a', i % 2 === beatIndex % 2 ? pulse : 0.15);
       ctx.fillRect(x - 2, L.stageBottom + 3, 4, 4);
     }
     // пол зала
@@ -1195,60 +1357,111 @@ if (typeof window !== 'undefined') (function () {
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
-  function drawPlayer() {
-    const p = G.player;
-    const x = p.x, y = p.y;
-    // аура присутствия и радиус подбора
-    ctx.fillStyle = stringBroken() ? 'rgba(120,120,130,0.08)' : 'rgba(255,176,58,0.07)';
-    ctx.beginPath(); ctx.arc(x, y - 6, auraRadius(), 0, Math.PI * 2); ctx.fill();
-    ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,210,61,0.45)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
+  // ---------- ритм на экране ----------
+  let beatT = 0, pulse = 0, beatIndex = 0, bodyLife = 0;
+  function beatPhase() {
+    const b = G.beat, x = (beatT - b.offset) / b.period;
+    beatIndex = Math.floor(x);
+    return x - Math.floor(x); // 0 — сама доля
+  }
+  const SOUL_COLORS = ['#3de0ff', '#5dff9e', '#ff3d8b', '#ffd23d'];
+  function soulColor() { return SOUL_COLORS[G ? comboStep() : 0]; }
 
-    const step = p.moving ? Math.sin(clock * 14) * 2.5 : 0;
-    const strum = Math.sin(clock * 8) * 1.5;
+  // Тело музыканта: стоит в центре сцены и играет на автопилоте. Оживает, когда душа в ударе.
+  function drawBody() {
+    const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
+    const life = bodyLife; // 0 — серое и неподвижное, 1 — живое
+    const bob = pulse * (0.6 + life * 2.4);
+    const gray = '#6b6670';
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(x, y + 1, 11, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(p.dir, 1);
-    // ноги
-    ctx.fillStyle = '#2b2b3a';
-    ctx.fillRect(-5, -8 + step * 0.3, 4, 8 - step * 0.3);
-    ctx.fillRect(1, -8 - step * 0.3, 4, 8 + step * 0.3);
-    // куртка
-    const costume = lvl('costume');
-    ctx.fillStyle = costume ? '#ffd23d' : PAL.cyan;
+    ctx.translate(x, y - bob);
+    ctx.fillStyle = lerpColor('#3a3840', '#2b2b3a', life);
+    ctx.fillRect(-5, -8 + bob, 4, 8); ctx.fillRect(1, -8 + bob, 4, 8);
+    ctx.fillStyle = lerpColor(gray, '#c94f2f', life);
     roundRect(-8, -26, 16, 19, 5); ctx.fill();
-    if (costume) {
-      ctx.fillStyle = '#fff';
-      for (let i = 0; i < costume * 2; i++) {
-        const tw = (Math.sin(clock * 5 + i * 2) + 1) / 2;
-        ctx.globalAlpha = tw; ctx.fillRect(-6 + (i * 5) % 12, -24 + (i * 7) % 15, 2, 2);
-      }
-      ctx.globalAlpha = 1;
-    }
-    // голова и волосы
-    ctx.fillStyle = '#f1c9a5';
-    ctx.beginPath(); ctx.arc(0, -32, 6.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#3a1d10';
-    ctx.beginPath(); ctx.arc(0, -34, 7, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.fillRect(-7, -34, 3, 7);
-    // гитара
+    // голова смотрит в пол, пока тело «спит»
+    const headDrop = (1 - life) * 3;
+    ctx.fillStyle = lerpColor('#8f8680', '#f1c9a5', life);
+    ctx.beginPath(); ctx.arc(0, -32 + headDrop, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = lerpColor('#4a4448', '#3a1d10', life);
+    ctx.beginPath(); ctx.arc(0, -34 + headDrop, 7, Math.PI, Math.PI * 2); ctx.fill();
     ctx.save();
-    ctx.translate(1, -15);
-    ctx.rotate(-0.55);
-    ctx.fillStyle = '#5a2c10'; ctx.fillRect(4, -2, 20, 3.5);
-    ctx.fillStyle = PAL.amber;
+    ctx.translate(1, -15); ctx.rotate(-0.55);
+    ctx.fillStyle = lerpColor('#4a4245', '#5a2c10', life); ctx.fillRect(4, -2, 20, 3.5);
+    ctx.fillStyle = lerpColor('#7d7570', PAL.amber, life);
     ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(-6, 0, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#2a160c';
-    ctx.beginPath(); ctx.arc(-1, 0, 2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // рука, бьющая по струнам
-    ctx.fillStyle = '#f1c9a5';
-    ctx.beginPath(); ctx.arc(-2, -15 + strum, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = lerpColor('#8f8680', '#f1c9a5', life);
+    ctx.beginPath(); ctx.arc(-2, -15 + pulse * 2, 2.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+
+    if (stringBroken()) {
+      const blink = Math.sin(clock * 8) > 0;
+      ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(x, y - 16, S.radius + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ring(x, y - 54, 9, G.incident.progress, PAL.green);
+      ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, y - 53);
+    }
+  }
+
+  // Душа: светящееся пламя над залом. Кольцо сжимается к каждой доле.
+  function drawSoul() {
+    const p = G.player, x = p.x, y = p.y - 14;
+    const col = soulColor();
+    const broken = stringBroken();
+    // аура и радиус волны
+    ctx.fillStyle = broken ? 'rgba(120,120,130,0.08)' : 'rgba(255,176,58,0.07)';
+    ctx.beginPath(); ctx.arc(x, y + 8, auraRadius(), 0, Math.PI * 2); ctx.fill();
+    // цель полёта
+    if (Math.hypot(p.tx - p.x, p.ty - p.y) > 6) {
+      ctx.strokeStyle = 'rgba(246,231,208,0.35)'; ctx.lineWidth = 1.2; ctx.setLineDash([2, 5]);
+      ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(p.tx, p.ty); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(p.tx, p.ty, 4, 0, Math.PI * 2); ctx.stroke();
+    }
+    // кольцо такта
+    const ph = beatPhase();
+    const rr = 15 + 30 * (1 - ph);
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.25 + 0.6 * ph; ctx.lineWidth = 2 + 2 * ph;
+    ctx.beginPath(); ctx.arc(x, y + 2, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // свечение и пламя
+    const flick = Math.sin(clock * 11) * 1.2, swell = 1 + pulse * 0.18 + (p.dash ? 0.15 : 0);
+    ctx.save();
+    ctx.translate(x, y + 4);
+    ctx.scale(swell, swell);
+    ctx.globalAlpha = 0.22; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(0, -20 - flick);
+    ctx.bezierCurveTo(9, -10, 11, 2, 0, 9);
+    ctx.bezierCurveTo(-11, 2, -9, -10, 0, -20 - flick);
+    ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = '#fff6e0';
+    ctx.beginPath();
+    ctx.moveTo(0, -9 - flick * 0.5);
+    ctx.bezierCurveTo(4, -4, 5, 2, 0, 5);
+    ctx.bezierCurveTo(-5, 2, -4, -4, 0, -9 - flick * 0.5);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawJudges() {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const j of judges) {
+      const k = j.t / j.life;
+      ctx.globalAlpha = 1 - k;
+      ctx.font = `bold ${j.text === 'мимо' ? 11 : 14}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(16,9,6,0.7)';
+      ctx.fillText(j.text, j.x + 1, j.y - 22 - k * 16 + 1);
+      ctx.fillStyle = j.color;
+      ctx.fillText(j.text, j.x, j.y - 22 - k * 16);
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawHeart(x, y, s) {
@@ -1306,6 +1519,11 @@ if (typeof window !== 'undefined') (function () {
         ctx.strokeStyle = f.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 5 * (1 - k) + 1;
         ctx.beginPath(); ctx.arc(f.x, f.y - 6, f.r * (0.25 + 0.75 * Math.sqrt(k)), 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = (1 - k) * 0.12; ctx.fillStyle = f.color; ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (f.type === 'tapMark') {
+        const k = f.t / f.life;
+        ctx.strokeStyle = f.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(f.x, f.y, 6 + 10 * k, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
       } else if (f.type === 'leaveMark') {
         const k = f.t / f.life;
@@ -1416,12 +1634,14 @@ if (typeof window !== 'undefined') (function () {
     // верхняя плашка
     ctx.fillStyle = 'rgba(16,9,6,0.82)'; ctx.fillRect(0, 0, L.W, L.hudH);
     ctx.fillStyle = PAL.amber; ctx.fillRect(0, L.hudH - 2, L.W, 2);
-    const rest = Math.max(0, CONFIG.songDuration - G.t);
+    const rest = G.encore ? Math.max(0, CONFIG.encore.duration - G.encore.t) : Math.max(0, CONFIG.songDuration - G.t);
     const m = Math.floor(Math.ceil(rest) / 60), s = Math.ceil(rest) % 60;
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 22px system-ui, sans-serif'; ctx.textAlign = 'left';
-    ctx.fillStyle = rest <= 30 ? PAL.pink : PAL.text;
-    ctx.fillText(`${m}:${String(s).padStart(2, '0')}`, 12, 23);
+    ctx.fillStyle = G.encore ? PAL.amber : rest <= 20 ? PAL.pink : PAL.text;
+    if (G.encore) ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.fillText(G.encore ? `БИС ${Math.ceil(rest)}` : `${m}:${String(s).padStart(2, '0')}`, 12, 23);
+    ctx.font = 'bold 22px system-ui, sans-serif';
     // прогресс песни
     ctx.fillStyle = '#3a2416'; ctx.fillRect(74, 19, 110, 6);
     ctx.fillStyle = PAL.amber; ctx.fillRect(74, 19, 110 * (G.t / CONFIG.songDuration), 6);
@@ -1447,12 +1667,14 @@ if (typeof window !== 'undefined') (function () {
     const k = clamp(G.drive / need, 0, 1);
     ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = PAL.dim;
     ctx.fillText('ДРАЙВ', 10, y0 + 13);
-    const bx = 56, bw = L.W - 56 - 46, by = y0 + 7, bh = 12;
+    const bx = 56, bw = L.W - 56 - 50, by = y0 + 7, bh = 12;
     ctx.fillStyle = '#3a2416'; ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = PAL.pink; ctx.fillRect(bx, by, bw * k, bh);
     ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(bx, by, bw * k, 3);
     ctx.textAlign = 'right'; ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif';
-    ctx.fillText(`ур. ${G.levelNo + 1}`, L.W - 8, y0 + 13);
+    const cm = comboMul();
+    ctx.fillStyle = cm > 1 ? soulColor() : PAL.dim;
+    ctx.fillText(`×${f1(cm)}`, L.W - 8, y0 + 13);
     // слоты карт: 4 активных + 4 пассивных
     const act = G.cardOrder.filter(id => CARD_DEFS[id].type === 'active');
     const pas = G.cardOrder.filter(id => CARD_DEFS[id].type === 'passive');
@@ -1490,18 +1712,11 @@ if (typeof window !== 'undefined') (function () {
   }
 
   function drawAmp() {
-    const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y;
-    const broken = stringBroken();
+    // усилитель — просто декор слева на сцене, подпрыгивает в такт
+    const x = 34, y = 150, k = pulse * 1.5;
     ctx.fillStyle = '#121212'; ctx.fillRect(x - 13, y - 30, 26, 30);
-    ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(x, y - 13, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(x, y - 13, 8 + k, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = PAL.amber; ctx.fillRect(x - 11, y - 28, 22, 3);
-    if (!broken) return;
-    const blink = Math.sin(clock * 8) > 0;
-    ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.arc(x, y - 6, S.radius + 4, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    ring(x, y - 46, 9, G.incident.progress, PAL.green);
-    ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('!', x, y - 45);
   }
 
   function drawDrunk() {
@@ -1584,17 +1799,14 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.rect(0, 0, G.L.W, G.L.H); ctx.clip();
     drawBackground();
     drawFxUnder();
+    drawBody();
     const list = G.viewers.filter(v => !v.gone).sort((a, b) => a.y - b.y);
-    const p = G.player;
-    let drawn = false;
-    for (const v of list) {
-      if (!drawn && v.y > p.y) { drawPlayer(); drawn = true; }
-      drawViewer(v);
-    }
-    if (!drawn) drawPlayer();
+    for (const v of list) drawViewer(v);
     drawDrunk();
     drawEmotions();
+    drawSoul();
     drawFxOver();
+    drawJudges();
     drawBlackout();
     drawHUD();
     drawIncidentChip();
@@ -1606,6 +1818,16 @@ if (typeof window !== 'undefined') (function () {
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
     clock += dt;
+    if (G) {
+      // часы ритма: позиция трека по AudioContext, если музыка играет
+      const pos = state === 'play' || state === 'ending' ? musicPos() : null;
+      if (pos != null && pos >= 0) { G.externalClock = true; G.musicTime = pos; } else G.externalClock = false;
+      // на экране доля видна тогда, когда её слышно
+      beatT = G.externalClock ? G.musicTime - latency() : G.musicTime;
+      const ph = beatPhase();
+      pulse = Math.max(0, 1 - ph * 4);
+      bodyLife += ((comboStep() / 3) - bodyLife) * Math.min(1, dt * 1.5);
+    }
     if (G && (state === 'play' || state === 'ending') && !document.hidden) {
       if (state === 'play') { update(dt); handleEvents(); }
       updateVisuals(dt);
