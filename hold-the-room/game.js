@@ -77,6 +77,30 @@ const CONFIG = {
   },
 
   money: { perViewer: 10, halfBonus: 100 },
+
+  // Происшествия во время песни. count — сколько их запланировано на уровне,
+  // каждое случается с вероятностью chance (её снижает «Знакомый техник»).
+  incidents: {
+    count: [1, 1, 2, 2, 3],
+    chance: 0.8,
+    window: [35, 160],   // в какие секунды песни могут начаться
+    minGap: 25,
+    string: { spot: { x: 34, y: 150 }, radius: 24, repairTime: 1.5 },
+    blackout: { duration: 10, decayMul: 1.7, light: 85 },
+    drunk: { speed: 26, radius: 60, drain: 4, calmRadius: 32, calmTime: 1.8, maxTime: 40 },
+  },
+};
+
+// Модификаторы от покупок в магазине карьеры (career.js). В свободной игре — нули.
+const DEFAULT_MODS = {
+  auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0,
+  perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
+};
+
+const INCIDENT_NAMES = {
+  string: 'Порвалась струна!',
+  blackout: 'Вырубило свет!',
+  drunk: 'Пьяный дебошир!',
 };
 
 // ---------------------------------------------------------------------
@@ -155,7 +179,8 @@ function makeLayout(worldH) {
   };
 }
 
-function newGame(seed, worldH, levelIndex) {
+function newGame(seed, worldH, levelIndex, mods) {
+  const M = Object.assign({}, DEFAULT_MODS, mods);
   const levelNo = clamp(levelIndex | 0, 0, CONFIG.levels.length - 1);
   const LV = CONFIG.levels[levelNo];
   const rnd = mulberry32(seed == null ? (Math.random() * 1e9) | 0 : seed);
@@ -173,7 +198,7 @@ function newGame(seed, worldH, levelIndex) {
     const y = L.hallTop + 20 + cellH * (r + 0.5) + (rnd() - 0.5) * cellH * 0.6;
     viewers.push({
       id: i, x, y, homeX: x, homeY: y, tx: x, ty: y,
-      interest: LV.startInterest,
+      interest: Math.min(100, LV.startInterest + M.startInterest),
       decayMul: 1 + (rnd() * 2 - 1) * V.decayVariance,
       emitTimer: 0.5 + rnd() * CONFIG.emotion.intervalMax,
       wanderTimer: rnd() * 2,
@@ -185,7 +210,7 @@ function newGame(seed, worldH, levelIndex) {
   }
   G = {
     rnd, L,
-    levelNo, lv: LV, total: LV.viewers,
+    levelNo, lv: LV, total: LV.viewers, mods: M,
     t: 0, over: false,
     viewers,
     emotions: [],
@@ -200,7 +225,12 @@ function newGame(seed, worldH, levelIndex) {
     phaseIndex: 0,
     events: [],         // визуальные события для рендера за последний кадр
     emotionsSpawned: 0, emotionsCollected: 0,
+    incidentPlan: planIncidents(rnd, levelNo, M),
+    incident: null,     // текущее происшествие
+    incidentsHappened: [],
   };
+  // «Сет-лист» из магазина: одна карта на выбор сразу на старте
+  if (M.freeCard) G.pendingLevelUps = 1;
   return G;
 }
 
@@ -211,7 +241,7 @@ function lvl(id) { return G.cards[id] || 0; }
 function radiusMul() { const l = lvl('costume'); return l ? C.costume.radiusMul[l - 1] : 1; }
 function gainMul() { const l = lvl('charisma'); return l ? C.charisma.gainMul[l - 1] : 1; }
 function cooldownMul() { const l = lvl('amp'); return l ? C.amp.cooldownMul[l - 1] : 1; }
-function pickupRadius() { const l = lvl('mic'); return CONFIG.emotion.pickupRadius + (l ? C.mic.pickupBonus[l - 1] : 0); }
+function pickupRadius() { const l = lvl('mic'); return CONFIG.emotion.pickupRadius + G.mods.pickup + (l ? C.mic.pickupBonus[l - 1] : 0); }
 function emotionDriveMul() { const l = lvl('mic'); return l ? C.mic.driveMul[l - 1] : 1; }
 function auraRadius() { return CONFIG.player.auraRadius * radiusMul(); }
 function smokeRadius() { const l = lvl('smoke'); return l ? C.smoke.radius[l - 1] * radiusMul() : 0; }
@@ -309,6 +339,7 @@ function update(dt) {
   }
 
   updatePlayer(dt);
+  updateIncidents(dt);
   updateCards(dt);
   updateViewers(dt, ph);
   updateEmotions(dt);
@@ -319,7 +350,7 @@ function updatePlayer(dt) {
   p.tx = clamp(p.tx, 14, L.W - 14);
   p.ty = clamp(p.ty, L.wallBottom + 8, L.hallBottom - 6);
   const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-  const step = CONFIG.player.speed * dt;
+  const step = CONFIG.player.speed * G.mods.speedMul * dt;
   p.moving = d > 1;
   if (d <= step) { p.x = p.tx; p.y = p.ty; } else { p.x += dx / d * step; p.y += dy / d * step; }
   if (Math.abs(dx) > 2) p.dir = dx > 0 ? 1 : -1;
@@ -328,6 +359,7 @@ function updatePlayer(dt) {
 function updateCards(dt) {
   const p = G.player;
   const cdm = cooldownMul();
+  if (stringBroken()) return; // без струны активные карты молчат
   for (const id of ['solo', 'chorus', 'pyro']) {
     const l = lvl(id);
     if (!l) continue;
@@ -359,7 +391,10 @@ function updateCards(dt) {
 
 function updateViewers(dt, ph) {
   const V = CONFIG.viewers, L = G.L, p = G.player;
-  const baseRate = CONFIG.decayPhases[ph].rate * G.lv.decayMul;
+  const blackout = G.incident && G.incident.type === 'blackout';
+  const baseRate = CONFIG.decayPhases[ph].rate * G.lv.decayMul * (blackout ? CONFIG.incidents.blackout.decayMul : 1);
+  const dr = G.incident && G.incident.type === 'drunk' && !G.incident.leaving ? G.incident : null;
+  const auraGain = stringBroken() ? 0 : CONFIG.player.auraGain + G.mods.auraGain;
   const smokeR = smokeRadius();
   const smokeMul = smokeR ? C.smoke.decayMul[lvl('smoke') - 1] : 1;
   const auraR = auraRadius();
@@ -379,7 +414,8 @@ function updateViewers(dt, ph) {
     let rate = baseRate * v.decayMul;
     if (smokeR && d <= smokeR) rate *= smokeMul;
     v.interest -= rate * dt;
-    if (d <= auraR) gainInterest(v, CONFIG.player.auraGain * dt);
+    if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
+    if (d <= auraR && auraGain) gainInterest(v, auraGain * dt);
     if (v.interest <= 0) {
       v.interest = 0; v.leaving = true;
       G.events.push({ type: 'leave', x: v.x, y: v.y });
@@ -441,13 +477,94 @@ function updateEmotions(dt) {
   }
 }
 
+// ---------------------------------------------------------------------
+//  Происшествия
+// ---------------------------------------------------------------------
+function planIncidents(rnd, levelNo, M) {
+  const I = CONFIG.incidents;
+  const n = I.count[levelNo] || 0;
+  const types = ['string', 'blackout', 'drunk'];
+  const plan = [];
+  for (let i = 0; i < n; i++) {
+    if (rnd() >= I.chance * M.incidentMul) continue;
+    // по возможности без повторов
+    const pool = types.filter(t => !plan.some(p => p.type === t));
+    const type = (pool.length ? pool : types)[(rnd() * (pool.length || types.length)) | 0];
+    plan.push({ type, t: 0 });
+  }
+  // равномерно раскладываем по окну песни с небольшим разбросом
+  const [a, b] = I.window;
+  const step = (b - a) / Math.max(1, plan.length);
+  plan.forEach((p, i) => { p.t = a + step * i + rnd() * Math.max(0, step - I.minGap); });
+  return plan;
+}
+
+function stringBroken() { return !!(G.incident && G.incident.type === 'string'); }
+
+function startIncident(type) {
+  const I = CONFIG.incidents, L = G.L;
+  const inc = { type, age: 0, progress: 0 };
+  if (type === 'drunk') {
+    inc.x = L.exit.x - 10; inc.y = L.exit.y;
+    inc.tx = L.W / 2; inc.ty = (L.hallTop + L.hallBottom) / 2;
+    inc.leaving = false;
+  }
+  G.incident = inc;
+  G.incidentsHappened.push(type);
+  G.events.push({ type: 'incident', kind: type, text: INCIDENT_NAMES[type] });
+}
+
+function endIncident(text) {
+  G.events.push({ type: 'incidentEnd', kind: G.incident.type, text });
+  G.incident = null;
+}
+
+function updateIncidents(dt) {
+  const I = CONFIG.incidents, p = G.player, L = G.L;
+  if (!G.incident && G.incidentPlan.length && G.t >= G.incidentPlan[0].t) startIncident(G.incidentPlan.shift().type);
+  const inc = G.incident;
+  if (!inc) return;
+  inc.age += dt;
+  if (inc.type === 'string') {
+    const S = I.string;
+    if (dist(p.x, p.y, S.spot.x, S.spot.y) <= S.radius) inc.progress += dt * G.mods.repairMul / S.repairTime;
+    else inc.progress = Math.max(0, inc.progress - dt);
+    if (inc.progress >= 1) endIncident('Струна на месте!');
+  } else if (inc.type === 'blackout') {
+    if (inc.age >= I.blackout.duration) endIncident('Свет дали!');
+  } else if (inc.type === 'drunk') {
+    const D = I.drunk;
+    if (!inc.leaving) {
+      if (dist(p.x, p.y, inc.x, inc.y) <= D.calmRadius) inc.progress += dt / D.calmTime;
+      else inc.progress = Math.max(0, inc.progress - dt * 0.5);
+      if (inc.progress >= 1 || inc.age >= D.maxTime) {
+        inc.leaving = true;
+        G.events.push({ type: 'banner', text: inc.progress >= 1 ? 'Дебошира успокоили' : 'Дебошир ушёл сам' });
+      }
+      // бродит по залу
+      if (dist(inc.x, inc.y, inc.tx, inc.ty) < 6) {
+        inc.tx = 30 + G.rnd() * (L.W - 60);
+        inc.ty = L.hallTop + 20 + G.rnd() * (L.hallBottom - L.hallTop - 40);
+      }
+    } else {
+      inc.tx = L.exit.x; inc.ty = L.exit.y;
+      if (dist(inc.x, inc.y, inc.tx, inc.ty) < 6) { G.incident = null; return; }
+    }
+    const dx = inc.tx - inc.x, dy = inc.ty - inc.y, d = Math.hypot(dx, dy) || 1;
+    const sp = D.speed * (inc.leaving ? 2 : 1) * dt;
+    inc.x += dx / d * Math.min(sp, d); inc.y += dy / d * Math.min(sp, d);
+  }
+}
+
 function results() {
   const left = viewersInHall();
   const total = G.total;
   const bonus = left > total / 2 ? CONFIG.money.halfBonus : 0;
   return {
     left, total, bonus,
-    money: left * CONFIG.money.perViewer + bonus,
+    perViewer: CONFIG.money.perViewer + G.mods.perViewer,
+    money: left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus,
+    incidents: G.incidentsHappened.slice(),
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
     levels: G.level,
     levelNo: G.levelNo,
@@ -457,7 +574,7 @@ function results() {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    CONFIG, CARD_DEFS, CARD_IDS, newGame, update, addDrive, chooseCard, skipChoice, results,
+    CONFIG, CARD_DEFS, CARD_IDS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
     get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul,
   };
 }
@@ -497,31 +614,147 @@ if (typeof window !== 'undefined') (function () {
     offY = (cssH - H * scale) / 2;
   }
 
-  function startGame(levelNo) {
-    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo);
+  // ---------- режимы, карьера, сохранения ----------
+  function storage() { try { return window.localStorage; } catch (_) { return null; } }
+  let SAVE = loadSave(storage());
+  let mode = 'free'; // free | career
+  const persist = () => writeSave(storage(), SAVE);
+
+  function startGame(levelNo, gameMode) {
+    mode = gameMode || 'free';
+    const mods = mode === 'career' ? careerMods(SAVE.career) : null;
+    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo, mods);
     fx = []; particles = []; smoke = []; banners = [];
     resize();
     state = 'play';
     show(null);
-    banners.push({ text: `Уровень ${G.levelNo + 1}: ${G.lv.name}`, t: 0, life: 2.6, color: PAL.pink });
+    const head = mode === 'career' ? `День ${SAVE.career.day}: ${G.lv.name}` : `Уровень ${G.levelNo + 1}: ${G.lv.name}`;
+    banners.push({ text: head, t: 0, life: 2.6, color: PAL.pink });
     banners.push({ text: 'Разогрев: собирай эмоции!', t: 0, life: 3.2 });
   }
 
   const LEVEL_COLORS = ['#5dff9e', '#3de0ff', '#ffd23d', '#ff7a3d', '#ff3d8b'];
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const starsHtml = n => [0, 1, 2].map(i => `<span class="star${i < n ? '' : ' off'}">&#9733;&#xFE0E;</span>`).join('');
+  const money = n => `${n < 0 ? '−' : ''}${Math.abs(Math.round(n))} ₽`;
+  const signed = n => Math.round(n) === 0 ? '0 ₽' : `${n < 0 ? '−' : '+'}${Math.abs(Math.round(n))} ₽`;
+
+  function levelButton(i, meta, onClick, disabled) {
+    const lv = CONFIG.levels[i];
+    const b = document.createElement('button');
+    b.className = 'lvl';
+    b.disabled = !!disabled;
+    b.style.setProperty('--c', LEVEL_COLORS[i % LEVEL_COLORS.length]);
+    b.innerHTML = `<span class="lvl-num">${i + 1}</span><span><div class="lvl-name">${esc(lv.name)}</div>` +
+      `<div class="lvl-desc">${esc(lv.desc)} Зрителей: ${lv.viewers}.</div>${meta ? `<div class="lvl-meta">${meta}</div>` : ''}</span>`;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
   function buildLevelMenu() {
     const box = $('levels');
     box.innerHTML = '';
     CONFIG.levels.forEach((lv, i) => {
-      const b = document.createElement('button');
-      b.className = 'lvl';
-      b.style.setProperty('--c', LEVEL_COLORS[i % LEVEL_COLORS.length]);
-      b.innerHTML = `<span class="lvl-num">${i + 1}</span><span><div class="lvl-name">${lv.name}</div>` +
-        `<div class="lvl-desc">${lv.desc} Зрителей: ${lv.viewers}.</div></span>`;
-      b.addEventListener('click', () => startGame(i));
-      box.appendChild(b);
+      const r = SAVE.records.levels[i];
+      const meta = r ? `Рекорд: ${r.bestLeft} из ${r.total} ${starsHtml(r.bestStars)}` : '';
+      box.appendChild(levelButton(i, meta, () => startGame(i, 'free')));
     });
   }
-  buildLevelMenu();
+
+  function openMenu() {
+    const c = SAVE.career;
+    $('career-sub').textContent = c.gigs ? `день ${c.day} · ${money(c.money)} · известность ${c.rep}` : 'начать с пустого вторника';
+    show('overlay-start');
+  }
+
+  function openCareer() {
+    const c = SAVE.career;
+    $('day-title').textContent = `День ${c.day}`;
+    $('day-money').textContent = money(c.money);
+    $('day-money').classList.toggle('neg', c.money < 0);
+    $('day-rep').textContent = c.rep;
+    $('day-rent').textContent = money(rentFor(c.day));
+    const next = CAREER.venues.findIndex((v, i) => !venueUnlocked(c, i));
+    $('day-note').textContent = c.won
+      ? `Фестиваль покорён на ${c.wonDay}-й день! Можно играть дальше и копить на улучшения.`
+      : c.money < 0 ? 'Ты в долгах: магазин закрыт, пока не выйдешь в плюс.'
+      : next >= 0 ? `Следующий зал откроется при известности ${CAREER.venues[next].rep}.` : 'Открыты все залы. Покори фестиваль!';
+    const box = $('venues');
+    box.innerHTML = '';
+    CAREER.venues.forEach((v, i) => {
+      const open = venueUnlocked(c, i);
+      const best = c.best[i] || 0;
+      const meta = open
+        ? `Гонорар ×${f1(v.pay)} · дорога ${v.travel} ₽ · ${starsHtml(best)}`
+        : `Закрыто: нужна известность ${v.rep}`;
+      box.appendChild(levelButton(i, meta, () => startGame(i, 'career'), !open));
+    });
+    show('overlay-career');
+  }
+
+  function openShop() {
+    const c = SAVE.career;
+    $('shop-money').textContent = money(c.money);
+    const box = $('shop');
+    box.innerHTML = '';
+    for (const u of CAREER.upgrades) {
+      const l = upgradeLevel(c, u.id), max = u.cost.length;
+      const price = upgradePrice(c, u.id);
+      const el = document.createElement('div');
+      el.className = 'shop-item';
+      const shown = u.values[Math.min(l, max - 1)];
+      el.innerHTML = `<div class="info"><div class="name">${esc(u.name)}</div>` +
+        `<div class="desc">${l >= max ? esc(u.desc(u.values[max - 1])) : (l ? 'Сейчас: ' + esc(u.desc(u.values[l - 1])) + ' Дальше: ' : '') + (l < max ? esc(u.desc(shown)) : '')}</div>` +
+        `<div class="card-pips">${u.cost.map((_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div></div>`;
+      const b = document.createElement('button');
+      b.className = 'buy';
+      b.textContent = price == null ? 'Куплено' : `${price} ₽`;
+      b.disabled = price == null || c.money < price;
+      b.addEventListener('click', () => { if (buyUpgrade(c, u.id)) { persist(); openShop(); } });
+      el.appendChild(b);
+      box.appendChild(el);
+    }
+    show('overlay-shop');
+  }
+
+  function openRecords() {
+    const R = SAVE.records;
+    let html = '<div class="rec-head">Лучший результат по уровням</div>';
+    CONFIG.levels.forEach((lv, i) => {
+      const r = R.levels[i];
+      html += `<div class="rec-row"><span>${i + 1}. ${esc(lv.name)}<small>${r ? 'сыграно ' + r.plays : 'ещё не играл'}</small></span>` +
+        `<b>${r ? `${r.bestLeft}/${r.total} ${starsHtml(r.bestStars)}` : '—'}</b></div>`;
+    });
+    html += '<div class="rec-head">Карьера</div>';
+    const rows = [
+      ['Фестиваль покорён быстрее всего', R.bestWinDay ? `за ${R.bestWinDay} дн.` : '—'],
+      ['Сколько раз начинал карьеру', R.careers],
+      ['Всего концертов', R.gigs],
+      ['Заработано за всё время', money(R.totalEarned)],
+    ];
+    for (const [k, v] of rows) html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
+    $('records').innerHTML = html;
+    show('overlay-records');
+  }
+
+  for (const b of document.querySelectorAll('[data-go]')) {
+    b.addEventListener('click', () => {
+      const id = b.dataset.go;
+      if (id === 'overlay-start') openMenu(); else if (id === 'overlay-career') openCareer(); else show(id);
+    });
+  }
+  $('btn-career').addEventListener('click', openCareer);
+  $('btn-free').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
+  $('btn-records').addEventListener('click', openRecords);
+  $('btn-shop').addEventListener('click', openShop);
+  $('btn-reset').addEventListener('click', () => {
+    if (!window.confirm('Начать карьеру заново? Деньги, известность и покупки обнулятся. Рекорды останутся.')) return;
+    SAVE.career = newCareer();
+    SAVE.records.careers++;
+    persist();
+    openCareer();
+  });
+  openMenu();
 
   // ---------- ввод ----------
   function toWorld(e) { return { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale }; }
@@ -601,18 +834,54 @@ if (typeof window !== 'undefined') (function () {
   function openResults() {
     state = 'results';
     const r = results();
-    $('res-left').textContent = `${r.left} из ${r.total}`;
-    $('res-money').textContent = `${r.money} ₽`;
-    $('res-money-note').textContent = `${r.left} × ${CONFIG.money.perViewer}` + (r.bonus ? ` + ${r.bonus} бонус: осталось больше половины` : ' (бонус +100, если осталось больше половины)');
     const share = r.left / r.total;
     const last = r.levelNo >= CONFIG.levels.length - 1;
-    $('res-title').textContent = r.passed ? (last ? 'Все уровни пройдены!' : 'Уровень пройден!') : 'Песня окончена';
-    $('res-level').textContent = `Уровень ${r.levelNo + 1}: ${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
-    $('res-verdict').textContent =
+    const career = mode === 'career';
+    const isRecord = recordGig(SAVE.records, r.levelNo, r, 0);
+    let st = null;
+    if (career) {
+      st = settleGig(SAVE.career, r.levelNo, r);
+      if (st.fee > 0) SAVE.records.totalEarned += st.fee;
+      if (st.won) SAVE.records.bestWinDay = Math.min(SAVE.records.bestWinDay || Infinity, st.day);
+    }
+    persist();
+
+    $('res-title').textContent = st && st.won ? 'Фестиваль покорён!' :
+      r.passed ? (career ? 'Отличный вечер!' : last ? 'Все уровни пройдены!' : 'Уровень пройден!') : 'Песня окончена';
+    $('res-level').textContent = (career ? `День ${st.day}. ` : `Уровень ${r.levelNo + 1}. `) +
+      `${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
+    $('res-verdict').textContent = (isRecord ? 'Новый рекорд! ' : '') + (
       share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :
       share > 0.5 ? 'Хороший сет, бармен доволен.' :
-      share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.';
-    $('btn-next').classList.toggle('hidden', !r.passed || last);
+      share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.');
+    $('res-stars').innerHTML = starsHtml(starsFor(r.left, r.total));
+    $('res-left').textContent = `${r.left} из ${r.total}`;
+    $('res-money-label').textContent = career ? 'Касса зала' : 'Заработано';
+    $('res-money').textContent = `${r.money} ₽`;
+    $('res-money-note').textContent = `${r.left} × ${r.perViewer}` + (r.bonus ? ` + ${r.bonus} бонус: осталось больше половины` : ' (бонус +100, если осталось больше половины)') +
+      (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
+
+    const box = $('res-career');
+    box.innerHTML = '';
+    if (st) {
+      const V = CAREER.venues[r.levelNo];
+      const rows = [
+        ['Гонорар', `×${f1(V.pay)}${r.passed ? '' : ', половина: зал не удержан'}`, signed(st.fee)],
+        ['Дорога', '', signed(-st.travel)],
+        ['Аренда', '', signed(-st.rent)],
+        ['Итого за вечер', '', signed(st.net)],
+        ['Известность', '', `+${st.repGain}`],
+        ['Деньги', '', money(SAVE.career.money)],
+      ];
+      box.innerHTML = rows.map(([k, n, v]) => `<div class="res-row"><span>${k}${n ? `<small class="muted"> ${n}</small>` : ''}</span><b>${v}</b></div>`).join('') +
+        st.unlocked.map(i => `<p class="note center">Открыт новый зал: <b>${esc(CONFIG.levels[i].name)}</b></p>`).join('') +
+        (st.won ? '<p class="note center">Ты звезда городского фестиваля! Карьера продолжается.</p>' : '');
+    }
+    $('btn-day').classList.toggle('hidden', !career);
+    $('btn-next').classList.toggle('hidden', career || !r.passed || last);
+    $('btn-again').classList.toggle('hidden', career);
+    $('btn-menu').classList.toggle('hidden', career);
+
     const list = $('res-cards');
     list.innerHTML = '';
     if (!r.cards.length) list.innerHTML = '<span class="muted">Без карт</span>';
@@ -620,16 +889,17 @@ if (typeof window !== 'undefined') (function () {
       const el = document.createElement('div');
       el.className = 'res-card';
       el.appendChild(iconCanvas(c.id, 34));
-      const s = document.createElement('span'); s.textContent = `${CARD_DEFS[c.id].name} ${c.level}`;
-      el.appendChild(s);
+      const sp = document.createElement('span'); sp.textContent = `${CARD_DEFS[c.id].name} ${c.level}`;
+      el.appendChild(sp);
       list.appendChild(el);
     }
     show('overlay-results');
   }
 
-  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1));
-  $('btn-again').addEventListener('click', () => startGame(G.levelNo));
-  $('btn-menu').addEventListener('click', () => show('overlay-start'));
+  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1, 'free'));
+  $('btn-again').addEventListener('click', () => startGame(G.levelNo, 'free'));
+  $('btn-menu').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
+  $('btn-day').addEventListener('click', openCareer);
 
   // ---------- визуальные события ----------
   function spawnParticles(x, y, n, color, speed, life, size, gravity) {
@@ -657,6 +927,12 @@ if (typeof window !== 'undefined') (function () {
         spawnParticles(ev.x, ev.y, 7, EMO_COLORS[ev.kind], 70, 0.45, 2.2);
       } else if (ev.type === 'leave') {
         fx.push({ type: 'leaveMark', x: ev.x, y: ev.y, t: 0, life: 1.0 });
+      } else if (ev.type === 'incident') {
+        banners.push({ text: ev.text, t: 0, life: 2.6, color: PAL.pink });
+        shake = 0.3;
+      } else if (ev.type === 'incidentEnd') {
+        banners.push({ text: ev.text, t: 0, life: 1.8, color: PAL.green });
+        spawnParticles(G.player.x, G.player.y - 20, 12, PAL.green, 90, 0.6, 2.5);
       } else if (ev.type === 'banner') {
         banners.push({ text: ev.text, t: 0, life: 2.6, color: PAL.amber });
       } else if (ev.type === 'levelup') {
@@ -746,6 +1022,7 @@ if (typeof window !== 'undefined') (function () {
     for (let y = L.hallTop, r = 0; y < L.hallBottom + 6; y += ts, r++) {
       for (let x = (r % 2) * ts; x < L.W; x += ts * 2) ctx.fillRect(x, y, ts, Math.min(ts, L.hallBottom + 6 - y));
     }
+    drawAmp();
     // выход
     const ex = L.exit;
     ctx.fillStyle = '#0d1f14'; ctx.fillRect(L.W - 10, ex.y - 26, 10, 52);
@@ -818,7 +1095,7 @@ if (typeof window !== 'undefined') (function () {
     const p = G.player;
     const x = p.x, y = p.y;
     // аура присутствия и радиус подбора
-    ctx.fillStyle = 'rgba(255,176,58,0.07)';
+    ctx.fillStyle = stringBroken() ? 'rgba(120,120,130,0.08)' : 'rgba(255,176,58,0.07)';
     ctx.beginPath(); ctx.arc(x, y - 6, auraRadius(), 0, Math.PI * 2); ctx.fill();
     ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,210,61,0.45)'; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
@@ -1100,6 +1377,84 @@ if (typeof window !== 'undefined') (function () {
     function pad(a) { const r = a.slice(0, 4); while (r.length < 4) r.push(undefined); return r; }
   }
 
+  // ---------- происшествия ----------
+  function ring(x, y, r, k, color) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(k, 0, 1)); ctx.stroke();
+  }
+
+  function drawAmp() {
+    const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y;
+    const broken = stringBroken();
+    ctx.fillStyle = '#121212'; ctx.fillRect(x - 13, y - 30, 26, 30);
+    ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(x, y - 13, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = PAL.amber; ctx.fillRect(x - 11, y - 28, 22, 3);
+    if (!broken) return;
+    const blink = Math.sin(clock * 8) > 0;
+    ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(x, y - 6, S.radius + 4, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ring(x, y - 46, 9, G.incident.progress, PAL.green);
+    ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', x, y - 45);
+  }
+
+  function drawDrunk() {
+    const inc = G.incident;
+    if (!inc || inc.type !== 'drunk') return;
+    const D = CONFIG.incidents.drunk, x = inc.x, y = inc.y;
+    if (!inc.leaving) {
+      ctx.fillStyle = 'rgba(255,61,139,0.08)';
+      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,61,139,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const wob = Math.sin(clock * 5) * 0.25;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(x, y + 1, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(x, y); ctx.rotate(wob);
+    ctx.fillStyle = '#6b8f3a'; roundRect(-7, -16, 14, 15, 4); ctx.fill();
+    ctx.fillStyle = '#e08a7a'; ctx.beginPath(); ctx.arc(0, -21, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(1.5, -20, 1.8, 0, Math.PI * 2); ctx.fill();
+    // бутылка
+    ctx.fillStyle = '#3f7a4a'; ctx.fillRect(7, -18, 3, 9); ctx.fillRect(7.8, -21, 1.4, 3);
+    ctx.restore();
+    if (!inc.leaving) {
+      ring(x, y - 38, 8, inc.progress, PAL.green);
+      ctx.fillStyle = PAL.pink; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, y - 37);
+    }
+  }
+
+  function drawBlackout() {
+    const inc = G.incident;
+    if (!inc || inc.type !== 'blackout') return;
+    const B = CONFIG.incidents.blackout;
+    const fade = Math.min(1, inc.age * 3, (B.duration - inc.age) * 2);
+    const p = G.player;
+    ctx.save();
+    ctx.fillStyle = `rgba(4,2,1,${0.86 * fade})`;
+    ctx.beginPath();
+    ctx.rect(0, G.L.hudH, G.L.W, G.L.panelTop - G.L.hudH);
+    ctx.arc(p.x, p.y - 10, B.light, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  function drawIncidentChip() {
+    const inc = G.incident;
+    if (!inc || (inc.type === 'drunk' && inc.leaving)) return;
+    const text = inc.type === 'string' ? 'Струна! Беги к усилителю слева' :
+      inc.type === 'drunk' ? 'Дебошир! Подойди и постой рядом' :
+      `Нет света: ещё ${Math.ceil(CONFIG.incidents.blackout.duration - inc.age)} с`;
+    ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 20, y = G.L.hudH + 14;
+    ctx.fillStyle = Math.sin(clock * 6) > 0 ? '#5a1430' : '#3a0d20';
+    roundRect(G.L.W / 2 - w / 2, y - 11, w, 22, 6); ctx.fill();
+    ctx.fillStyle = PAL.text; ctx.fillText(text, G.L.W / 2, y + 1);
+  }
+
   function drawBanners() {
     let y = G.L.hallTop + 30;
     for (const b of banners) {
@@ -1133,9 +1488,12 @@ if (typeof window !== 'undefined') (function () {
       drawViewer(v);
     }
     if (!drawn) drawPlayer();
+    drawDrunk();
     drawEmotions();
     drawFxOver();
+    drawBlackout();
     drawHUD();
+    drawIncidentChip();
     drawBanners();
     ctx.restore();
   }
