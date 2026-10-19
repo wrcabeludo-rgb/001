@@ -86,9 +86,16 @@ const CONFIG = {
     charisma: { gainMul: [1.15, 1.3, 1.5] },
     amp: { cooldownMul: [0.88, 0.78, 0.68] },
     mic: { pickupBonus: [14, 28, 42], driveMul: [1.15, 1.3, 1.5] },
+    ballad: { cooldown: [4.5, 4.0, 3.5], targets: [1, 2, 3], gain: [40, 48, 56] },
+    breakdown: { cooldown: [16, 14, 12], freeze: [3, 4, 5] },
+    magnet: { cooldown: [7, 6, 5], radius: [90, 110, 130] },
+    fans: { count: [3, 6, 9], decayMul: 0.5 },
+    buzz: { gain: [5, 8, 11], radius: 60 },
+    second: { saves: [2, 4, 6], interest: 30 },
   },
 
-  money: { perViewer: 10, halfBonus: 100 },
+  // касса концерта; в туре её сравнивают с ценами барахолки (TOUR.marketPrices)
+  money: { perViewer: 6, halfBonus: 60 },
 
   // Боссы концертов тура
   bosses: {
@@ -167,6 +174,30 @@ const CARD_DEFS = {
   mic: {
     type: 'passive', name: 'Микрофон', color: '#7fd0ff',
     desc: l => `Радиус подбора эмоций +${C.mic.pickupBonus[l]}, драйв с эмоции +${pct(C.mic.driveMul[l] - 1)}.`,
+  },
+  ballad: {
+    type: 'active', name: 'Баллада', color: '#c9a0ff',
+    desc: l => `Каждые ${f1(C.ballad.cooldown[l])} с ${C.ballad.targets[l] === 1 ? 'самый скучающий зритель' : C.ballad.targets[l] + ' самых скучающих зрителя'} в зале: +${C.ballad.gain[l]} интереса. Где бы ты ни был.`,
+  },
+  breakdown: {
+    type: 'active', name: 'Брейк', color: '#ff5d5d',
+    desc: l => `Раз в ${C.breakdown.cooldown[l]} с зал замирает: ${C.breakdown.freeze[l]} с никто не теряет интерес.`,
+  },
+  magnet: {
+    type: 'active', name: 'Танцпол', color: '#5dffd8',
+    desc: l => `Каждые ${f1(C.magnet.cooldown[l])} с ловит все эмоции в радиусе ${C.magnet.radius[l]} от тебя.`,
+  },
+  fans: {
+    type: 'passive', name: 'Фанклуб', color: '#ff8fc8',
+    desc: l => `${C.fans.count[l]} зрителей становятся фанатами: теряют интерес вдвое медленнее.`,
+  },
+  buzz: {
+    type: 'passive', name: 'Сарафан', color: '#9dff5d',
+    desc: l => `Пойманная эмоция даёт +${C.buzz.gain[l]} интереса зрителям рядом с ней.`,
+  },
+  second: {
+    type: 'passive', name: 'Второе дыхание', color: '#ffe08a',
+    desc: l => `Зритель, который собрался уйти, остаётся с ${C.second.interest} интереса. ${C.second.saves[l]} раза за песню.`,
   },
 };
 const CARD_IDS = Object.keys(CARD_DEFS);
@@ -248,6 +279,8 @@ function newGame(seed, worldH, levelIndex, mods) {
     musicTime: 0,       // позиция в треке, секунды; браузер подставляет время из аудио
     externalClock: false,
     encore: null, encored: false,
+    freeze: 0,          // «Брейк»: сколько ещё секунд зал не теряет интерес
+    saves: 0,           // сколько раз сработало «Второе дыхание»
     drive: 0, level: 0, pendingLevelUps: 0,
     driveBySource: {},
     levelUpTimes: [],
@@ -358,7 +391,16 @@ function giveCard(id) {
     // первое срабатывание вскоре, чтобы было видно, что карта работает
     if (id === 'solo' || id === 'chorus') G.timers[id] = 0.6;
     if (id === 'pyro') G.timers[id] = 2.0;
+    if (id === 'ballad' || id === 'magnet') G.timers[id] = 1.0;
+    if (id === 'breakdown') G.timers[id] = 3.0;
   }
+  if (id === 'fans') makeFans(C.fans.count[l] - (l ? C.fans.count[l - 1] : 0));
+}
+
+// «Фанклуб»: самые увлечённые из оставшихся зрителей становятся фанатами
+function makeFans(n) {
+  const pool = G.viewers.filter(v => !v.leaving && !v.fan && !v.critic).sort((a, b) => b.interest - a.interest);
+  for (const v of pool.slice(0, n)) { v.fan = true; v.decayMul *= C.fans.decayMul; }
 }
 
 function chooseCard(id) {
@@ -383,6 +425,7 @@ function update(dt) {
   }
 
   G.t += dt;
+  G.freeze = Math.max(0, G.freeze - dt);
   if (!G.externalClock) G.musicTime += dt;
   if (G.encore) {
     G.encore.t += dt;
@@ -425,7 +468,7 @@ function updateCards(dt) {
   const p = G.player;
   const cdm = cooldownMul();
   if (stringBroken()) return; // без струны активные карты молчат
-  for (const id of ['solo', 'chorus', 'pyro']) {
+  for (const id of ['solo', 'chorus', 'pyro', 'ballad', 'breakdown', 'magnet']) {
     const l = lvl(id);
     if (!l) continue;
     G.timers[id] = (G.timers[id] == null ? C[id].cooldown[l - 1] : G.timers[id]) - dt;
@@ -450,6 +493,20 @@ function updateCards(dt) {
       const edge = G.L.stageBottom + C.pyro.reach[l - 1] * radiusMul();
       for (const v of G.viewers) if (inHall(v) && v.y <= edge) { gainInterest(v, C.pyro.gain[l - 1]); v.flash = 0.7; }
       G.events.push({ type: 'pyro', edge });
+    } else if (id === 'ballad') {
+      const list = G.viewers.filter(inHall).sort((a, b) => a.interest - b.interest).slice(0, C.ballad.targets[l - 1]);
+      for (const v of list) { gainInterest(v, C.ballad.gain[l - 1]); v.flash = 0.7; }
+      if (list.length) G.events.push({ type: 'ballad', x: p.x, y: p.y, targets: list.map(v => ({ x: v.x, y: v.y })) });
+    } else if (id === 'breakdown') {
+      G.freeze = C.breakdown.freeze[l - 1];
+      G.events.push({ type: 'breakdown' });
+    } else if (id === 'magnet') {
+      const r = C.magnet.radius[l - 1] * radiusMul();
+      for (let i = G.emotions.length - 1; i >= 0; i--) {
+        const e = G.emotions[i];
+        if (dist(e.x, e.y, p.x, p.y - 10) <= r) catchEmotion(i);
+      }
+      G.events.push({ type: 'magnet', x: p.x, y: p.y, r });
     }
   }
 }
@@ -477,11 +534,16 @@ function updateViewers(dt, ph) {
       continue;
     }
     const d = dist(v.x, v.y, p.x, p.y);
-    let rate = encore ? 0 : baseRate * v.decayMul;
+    let rate = encore || G.freeze > 0 ? 0 : baseRate * v.decayMul;
     if (smokeR && d <= smokeR) rate *= smokeMul;
     v.interest -= rate * dt;
     if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
     if (d <= auraR && auraGain) gainInterest(v, auraGain * dt);
+    const sl = lvl('second');
+    if (v.interest <= 0 && sl && G.saves < C.second.saves[sl - 1]) {
+      v.interest = C.second.interest; v.flash = 0.8; G.saves++;
+      G.events.push({ type: 'saved', x: v.x, y: v.y });
+    }
     if (v.interest <= 0) {
       v.interest = 0; v.leaving = true;
       G.events.push({ type: 'leave', x: v.x, y: v.y });
@@ -526,8 +588,22 @@ function updateViewers(dt, ph) {
   }
 }
 
+// Душа поймала эмоцию: драйв, а с «Сарафаном» — интерес зрителям рядом с эмоцией
+function catchEmotion(i) {
+  const e = G.emotions[i];
+  addDrive(e.drive * emotionDriveMul() * G.mods.driveMul, 'emotion');
+  G.emotionsCollected++;
+  G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind });
+  const bl = lvl('buzz');
+  if (bl) {
+    const r = C.buzz.radius * radiusMul();
+    for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, e.x, e.y + 22) <= r) gainInterest(v, C.buzz.gain[bl - 1]);
+  }
+  G.emotions.splice(i, 1);
+}
+
 function updateEmotions(dt) {
-  const p = G.player, pr = pickupRadius(), dm = emotionDriveMul();
+  const p = G.player, pr = pickupRadius();
   const E = CONFIG.emotion;
   for (let i = G.emotions.length - 1; i >= 0; i--) {
     const e = G.emotions[i];
@@ -535,10 +611,7 @@ function updateEmotions(dt) {
     e.y -= E.floatSpeed * dt;
     e.x += e.drift * dt * 0.3;
     if (dist(e.x, e.y, p.x, p.y - 10) <= pr + e.size * 0.5) {
-      addDrive(e.drive * dm * G.mods.driveMul, 'emotion');
-      G.emotionsCollected++;
-      G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind });
-      G.emotions.splice(i, 1);
+      catchEmotion(i);
     } else if (e.age >= e.life) {
       G.emotions.splice(i, 1);
     }
@@ -1383,7 +1456,7 @@ if (typeof window !== 'undefined') (function () {
     $('res-left').textContent = `${r.left} из ${r.total}`;
     $('res-money').textContent = `${r.money} ₽`;
     $('res-money-note').textContent = `${r.left} × ${r.perViewer}` +
-      (r.bonus ? ` + ${r.bonus} бонус за полный зал` : ' (бонус +100, если осталось больше половины)') +
+      (r.bonus ? ` + ${r.bonus} бонус за полный зал` : ` (бонус +${CONFIG.money.halfBonus}, если осталось больше половины)`) +
       (r.encored ? `, +${Math.round(r.encoreBonus * 100)}% за бис` : '') + (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
     const free = mode === 'free';
     $('btn-continue').classList.toggle('hidden', free);
@@ -1437,6 +1510,15 @@ if (typeof window !== 'undefined') (function () {
             particles.push({ x, y: G.L.stageBottom, vx: (Math.random() - 0.5) * 70, vy: -120 - Math.random() * 160, life: 1.1, max: 1.1, color: Math.random() < 0.5 ? '#ffd23d' : '#ff7a3d', size: 2.5, g: 260 });
           }
         }
+      } else if (ev.type === 'ballad') {
+        fx.push({ type: 'chorus', x: ev.x, y: ev.y, targets: ev.targets, t: 0, life: 0.9, color: CARD_DEFS.ballad.color });
+      } else if (ev.type === 'breakdown') {
+        banners.push({ text: 'Брейк! Зал замер', t: 0, life: 1.4, color: CARD_DEFS.breakdown.color });
+        shake = 0.25;
+      } else if (ev.type === 'magnet') {
+        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: CARD_DEFS.magnet.color });
+      } else if (ev.type === 'saved') {
+        spawnParticles(ev.x, ev.y - 18, 10, CARD_DEFS.second.color, 80, 0.6, 2.4);
       } else if (ev.type === 'pickup') {
         spawnParticles(ev.x, ev.y, 7, EMO_COLORS[ev.kind], 70, 0.45, 2.2);
       } else if (ev.type === 'repel') {
@@ -1615,6 +1697,8 @@ if (typeof window !== 'undefined') (function () {
       ctx.strokeStyle = 'rgba(180,140,255,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(x, y - 10, 15, 0, Math.PI * 2); ctx.stroke();
     }
+    // фанат: маленькое сердечко над головой
+    if (v.fan && !v.leaving) { ctx.fillStyle = CARD_DEFS.fans.color; drawHeart(x - 9, y - 27 - bob, 5); }
     // значки настроения
     if (!v.leaving && I < V.boredThreshold) {
       ctx.fillStyle = '#9a9aa2';
@@ -1819,13 +1903,14 @@ if (typeof window !== 'undefined') (function () {
     for (const f of fx) {
       if (f.type === 'chorus') {
         const k = f.t / f.life;
-        ctx.strokeStyle = CARD_DEFS.chorus.color; ctx.lineWidth = 2; ctx.globalAlpha = 1 - k;
+        const col = f.color || CARD_DEFS.chorus.color;
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 1 - k;
         ctx.setLineDash([3, 4]);
         for (const tg of f.targets) {
           ctx.beginPath(); ctx.moveTo(f.x, f.y - 20); ctx.lineTo(tg.x, tg.y - 20); ctx.stroke();
         }
         ctx.setLineDash([]);
-        ctx.fillStyle = CARD_DEFS.chorus.color;
+        ctx.fillStyle = col;
         for (const tg of f.targets) {
           const m = Math.min(1, k * 2.2);
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
@@ -1905,6 +1990,38 @@ if (typeof window !== 'undefined') (function () {
       c.beginPath(); c.arc(x, y - u * 0.4, u * 0.48, 0, Math.PI * 2); c.fill();
       c.fillRect(x - u * 0.16, y, u * 0.32, u * 0.95);
       c.beginPath(); c.arc(x, y - u * 0.1, u * 0.7, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
+    } else if (id === 'ballad') {
+      // полумесяц
+      c.beginPath(); c.arc(x, y, u * 0.95, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#2a170d';
+      c.beginPath(); c.arc(x + u * 0.45, y - u * 0.3, u * 0.8, 0, Math.PI * 2); c.fill();
+    } else if (id === 'breakdown') {
+      // барабан с палочками
+      c.beginPath(); c.ellipse(x, y - u * 0.1, u * 0.85, u * 0.35, 0, 0, Math.PI * 2); c.fill();
+      c.fillRect(x - u * 0.85, y - u * 0.1, u * 1.7, u * 0.75);
+      c.beginPath(); c.moveTo(x - u * 0.9, y - u * 1.0); c.lineTo(x - u * 0.15, y - u * 0.25);
+      c.moveTo(x + u * 0.9, y - u * 1.0); c.lineTo(x + u * 0.15, y - u * 0.25); c.stroke();
+    } else if (id === 'magnet') {
+      // подкова-магнит
+      c.lineWidth = s * 0.12; c.lineCap = 'butt';
+      c.beginPath(); c.arc(x, y - u * 0.05, u * 0.6, Math.PI, 0, true); c.stroke();
+      c.beginPath(); c.moveTo(x - u * 0.6, y - u * 0.05); c.lineTo(x - u * 0.6, y - u * 0.8);
+      c.moveTo(x + u * 0.6, y - u * 0.05); c.lineTo(x + u * 0.6, y - u * 0.8); c.stroke();
+    } else if (id === 'fans') {
+      // три головы
+      for (const dx of [-0.65, 0, 0.65]) {
+        c.beginPath(); c.arc(x + dx * u, y - u * 0.3, u * 0.28, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(x + dx * u, y + u * 0.55, u * 0.38, Math.PI, 0); c.fill();
+      }
+    } else if (id === 'buzz') {
+      // круги расходятся от точки
+      c.beginPath(); c.arc(x - u * 0.6, y + u * 0.6, u * 0.22, 0, Math.PI * 2); c.fill();
+      for (const k of [0.7, 1.2]) { c.beginPath(); c.arc(x - u * 0.6, y + u * 0.6, u * k, -Math.PI / 2, 0); c.stroke(); }
+    } else if (id === 'second') {
+      // перо-лёгкие: два вдоха
+      c.beginPath(); c.ellipse(x - u * 0.4, y + u * 0.1, u * 0.35, u * 0.7, 0.15, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.ellipse(x + u * 0.4, y + u * 0.1, u * 0.35, u * 0.7, -0.15, 0, Math.PI * 2); c.fill();
+      c.fillRect(x - u * 0.06, y - u * 0.95, u * 0.12, u * 0.6);
     }
     c.restore();
   }
@@ -2128,6 +2245,10 @@ if (typeof window !== 'undefined') (function () {
     drawEmotions();
     drawSoul();
     drawFxOver();
+    if (G.freeze > 0) { // «Брейк»: зал замер — рамка по краю зала
+      ctx.strokeStyle = CARD_DEFS.breakdown.color; ctx.globalAlpha = Math.min(1, G.freeze) * 0.6; ctx.lineWidth = 4;
+      ctx.strokeRect(2, G.L.hallTop, G.L.W - 4, G.L.hallBottom - G.L.hallTop); ctx.globalAlpha = 1;
+    }
     drawBlackout();
     drawHUD();
     drawIncidentChip();

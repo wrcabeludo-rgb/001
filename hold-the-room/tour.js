@@ -14,10 +14,11 @@ const TOUR = {
   rows: [5, 7],            // вечеров в акте до босса
   rowWidth: [2, 3],        // точек в ряду карты
   nodeWeights: { concert: 0.6, event: 0.27, market: 0.13 },
-  rowDifficulty: 0.05,     // +5% к спаду интереса за каждый следующий вечер акта
-  actDifficulty: [0, 0.2, 0.35], // и ещё столько за номер акта
+  rowDifficulty: 0.03,     // +3% к спаду интереса за каждый следующий вечер акта
+  actDifficulty: [0, 0.12, 0.25], // и ещё столько за номер акта
   pinSlots: 3,             // сколько карт можно закрепить в стартовый набор
-  marketPrices: [120, 260],
+  // цены барахолки по актам: за 2–3 концерта хватает на одну-две вещи, не на все
+  marketPrices: [[220, 340], [300, 440], [380, 540]],
   // «Слава» за тур: 1 за каждые perViewers удержанных зрителей, плюс за боссов и победу
   fame: { perViewers: 10, boss: 15, victory: 30 },
 };
@@ -225,7 +226,7 @@ function marketOffer(tour, rnd) {
   const out = [];
   while (out.length < 3 && pool.length) {
     const id = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
-    const [a, b] = TOUR.marketPrices;
+    const [a, b] = TOUR.marketPrices[Math.min(tour.act || 0, TOUR.marketPrices.length - 1)];
     out.push({ id, price: Math.round((a + rnd() * (b - a)) / 10) * 10 });
   }
   return out;
