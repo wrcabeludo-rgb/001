@@ -53,6 +53,7 @@ const CONFIG = {
     touchOffset: 55,   // душа держится выше пальца, чтобы его не закрывать
     auraRadius: 48,    // присутствие души рядом
     auraGain: 5,       // +интерес/с зрителям в ауре
+    bodyRadius: 110,   // докуда тело на сцене подогревает зал (порог связи «Тело подыгрывает»)
   },
 
   // Бис: если к концу песни в зале столько и больше — ещё немного музыки и ливень эмоций
@@ -129,6 +130,8 @@ const DEFAULT_MODS = {
   blackoutLightMul: 1, drunkCalmMul: 1, auraRadiusMul: 1, decayMul: 1,
   startCards: [],   // закреплённые карты: выдаются на 1-м уровне в начале песни
   rehearsed: null,  // карта с репетиции тура: выдаётся сразу на 2-м уровне
+  bodyGain: 0,      // порог связи: тело на сцене само даёт интерес ближним рядам
+  encoreEase: 0,    // порог связи: на столько ниже порог биса
   boss: null,       // 'critic' | 'rival' | 'fear'
   duration: null,   // длина песни, если не стандартная (концерт босса — 180 с)
 };
@@ -462,7 +465,7 @@ function update(dt) {
     if (G.encore.t >= CONFIG.encore.duration) { G.over = true; G.events.push({ type: 'end' }); return; }
   } else if (G.t >= G.duration) {
     G.t = G.duration;
-    if (viewersInHall() >= G.total * CONFIG.encore.threshold) {
+    if (viewersInHall() >= G.total * (CONFIG.encore.threshold - G.mods.encoreEase)) {
       G.encore = { t: 0 };
       G.encored = true;
       G.events.push({ type: 'encore' });
@@ -554,6 +557,7 @@ function updateViewers(dt, ph) {
   const smokeR = smokeRadius();
   const smokeMul = smokeR ? cp('smoke', 'decayMul') : 1;
   const auraR = auraRadius();
+  const body = CONFIG.incidents.string.spot, bodyGain = stringBroken() ? 0 : G.mods.bodyGain;
   const warm = G.t < warmupDuration();
   const encore = !!G.encore;
   const emitThr = warm || encore ? CONFIG.warmup.emitThreshold : V.happyThreshold;
@@ -573,6 +577,7 @@ function updateViewers(dt, ph) {
     v.interest -= rate * dt;
     if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
     if (d <= auraR && auraGain) gainInterest(v, auraGain * dt);
+    if (bodyGain && dist(v.x, v.y, body.x, body.y) <= CONFIG.player.bodyRadius) gainInterest(v, bodyGain * dt);
     const sl = lvl('second');
     if (v.interest <= 0 && sl && G.saves < C.second.saves[sl - 1]) {
       v.interest = C.second.interest; v.flash = 0.8; G.saves++;
@@ -1064,7 +1069,7 @@ if (typeof window !== 'undefined') (function () {
   function openRecords() {
     const R = SAVE.records;
     let html = '<div class="rec-head">Туры</div>';
-    for (const [k, v] of [['Туров сыграно', R.tours], ['Побед на фестивале', R.wins], ['«Славы» заработано', R.fameTotal]]) {
+    for (const [k, v] of [['Туров сыграно', R.tours], ['Побед на фестивале', R.wins], ['Настоящих финалов', R.trueEnds || 0], ['«Славы» заработано', R.fameTotal]]) {
       html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
     }
     html += '<div class="rec-head">Лучший результат по залам</div>';
@@ -1122,12 +1127,20 @@ if (typeof window !== 'undefined') (function () {
     const act = TOUR.acts[t.act];
     $('map-title').textContent = `Акт ${t.act + 1}. ${act.name}`;
     const pinned = t.pinned.map(id => CARD_DEFS[id].name).join(', ') || 'нет';
-    $('map-stats').innerHTML = `<span class="chip">Деньги <b>${t.money} ₽</b></span><span class="chip">Связь <b>${t.bond}</b></span>` +
+    const nb = nextBondPerk(t.bond);
+    const bondTip = nb ? ` · ${nb.at}: «${nb.name}»` : ` · финал: ${TOUR.trueEndingBond}`;
+    $('map-stats').innerHTML = `<span class="chip">Деньги <b>${t.money} ₽</b></span><span class="chip">Связь <b>${t.bond}</b>${esc(bondTip)}</span>` +
       `<span class="chip">Вечеров <b>${t.nights}</b></span><span class="chip">Закреплены: <b>${esc(pinned)}</b></span>` +
       (t.rehearsed ? `<span class="chip">Разучена: <b>${esc(CARD_DEFS[t.rehearsed].name)}</b></span>` : '') +
       (t.nextStart ? `<span class="chip">Выспались: <b>+${t.nextStart}</b></span>` : '');
     const rel = $('map-relics');
     rel.innerHTML = '';
+    for (const p of bondPerks(t.bond)) {
+      const c = document.createElement('span');
+      c.className = 'chip bond'; c.textContent = p.name; c.title = p.desc;
+      c.addEventListener('click', () => { c.textContent = c.textContent === p.name ? p.desc : p.name; });
+      rel.appendChild(c);
+    }
     for (const id of t.relics) {
       const c = document.createElement('span');
       c.className = 'chip'; c.textContent = RELICS[id].name; c.title = RELICS[id].desc;
@@ -1227,10 +1240,17 @@ if (typeof window !== 'undefined') (function () {
     rival: () => ['На соседней сцене — бывший друг. Сегодня у него сольный концерт, и он уводит твой зал к себе.', 'Его тень летает над залом и гасит интерес. Коснись её душой — она отлетит.'],
     fear: () => ['Городской фестиваль. Та самая сцена. Свет бьёт в глаза, и где-то в темноте шевелится Страх.', 'Он летает по залу и уводит людей. Не дай ему забрать их — касайся его душой.'],
   };
+  function bondHint(t) {
+    return trueEnding(t)
+      ? `Связь тела и души — ${t.bond}. Если победишь, они снова станут одним целым.`
+      : `Связь тела и души — ${t.bond} из ${TOUR.trueEndingBond}. Победа принесёт фестиваль, но не вернёт душу в тело.`;
+  }
+
   function bossIntro(n) {
     const act = TOUR.acts[SAVE.tour.act];
     story({
-      title: `Босс: ${act.boss.name}`, paras: BOSS_INTRO[act.boss.kind](),
+      title: `Босс: ${act.boss.name}`,
+      paras: BOSS_INTRO[act.boss.kind]().concat(act.boss.kind === 'fear' ? [bondHint(SAVE.tour)] : []),
       buttons: [
         { label: 'На сцену', sub: 'концерт 3 минуты', onClick: () => startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, SAVE.tour, n) }) },
         { label: 'Назад к карте', cls: 'ghost', onClick: openMap },
@@ -1313,7 +1333,8 @@ if (typeof window !== 'undefined') (function () {
         title: `Акт ${t.act + 1}. ${act.name}`,
         paras: t.act === 1
           ? ['Критик ушёл последним и что-то долго записывал. Утром в журнале — три строчки: «Кажется, в баре снова живая музыка».', 'Тебя зовут в клубы. Залы больше, публика капризнее.']
-          : ['Соперник замолчал на полуслове, а потом зааплодировал вместе со всеми.', `Впереди — городской фестиваль. Та самая сцена. Тело на сцене впервые за десять лет смотрит в зал, а не в пол.`],
+          : ['Соперник замолчал на полуслове, а потом зааплодировал вместе со всеми.', `Впереди — городской фестиваль. Та самая сцена. Тело на сцене впервые за десять лет смотрит в зал, а не в пол.`,
+            `Чтобы после фестиваля тело и душа снова стали одним целым, нужна связь ${TOUR.trueEndingBond}. Сейчас — ${t.bond}.`],
         buttons: [{ label: 'К карте', onClick: openMap }],
       });
     });
@@ -1326,19 +1347,27 @@ if (typeof window !== 'undefined') (function () {
     SAVE.fame += fame;
     SAVE.records.tours++;
     if (victory) SAVE.records.wins++;
+    const whole = victory && trueEnding(t);
+    if (whole) SAVE.records.trueEnds++;
     SAVE.records.fameTotal += fame;
     const talk = BAR_TALKS[Math.min(SAVE.story.talks, BAR_TALKS.length - 1)];
     SAVE.story.talks++;
     SAVE.tour = null;
     persist();
+    const stats = (reason ? reason + ' ' : '') + `Акт ${t.act + (victory ? 0 : 1)}, вечеров: ${t.nights}, удержано зрителей: ${t.kept}, боссов: ${t.bosses}, связь: ${t.bond}.`;
     story({
-      title: victory ? 'Фестиваль покорён' : 'Душа вернулась в бар',
-      speaker: 'Михалыч',
-      paras: [
-        (reason ? reason + ' ' : '') + `Акт ${t.act + (victory ? 0 : 1)}, вечеров: ${t.nights}, удержано зрителей: ${t.kept}, боссов: ${t.bosses}.`,
-        talk[victory ? 'win' : 'lose'](g),
-      ],
-      result: `+${fame} «Славы». Её можно потратить на душу.`,
+      title: whole ? 'Снова одно целое' : victory ? 'Фестиваль покорён' : 'Душа вернулась в бар',
+      speaker: whole ? '' : 'Михалыч',
+      paras: whole ? [
+        stats,
+        `Последний аккорд. Зал встаёт. И в этот момент душа опускается на сцену — и входит в тело. Пальцы на грифе тёплые. ${g('Он', 'Она')} поднимает голову и впервые за десять лет видит зал своими глазами.`,
+        `Где-то у барной стойки Михалыч поднимает стакан. Кажется, он плачет. Или это свет.`,
+      ] : victory ? [
+        stats,
+        `Зал аплодирует, а тело кланяется — вежливо, как на корпоративе. Душа висит над сценой и не может войти обратно: связь ${t.bond} из ${TOUR.trueEndingBond}.`,
+        talk.win(g),
+      ] : [stats, talk.lose(g)],
+      result: `+${fame} «Славы»${whole ? ` (из них ${TOUR.fame.trueEnding} — за настоящий финал)` : ''}. Её можно потратить на душу.`,
       buttons: [{ label: 'Прокачать душу', onClick: openSoul }, { label: 'В меню', cls: 'ghost', onClick: openMenu }],
     });
   }
@@ -1528,6 +1557,7 @@ if (typeof window !== 'undefined') (function () {
       enterNode(t, tourNode);
       tourBox.innerHTML = row('В кассу тура', `+${st.money} ₽`) + row('Деньги тура', `${t.money} ₽`) + row('Связь тела и души', `${t.bond} (+${st.bondGain})`) +
         (st.relic ? row('Награда особого концерта', esc(RELICS[st.relic].name)) : '') +
+        bondPerks(t.bond).filter(p => t.bond - st.bondGain < p.at).map(p => `<p class="note bond-note">Порог связи ${p.at}: «${esc(p.name)}». ${esc(p.desc)}</p>`).join('') +
         (r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
         (r.boss === 'critic' && !r.criticStayed ? '<p class="note">Критик ушёл, не дослушав.</p>' : '');
     } else if (mode === 'daily' && dailyNow) {
@@ -1864,6 +1894,11 @@ if (typeof window !== 'undefined') (function () {
     const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
     const life = bodyLife; // 0 — серое и неподвижное, 1 — живое
     const bob = pulse * (0.6 + life * 2.4);
+    // порог связи «Тело подыгрывает»: тёплый круг, где тело само держит зал
+    if (G.mods.bodyGain && !stringBroken()) {
+      ctx.fillStyle = 'rgba(255,176,58,0.05)';
+      ctx.beginPath(); ctx.arc(S.spot.x, S.spot.y, CONFIG.player.bodyRadius, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save();

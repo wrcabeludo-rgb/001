@@ -12,7 +12,7 @@ const STAR_SHARES = [0.5, 0.65, 0.8];
 function defaultSave() {
   return {
     v: 1,
-    records: { levels: [], gigs: 0, tours: 0, wins: 0, fameTotal: 0 },
+    records: { levels: [], gigs: 0, tours: 0, wins: 0, trueEnds: 0, fameTotal: 0 },
     settings: { music: true },
     profile: { hero: null },            // 'm' | 'f' — выбирается перед первым туром
     fame: 0,                            // «Слава», тратится между турами
