@@ -89,6 +89,15 @@ const CONFIG = {
 
   money: { perViewer: 10, halfBonus: 100 },
 
+  // Боссы концертов тура
+  bosses: {
+    // критик: один особый зритель, теряет интерес быстрее и не даёт эмоций; должен остаться до конца
+    critic: { decayMul: 2.0 },
+    // соперник и страх летают по залу и гасят интерес вокруг; касание души отгоняет их
+    rival: { speed: 45, radius: 70, drain: 5.0, touch: 34, stun: 2.5, retarget: 2.5, start: 12 },
+    fear: { speed: 68, radius: 82, drain: 7.5, touch: 34, stun: 2.0, retarget: 2.0, start: 10 },
+  },
+
   // Происшествия во время песни. count — сколько их запланировано на уровне,
   // каждое случается с вероятностью chance (её снижает «Знакомый техник»).
   incidents: {
@@ -104,9 +113,15 @@ const CONFIG = {
 };
 
 // Модификаторы от постоянных улучшений (будущее дерево способностей души).
+// В туре их собирает tour.js: дерево души, реликвии, концерт босса.
 const DEFAULT_MODS = {
   auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0,
   perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
+  cooldownMul: 1, driveMul: 1, moneyMul: 1, warmupBonus: 0, noString: false,
+  blackoutLightMul: 1, drunkCalmMul: 1, auraRadiusMul: 1, decayMul: 1,
+  startCards: [],   // закреплённые карты: выдаются на 1-м уровне в начале песни
+  boss: null,       // 'critic' | 'rival' | 'fear'
+  duration: null,   // длина песни, если не стандартная (концерт босса — 180 с)
 };
 
 const INCIDENT_NAMES = {
@@ -242,12 +257,26 @@ function newGame(seed, worldH, levelIndex, mods) {
     phaseIndex: 0,
     events: [],         // визуальные события для рендера за последний кадр
     emotionsSpawned: 0, emotionsCollected: 0,
-    incidentPlan: planIncidents(rnd, levelNo, M),
+    duration: M.duration || CONFIG.songDuration,
+    incidentPlan: null,
     incident: null,     // текущее происшествие
     incidentsHappened: [],
+    boss: M.boss,
+    critic: null,       // зритель-критик на концерте босса
+    antagonist: null,   // соперник или страх
   };
-  // «Сет-лист» из магазина: одна карта на выбор сразу на старте
+  G.incidentPlan = planIncidents(rnd, levelNo, M);
+  // закреплённые в туре карты — сразу в игре на 1-м уровне
+  for (const id of M.startCards) if (CARD_DEFS[id] && !G.cards[id]) giveCard(id);
+  // реликвия «Кассета группы»: одна карта на выбор сразу на старте
   if (M.freeCard) G.pendingLevelUps = 1;
+  if (M.boss === 'critic') {
+    const c = viewers.slice().sort((a, b) => dist(a.x, a.y, L.W / 2, L.hallTop + 50) - dist(b.x, b.y, L.W / 2, L.hallTop + 50))[0];
+    c.critic = true; c.decayMul = CONFIG.bosses.critic.decayMul;
+    G.critic = c;
+  } else if (M.boss === 'rival' || M.boss === 'fear') {
+    G.antagonist = { kind: M.boss, x: L.W - 40, y: L.hallTop + 20, tx: L.W / 2, ty: (L.hallTop + L.hallBottom) / 2, stun: 0, retarget: 0, active: false };
+  }
   return G;
 }
 
@@ -257,15 +286,17 @@ function newGame(seed, worldH, levelIndex, mods) {
 function lvl(id) { return G.cards[id] || 0; }
 function radiusMul() { const l = lvl('costume'); return l ? C.costume.radiusMul[l - 1] : 1; }
 function gainMul() { const l = lvl('charisma'); return l ? C.charisma.gainMul[l - 1] : 1; }
-function cooldownMul() { const l = lvl('amp'); return l ? C.amp.cooldownMul[l - 1] : 1; }
+function cooldownMul() { const l = lvl('amp'); return (l ? C.amp.cooldownMul[l - 1] : 1) * G.mods.cooldownMul; }
 function pickupRadius() { const l = lvl('mic'); return CONFIG.emotion.pickupRadius + G.mods.pickup + (l ? C.mic.pickupBonus[l - 1] : 0); }
 function emotionDriveMul() { const l = lvl('mic'); return l ? C.mic.driveMul[l - 1] : 1; }
-function auraRadius() { return CONFIG.player.auraRadius * radiusMul(); }
+function auraRadius() { return CONFIG.player.auraRadius * radiusMul() * G.mods.auraRadiusMul; }
+function warmupDuration() { return Math.max(5, CONFIG.warmup.duration + G.mods.warmupBonus); }
 function smokeRadius() { const l = lvl('smoke'); return l ? C.smoke.radius[l - 1] * radiusMul() : 0; }
 
+// Фазы песни растягиваются под её длину (концерт босса длиннее)
 function currentPhase() {
-  const ph = CONFIG.decayPhases;
-  for (let i = 0; i < ph.length; i++) if (G.t < ph[i].until) return i;
+  const ph = CONFIG.decayPhases, k = G.duration / CONFIG.songDuration;
+  for (let i = 0; i < ph.length; i++) if (G.t < ph[i].until * k) return i;
   return ph.length - 1;
 }
 
@@ -318,8 +349,7 @@ function rollChoice() {
   return cand.slice(0, 3);
 }
 
-function chooseCard(id) {
-  if (!G.choice || !G.choice.includes(id)) return;
+function giveCard(id) {
   const l = lvl(id);
   G.cards[id] = l + 1;
   if (l === 0) {
@@ -328,6 +358,11 @@ function chooseCard(id) {
     if (id === 'solo' || id === 'chorus') G.timers[id] = 0.6;
     if (id === 'pyro') G.timers[id] = 2.0;
   }
+}
+
+function chooseCard(id) {
+  if (!G.choice || !G.choice.includes(id)) return;
+  giveCard(id);
   G.choice = null;
   G.pendingLevelUps--;
 }
@@ -351,8 +386,8 @@ function update(dt) {
   if (G.encore) {
     G.encore.t += dt;
     if (G.encore.t >= CONFIG.encore.duration) { G.over = true; G.events.push({ type: 'end' }); return; }
-  } else if (G.t >= CONFIG.songDuration) {
-    G.t = CONFIG.songDuration;
+  } else if (G.t >= G.duration) {
+    G.t = G.duration;
     if (viewersInHall() >= G.total * CONFIG.encore.threshold) {
       G.encore = { t: 0 };
       G.encored = true;
@@ -368,6 +403,7 @@ function update(dt) {
 
   updatePlayer(dt);
   updateIncidents(dt);
+  updateAntagonist(dt);
   updateCards(dt);
   updateViewers(dt, ph);
   updateEmotions(dt);
@@ -420,13 +456,13 @@ function updateCards(dt) {
 function updateViewers(dt, ph) {
   const V = CONFIG.viewers, L = G.L, p = G.player;
   const blackout = G.incident && G.incident.type === 'blackout';
-  const baseRate = CONFIG.decayPhases[ph].rate * G.lv.decayMul * (blackout ? CONFIG.incidents.blackout.decayMul : 1);
+  const baseRate = CONFIG.decayPhases[ph].rate * G.lv.decayMul * G.mods.decayMul * (blackout ? CONFIG.incidents.blackout.decayMul : 1);
   const dr = G.incident && G.incident.type === 'drunk' && !G.incident.leaving ? G.incident : null;
   const auraGain = stringBroken() ? 0 : CONFIG.player.auraGain + G.mods.auraGain;
   const smokeR = smokeRadius();
   const smokeMul = smokeR ? C.smoke.decayMul[lvl('smoke') - 1] : 1;
   const auraR = auraRadius();
-  const warm = G.t < CONFIG.warmup.duration;
+  const warm = G.t < warmupDuration();
   const encore = !!G.encore;
   const emitThr = warm || encore ? CONFIG.warmup.emitThreshold : V.happyThreshold;
 
@@ -473,7 +509,7 @@ function updateViewers(dt, ph) {
       v.emitTimer = encore
         ? CONFIG.encore.emitMin + G.rnd() * (CONFIG.encore.emitMax - CONFIG.encore.emitMin)
         : E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin);
-      if (v.interest > emitThr) {
+      if (v.interest > emitThr && !v.critic) {
         const k = clamp((v.interest - emitThr) / (100 - emitThr), 0, 1);
         G.emotions.push({
           x: v.x, y: v.y - 22,
@@ -498,7 +534,7 @@ function updateEmotions(dt) {
     e.y -= E.floatSpeed * dt;
     e.x += e.drift * dt * 0.3;
     if (dist(e.x, e.y, p.x, p.y - 10) <= pr + e.size * 0.5) {
-      addDrive(e.drive * dm, 'emotion');
+      addDrive(e.drive * dm * G.mods.driveMul, 'emotion');
       G.emotionsCollected++;
       G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind });
       G.emotions.splice(i, 1);
@@ -514,7 +550,7 @@ function updateEmotions(dt) {
 function planIncidents(rnd, levelNo, M) {
   const I = CONFIG.incidents;
   const n = I.count[levelNo] || 0;
-  const types = ['string', 'blackout', 'drunk'];
+  const types = M.noString ? ['blackout', 'drunk'] : ['string', 'blackout', 'drunk'];
   const plan = [];
   for (let i = 0; i < n; i++) {
     if (rnd() >= I.chance * M.incidentMul) continue;
@@ -524,7 +560,8 @@ function planIncidents(rnd, levelNo, M) {
     plan.push({ type, t: 0 });
   }
   // равномерно раскладываем по окну песни с небольшим разбросом
-  const [a, b] = I.window;
+  const k = (M.duration || CONFIG.songDuration) / CONFIG.songDuration;
+  const a = I.window[0] * k, b = I.window[1] * k;
   const step = (b - a) / Math.max(1, plan.length);
   plan.forEach((p, i) => { p.t = a + step * i + rnd() * Math.max(0, step - I.minGap); });
   return plan;
@@ -566,7 +603,7 @@ function updateIncidents(dt) {
   } else if (inc.type === 'drunk') {
     const D = I.drunk;
     if (!inc.leaving) {
-      if (dist(p.x, p.y, inc.x, inc.y) <= D.calmRadius) inc.progress += dt / D.calmTime;
+      if (dist(p.x, p.y, inc.x, inc.y) <= D.calmRadius) inc.progress += dt * G.mods.drunkCalmMul / D.calmTime;
       else inc.progress = Math.max(0, inc.progress - dt * 0.5);
       if (inc.progress >= 1 || inc.age >= D.maxTime) {
         inc.leaving = true;
@@ -587,6 +624,48 @@ function updateIncidents(dt) {
   }
 }
 
+// ---------------------------------------------------------------------
+//  Боссы: соперник и страх летают по залу и гасят интерес; душа отгоняет их касанием
+// ---------------------------------------------------------------------
+function updateAntagonist(dt) {
+  const A = G.antagonist;
+  if (!A) return;
+  const B = CONFIG.bosses[A.kind], p = G.player, L = G.L;
+  if (!A.active) {
+    if (G.t < B.start || G.encore) return;
+    A.active = true;
+    G.events.push({ type: 'banner', text: A.kind === 'rival' ? 'Соперник уводит зал!' : 'Страх выходит на сцену…' });
+  }
+  if (G.encore) return;
+  A.stun = Math.max(0, A.stun - dt);
+  A.retarget -= dt;
+  if (!A.stun && A.retarget <= 0) {
+    // летит к самым увлечённым: им есть что терять
+    let best = null;
+    for (let i = 0; i < 8; i++) {
+      const v = G.viewers[(G.rnd() * G.viewers.length) | 0];
+      if (!v.leaving && (!best || v.interest > best.interest)) best = v;
+    }
+    if (best) { A.tx = best.x; A.ty = best.y; }
+    A.retarget = B.retarget;
+  }
+  const dx = A.tx - A.x, dy = A.ty - A.y, d = Math.hypot(dx, dy) || 1;
+  const sp = B.speed * (A.stun ? 2.2 : 1) * dt;
+  A.x += dx / d * Math.min(sp, d); A.y += dy / d * Math.min(sp, d);
+  if (A.stun) return;
+  for (const v of G.viewers) {
+    if (!v.leaving && dist(v.x, v.y, A.x, A.y) <= B.radius) v.interest -= B.drain * dt;
+  }
+  if (dist(p.x, p.y, A.x, A.y) <= B.touch) {
+    A.stun = B.stun;
+    // отлетает в противоположную от души сторону зала
+    A.tx = p.x < L.W / 2 ? L.W - 30 : 30;
+    A.ty = p.y < (L.hallTop + L.hallBottom) / 2 ? L.hallBottom - 30 : L.hallTop + 30;
+    A.retarget = B.stun;
+    G.events.push({ type: 'repel', x: A.x, y: A.y, kind: A.kind });
+  }
+}
+
 function results() {
   const left = viewersInHall();
   const total = G.total;
@@ -594,20 +673,24 @@ function results() {
   return {
     left, total, bonus,
     perViewer: CONFIG.money.perViewer + G.mods.perViewer,
-    money: (left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (G.encored ? CONFIG.encore.moneyMul : 1),
+    money: Math.round((left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (G.encored ? CONFIG.encore.moneyMul : 1) * G.mods.moneyMul),
     encored: G.encored,
     incidents: G.incidentsHappened.slice(),
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
     levels: G.level,
     levelNo: G.levelNo,
     passed: bonus > 0,
+    boss: G.boss,
+    criticStayed: G.critic ? !G.critic.leaving : null,
+    // босс побеждён: зал удержан, а критик (если он есть) остался до конца
+    bossBeaten: !!G.boss && bonus > 0 && (!G.critic || !G.critic.leaving),
   };
 }
 
 if (typeof module !== 'undefined') {
   module.exports = {
     CONFIG, CARD_DEFS, CARD_IDS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
-    get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul,
+    get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul, giveCard,
   };
 }
 
@@ -664,12 +747,19 @@ if (typeof window !== 'undefined') (function () {
     if (!actx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
+      // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ }
       actx = new AC();
       musicGain = actx.createGain();
       musicGain.connect(actx.destination);
     }
     return actx;
   }
+  // iOS может «прервать» звук (звонок, сворачивание PWA); возобновляем при любом касании
+  function wakeAudio() {
+    if (actx && actx.state !== 'running' && SAVE.settings.music && state !== 'levelup') actx.resume();
+  }
+  document.addEventListener('pointerdown', wakeAudio, true);
 
   function loadTrack(url) {
     if (loadedTrack.url === url) return Promise.resolve(loadedTrack.buffer);
@@ -757,22 +847,42 @@ if (typeof window !== 'undefined') (function () {
   syncSoundButton();
 
   // ---------- запуск песни ----------
-  function startGame(levelNo) {
-    newGame(null, worldHeightFor(window.innerWidth, window.innerHeight), levelNo);
+  let mode = 'free';        // free — тренировка, tour — тур, daily — вызов дня
+  let tourNode = null;      // точка карты тура, которую сейчас играем
+  let lifeFloor = 0;        // в туре тело тем живее, чем крепче связь с душой
+  let dailyNow = null;
+
+  function startGame(levelNo, opts) {
+    opts = opts || {};
+    mode = opts.mode || 'free';
+    tourNode = opts.node || null;
+    newGame(opts.seed == null ? null : opts.seed, worldHeightFor(window.innerWidth, window.innerHeight), levelNo, opts.mods);
     fx = []; particles = []; smoke = []; banners = [];
+    lifeFloor = mode === 'tour' && SAVE.tour ? Math.min(0.45, SAVE.tour.bond / 30) : 0;
+    bodyLife = lifeFloor;
     resize();
     state = 'loading';
     show(null);
-    banners.push({ text: `${G.levelNo + 1}. ${G.lv.name}`, t: 0, life: 2.6, color: PAL.pink });
+    const head = mode === 'tour' ? (tourNode.type === 'boss' ? `Босс: ${TOUR.acts[SAVE.tour.act].boss.name}` : `Акт ${SAVE.tour.act + 1} · ${G.lv.name}`)
+      : mode === 'daily' ? `Вызов дня · ${G.lv.name}` : `${G.levelNo + 1}. ${G.lv.name}`;
+    banners.push({ text: head, t: 0, life: 2.6, color: PAL.pink });
     // песня стартует, когда трек заиграл: пульс зала идёт от музыки
-    const go = () => { if (state !== 'loading') return; state = 'play'; banners.push({ text: 'Разогрев: собирай эмоции!', t: 0, life: 2.6 }); };
+    const go = () => {
+      if (state !== 'loading') return;
+      state = 'play';
+      const hint = G.boss === 'critic' ? 'Критик должен остаться до конца!' : 'Разогрев: собирай эмоции!';
+      banners.push({ text: hint, t: 0, life: 2.6 });
+    };
     playMusic(levelNo).then(go);
     setTimeout(go, 4000); // если трек не грузится, играем без музыки
   }
 
   const LEVEL_COLORS = ['#5dff9e', '#3de0ff', '#ffd23d', '#ff7a3d', '#ff3d8b'];
+  const VENUE_SHORT = ['Вторник', 'Пятница', 'Студенты', 'Клуб', 'Фестиваль'];
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const starsHtml = n => [0, 1, 2].map(i => `<span class="star${i < n ? '' : ' off'}">&#9733;&#xFE0E;</span>`).join('');
+  const g = (m, f) => (heroIsF() ? f : m); // форма слова по герою
+  const cleanMods = () => Object.assign({}, DEFAULT_MODS, { startCards: [] });
 
   function levelButton(i, meta, onClick) {
     const lv = CONFIG.levels[i];
@@ -791,31 +901,347 @@ if (typeof window !== 'undefined') (function () {
     CONFIG.levels.forEach((lv, i) => {
       const r = SAVE.records.levels[i];
       const meta = r ? `Рекорд: ${r.bestLeft} из ${r.total} ${starsHtml(r.bestStars)}` : '';
-      box.appendChild(levelButton(i, meta, () => startGame(i)));
+      box.appendChild(levelButton(i, meta, () => startGame(i, { mode: 'free', mods: cleanMods() })));
     });
   }
 
-  function openMenu() { show('overlay-start'); }
+  // Экран с текстом и кнопками: вступление, события, разговоры с Михалычем, итоги тура
+  function story(o) {
+    $('story-title').textContent = o.title || '';
+    $('story-speaker').textContent = o.speaker || '';
+    const box = $('story-text');
+    box.innerHTML = '';
+    for (const p of o.paras || []) { const el = document.createElement('p'); el.textContent = p; box.appendChild(el); }
+    if (o.result) { const el = document.createElement('p'); el.className = 'result'; el.textContent = o.result; box.appendChild(el); }
+    const bx = $('story-buttons');
+    bx.innerHTML = '';
+    for (const b of o.buttons) {
+      const el = document.createElement('button');
+      el.className = 'btn choice ' + (b.cls || '');
+      el.innerHTML = esc(b.label) + (b.sub ? `<small>${esc(b.sub)}</small>` : '');
+      el.disabled = !!b.disabled;
+      el.addEventListener('click', b.onClick);
+      bx.appendChild(el);
+    }
+    show('overlay-story');
+  }
+
+  function openMenu() {
+    const t = SAVE.tour;
+    $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
+    const d = dailyChallenge(new Date(), CONFIG.levels.length), best = SAVE.daily[d.key];
+    $('daily-sub').textContent = `${CONFIG.levels[d.levelNo].name} · ${d.mod.name}` + (best ? ` · рекорд ${best.left}/${best.total}` : '');
+    $('soul-sub').textContent = `«Слава»: ${SAVE.fame}`;
+    show('overlay-start');
+  }
 
   function openRecords() {
     const R = SAVE.records;
-    let html = '<div class="rec-head">Лучший результат по залам</div>';
+    let html = '<div class="rec-head">Туры</div>';
+    for (const [k, v] of [['Туров сыграно', R.tours], ['Побед на фестивале', R.wins], ['«Славы» заработано', R.fameTotal]]) {
+      html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
+    }
+    html += '<div class="rec-head">Лучший результат по залам</div>';
     CONFIG.levels.forEach((lv, i) => {
       const r = R.levels[i];
       html += `<div class="rec-row"><span>${i + 1}. ${esc(lv.name)}<small>${r ? 'сыграно ' + r.plays : 'ещё не играл'}</small></span>` +
         `<b>${r ? `${r.bestLeft}/${r.total} ${starsHtml(r.bestStars)}` : '—'}</b></div>`;
     });
-    html += '<div class="rec-head">Всего</div>';
-    for (const [k, v] of [['Концертов', R.gigs]]) {
-      html += `<div class="rec-row"><span>${k}</span><b>${v}</b></div>`;
-    }
+    html += `<div class="rec-head">Всего</div><div class="rec-row"><span>Концертов</span><b>${R.gigs}</b></div>`;
     $('records').innerHTML = html;
     show('overlay-records');
   }
 
+  // ---------- тур ----------
+  function openTour() {
+    if (!SAVE.profile.hero) { show('overlay-hero'); return; }
+    if (SAVE.tour) { openMap(); return; }
+    SAVE.tour = newTour(SAVE, (Math.random() * 1e9) | 0);
+    persist();
+    const relic = SAVE.tour.relics[0];
+    const paras = SAVE.story.intro ? [
+      'Новый тур. Михалыч ставит на стойку чай и кивает на сцену: «Ну что, ещё раз?»',
+      'Тело снова стоит под лампой, серое и тихое. Душа поднимается над залом.',
+    ] : [
+      `Вторник. Бар «Подвал». ${g('Ему', 'Ей')} тридцать пять, днём — офис, вечером — гитара и полупустой зал.`,
+      `Тело стоит на сцене и играет на автопилоте. А душа… душа давно ушла. Десять лет назад, на городском фестивале, что-то случилось — и с тех пор ${g('он', 'она')} играет, но никто не слушает.`,
+      'Сегодня душа вернулась. Только она умеет достучаться до людей в зале. Удержи их — и, может быть, тело вспомнит, зачем выходило на сцену.',
+    ];
+    SAVE.story.intro = true;
+    persist();
+    story({
+      title: 'Акт 1. Бары', paras,
+      result: relic ? `Талисман души: «${RELICS[relic].name}» — ${RELICS[relic].desc}` : '',
+      buttons: [{ label: 'К карте тура', onClick: openMap }],
+    });
+  }
+
+  function setHero(h) { SAVE.profile.hero = h; persist(); openTour(); }
+  $('hero-m').addEventListener('click', () => setHero('m'));
+  $('hero-f').addEventListener('click', () => setHero('f'));
+
+  function nodeLabel(n) {
+    if (n.type === 'concert') return ['&#9834;&#xFE0E;', VENUE_SHORT[n.venue]];
+    if (n.type === 'event') return ['?', 'Событие'];
+    if (n.type === 'market') return ['&#8381;', 'Барахолка'];
+    return ['&#9733;&#xFE0E;', 'Босс: ' + TOUR.acts[SAVE.tour.act].boss.name];
+  }
+
+  function openMap() {
+    const t = SAVE.tour;
+    if (!t) { openMenu(); return; }
+    const act = TOUR.acts[t.act];
+    $('map-title').textContent = `Акт ${t.act + 1}. ${act.name}`;
+    const pinned = t.pinned.map(id => CARD_DEFS[id].name).join(', ') || 'нет';
+    $('map-stats').innerHTML = `<span class="chip">Деньги <b>${t.money} ₽</b></span><span class="chip">Связь <b>${t.bond}</b></span>` +
+      `<span class="chip">Вечеров <b>${t.nights}</b></span><span class="chip">Закреплены: <b>${esc(pinned)}</b></span>`;
+    const rel = $('map-relics');
+    rel.innerHTML = '';
+    for (const id of t.relics) {
+      const c = document.createElement('span');
+      c.className = 'chip'; c.textContent = RELICS[id].name; c.title = RELICS[id].desc;
+      c.addEventListener('click', () => { c.textContent = c.textContent === RELICS[id].name ? RELICS[id].desc : RELICS[id].name; });
+      rel.appendChild(c);
+    }
+    const open = availableNodes(t);
+    const box = $('map-rows');
+    box.innerHTML = '';
+    for (let r = t.map.length - 1; r >= 0; r--) {
+      const row = document.createElement('div');
+      row.className = 'map-row';
+      for (const n of t.map[r]) {
+        const b = document.createElement('button');
+        const isOpen = open.includes(n), here = r === t.row && n.col === t.col;
+        b.className = `node ${n.type}` + (isOpen ? ' open' : here ? ' here' : r <= t.row ? ' done' : ' dim');
+        const [ico, label] = nodeLabel(n);
+        b.innerHTML = `<span class="ico">${ico}</span>${esc(label)}`;
+        b.disabled = !isOpen;
+        if (isOpen) b.addEventListener('click', () => onNode(n));
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    }
+    show('overlay-map');
+    const first = box.querySelector('.node.open');
+    if (first) first.scrollIntoView({ block: 'center' });
+  }
+
+  function onNode(n) {
+    const t = SAVE.tour;
+    if (n.type === 'concert') { startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, t, n) }); return; }
+    if (n.type === 'boss') { bossIntro(n); return; }
+    enterNode(t, n);
+    persist();
+    if (n.type === 'event') runEvent();
+    else openMarket(true);
+  }
+
+  const BOSS_INTRO = {
+    critic: () => [`В зале — критик журнала «Звук». Тот самый, что десять лет назад написал: «Сцена не для ${g('него', 'неё')}».`, 'Он скучает быстрее остальных и не хлопает. Если он уйдёт — провал, даже при полном зале.'],
+    rival: () => ['На соседней сцене — бывший друг. Сегодня у него сольный концерт, и он уводит твой зал к себе.', 'Его тень летает над залом и гасит интерес. Коснись её душой — она отлетит.'],
+    fear: () => ['Городской фестиваль. Та самая сцена. Свет бьёт в глаза, и где-то в темноте шевелится Страх.', 'Он летает по залу и уводит людей. Не дай ему забрать их — касайся его душой.'],
+  };
+  function bossIntro(n) {
+    const act = TOUR.acts[SAVE.tour.act];
+    story({
+      title: `Босс: ${act.boss.name}`, paras: BOSS_INTRO[act.boss.kind](),
+      buttons: [
+        { label: 'На сцену', sub: 'концерт 3 минуты', onClick: () => startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, SAVE.tour, n) }) },
+        { label: 'Назад к карте', cls: 'ghost', onClick: openMap },
+      ],
+    });
+  }
+
+  function runEvent() {
+    const t = SAVE.tour;
+    t.seen = t.seen || [];
+    let pool = EVENTS.filter(e => !t.seen.includes(e.id));
+    if (!pool.length) { t.seen = []; pool = EVENTS; }
+    const ev = pool[(Math.random() * pool.length) | 0];
+    t.seen.push(ev.id);
+    persist();
+    story({
+      title: ev.title, paras: [ev.text(g)],
+      buttons: ev.choices.map(c => ({
+        label: c.label, sub: c.cost ? `−${c.cost} ₽ · у тебя ${t.money} ₽` : '', disabled: c.cost && t.money < c.cost,
+        onClick: () => {
+          if (c.cost) t.money -= c.cost;
+          const res = c.effect(t, Math.random, g);
+          persist();
+          story({ title: ev.title, paras: [ev.text(g)], result: res, buttons: [{ label: 'К карте', onClick: openMap }] });
+        },
+      })),
+    });
+  }
+
+  function openMarket(fresh) {
+    const t = SAVE.tour;
+    if (fresh || !t.market) t.market = marketOffer(t, Math.random);
+    persist();
+    $('market-money').textContent = `${t.money} ₽`;
+    const box = $('market-list');
+    box.innerHTML = '';
+    for (const o of t.market) {
+      const r = RELICS[o.id], owned = t.relics.includes(o.id);
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `<div class="info"><div class="name">${esc(r.name)}</div><div class="desc">${esc(r.desc)}</div></div>`;
+      const b = document.createElement('button');
+      b.className = 'buy';
+      b.textContent = owned ? 'Твоё' : `${o.price} ₽`;
+      b.disabled = owned || t.money < o.price;
+      b.addEventListener('click', () => { t.money -= o.price; t.relics.push(o.id); persist(); openMarket(false); });
+      el.appendChild(b);
+      box.appendChild(el);
+    }
+    show('overlay-market');
+  }
+  $('market-leave').addEventListener('click', () => { SAVE.tour.market = null; persist(); openMap(); });
+
+  // После победы над боссом — закрепить одну из взятых карт в стартовый набор
+  function openPin(cards, then) {
+    const t = SAVE.tour, slots = pinSlots(SAVE);
+    const cand = cards.map(c => c.id).filter(id => !t.pinned.includes(id));
+    if (!cand.length) { then(); return; }
+    const full = t.pinned.length >= slots;
+    $('pin-sub').textContent = full
+      ? `Все ${slots} места заняты: новая карта заменит «${CARD_DEFS[t.pinned[0]].name}».`
+      : `Карта будет у тебя в начале каждого концерта тура на 1-м уровне. Мест: ${t.pinned.length} из ${slots}.`;
+    const box = $('pin-list');
+    box.innerHTML = '';
+    for (const id of cand) {
+      const def = CARD_DEFS[id];
+      const b = document.createElement('button');
+      b.className = 'card ' + def.type;
+      b.style.setProperty('--c', def.color);
+      const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(iconCanvas(id, 44));
+      const body = document.createElement('div'); body.className = 'card-body';
+      body.innerHTML = `<div class="card-top"><span class="card-name">${def.name}</span><span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'}</span></div><div class="card-desc">${def.desc(0)}</div>`;
+      b.append(ic, body);
+      b.addEventListener('click', () => { if (full) t.pinned.shift(); t.pinned.push(id); persist(); then(); });
+      box.appendChild(b);
+    }
+    $('pin-skip').onclick = then;
+    show('overlay-pin');
+  }
+
+  function afterBoss(r) {
+    const t = SAVE.tour;
+    if (!r.bossBeaten) { tourEnd(false, r.boss === 'critic' && !r.criticStayed ? 'Критик ушёл, не дослушав.' : 'Зал не удержан.'); return; }
+    openPin(r.cards, () => {
+      if (!nextAct(t)) { tourEnd(true); return; }
+      persist();
+      const act = TOUR.acts[t.act];
+      story({
+        title: `Акт ${t.act + 1}. ${act.name}`,
+        paras: t.act === 1
+          ? ['Критик ушёл последним и что-то долго записывал. Утром в журнале — три строчки: «Кажется, в баре снова живая музыка».', 'Тебя зовут в клубы. Залы больше, публика капризнее.']
+          : ['Соперник замолчал на полуслове, а потом зааплодировал вместе со всеми.', `Впереди — городской фестиваль. Та самая сцена. Тело на сцене впервые за десять лет смотрит в зал, а не в пол.`],
+        buttons: [{ label: 'К карте', onClick: openMap }],
+      });
+    });
+  }
+
+  function tourEnd(victory, reason) {
+    const t = SAVE.tour;
+    if (!t) { openMenu(); return; }
+    const fame = tourFame(t, victory);
+    SAVE.fame += fame;
+    SAVE.records.tours++;
+    if (victory) SAVE.records.wins++;
+    SAVE.records.fameTotal += fame;
+    const talk = BAR_TALKS[Math.min(SAVE.story.talks, BAR_TALKS.length - 1)];
+    SAVE.story.talks++;
+    SAVE.tour = null;
+    persist();
+    story({
+      title: victory ? 'Фестиваль покорён' : 'Душа вернулась в бар',
+      speaker: 'Михалыч',
+      paras: [
+        (reason ? reason + ' ' : '') + `Акт ${t.act + (victory ? 0 : 1)}, вечеров: ${t.nights}, удержано зрителей: ${t.kept}, боссов: ${t.bosses}.`,
+        talk[victory ? 'win' : 'lose'](g),
+      ],
+      result: `+${fame} «Славы». Её можно потратить на душу.`,
+      buttons: [{ label: 'Прокачать душу', onClick: openSoul }, { label: 'В меню', cls: 'ghost', onClick: openMenu }],
+    });
+  }
+
+  $('btn-giveup').addEventListener('click', () => {
+    if (window.confirm('Сдаться? Тур закончится, «Слава» за пройденное начислится.')) tourEnd(false, g('Ты ушёл со сцены сам.', 'Ты ушла со сцены сама.'));
+  });
+
+  // ---------- душа: дерево способностей и облик ----------
+  function openSoul() {
+    $('soul-fame').textContent = SAVE.fame;
+    const tree = $('soul-tree');
+    tree.innerHTML = '';
+    for (const n of SOUL_TREE) {
+      const l = treeLevel(SAVE, n.id), max = n.cost.length, price = treePrice(SAVE, n.id);
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `<div class="info"><div class="name">${esc(n.name)}</div><div class="desc">${esc(n.desc(Math.min(max, l + 1)))}${l && l < max ? ` Сейчас: ${esc(n.desc(l))}` : ''}</div>` +
+        `<div class="card-pips">${n.cost.map((_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div></div>`;
+      const b = document.createElement('button');
+      b.className = 'buy';
+      b.textContent = price == null ? 'Есть' : `${price} ★`;
+      b.disabled = price == null || SAVE.fame < price;
+      b.addEventListener('click', () => { if (buyTree(SAVE, n.id)) { persist(); openSoul(); } });
+      el.appendChild(b);
+      tree.appendChild(el);
+    }
+    const skins = $('soul-skins');
+    skins.innerHTML = '';
+    for (const sk of SOUL_SKINS) {
+      const owned = SAVE.skins.owned.includes(sk.id), sel = SAVE.skins.selected === sk.id;
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `<div class="info"><div class="name">${esc(sk.name)}</div><div class="swatch">${sk.colors.map(c => `<i style="background:${c}"></i>`).join('')}</div></div>`;
+      const b = document.createElement('button');
+      b.className = 'buy';
+      b.textContent = sel ? 'Выбран' : owned ? 'Выбрать' : `${sk.cost} ★`;
+      b.disabled = sel || (!owned && SAVE.fame < sk.cost);
+      b.addEventListener('click', () => {
+        if (owned) SAVE.skins.selected = sk.id; else if (!buySkin(SAVE, sk.id)) return;
+        persist(); openSoul();
+      });
+      el.appendChild(b);
+      skins.appendChild(el);
+    }
+    show('overlay-soul');
+  }
+
+  // ---------- вызов дня ----------
+  function openDaily() {
+    const d = dailyNow = dailyChallenge(new Date(), CONFIG.levels.length);
+    const lv = CONFIG.levels[d.levelNo], best = SAVE.daily[d.key];
+    $('daily-date').textContent = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+    $('daily-info').innerHTML = `<p><b>${esc(lv.name)}</b>: ${esc(lv.desc)} Зрителей: ${lv.viewers}.</p><p><b>${esc(d.mod.name)}.</b> ${esc(d.mod.desc)}</p><p class="note">Один зал и одна раздача для всех. Без прокачки души — только мастерство.</p>`;
+    $('daily-best').innerHTML = best ? `Твой рекорд сегодня: <b>${best.left} из ${best.total}</b> ${starsHtml(starsFor(best.left, best.total))}` : g('Сегодня ещё не играл.', 'Сегодня ещё не играла.');
+    $('daily-share').classList.toggle('hidden', !best);
+    $('daily-share-text').textContent = '';
+    show('overlay-daily');
+  }
+  $('daily-play').addEventListener('click', () => {
+    const d = dailyNow, m = cleanMods();
+    d.mod.apply(m);
+    startGame(d.levelNo, { mode: 'daily', seed: d.seed, mods: m });
+  });
+  $('daily-share').addEventListener('click', () => {
+    const d = dailyNow, best = SAVE.daily[d.key];
+    if (!best) return;
+    const st = starsFor(best.left, best.total);
+    const text = `Удержи зал · вызов ${d.key}\n${CONFIG.levels[d.levelNo].name} (${d.mod.name}): ${best.left}/${best.total} ${'★'.repeat(st)}${'☆'.repeat(3 - st)}\n${location.href}`;
+    const done = () => { $('daily-share-text').textContent = 'Скопировано — отправь другу.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => { $('daily-share-text').textContent = text; });
+    else $('daily-share-text').textContent = text;
+  });
+
   for (const b of document.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => { if (b.dataset.go === 'overlay-start') openMenu(); else show(b.dataset.go); });
   }
+  $('btn-tour').addEventListener('click', openTour);
+  $('btn-daily').addEventListener('click', openDaily);
+  $('btn-soul').addEventListener('click', openSoul);
   $('btn-play').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
   $('btn-records').addEventListener('click', openRecords);
   openMenu();
@@ -905,10 +1331,28 @@ if (typeof window !== 'undefined') (function () {
     const share = r.left / r.total;
     const last = r.levelNo >= CONFIG.levels.length - 1;
     const isRecord = recordGig(SAVE.records, r.levelNo, r);
+    const tourBox = $('res-tour');
+    tourBox.innerHTML = '';
+    const row = (k, v) => `<div class="res-row"><span>${k}</span><b>${v}</b></div>`;
+
+    let title = r.encored ? 'Бис! Зал твой!' : r.passed ? (last ? 'Все залы пройдены!' : 'Зал удержан!') : 'Песня окончена';
+    if (r.boss) title = r.bossBeaten ? 'Босс повержен!' : 'Босс не сдался';
+    if (mode === 'tour' && SAVE.tour) {
+      const t = SAVE.tour;
+      const st = settleConcert(t, tourNode, r);
+      enterNode(t, tourNode);
+      tourBox.innerHTML = row('В кассу тура', `+${st.money} ₽`) + row('Деньги тура', `${t.money} ₽`) + row('Связь тела и души', `${t.bond} (+${st.bondGain})`) +
+        (r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
+        (r.boss === 'critic' && !r.criticStayed ? '<p class="note">Критик ушёл, не дослушав.</p>' : '');
+    } else if (mode === 'daily' && dailyNow) {
+      const prev = SAVE.daily[dailyNow.key];
+      if (!prev || r.left > prev.left) SAVE.daily[dailyNow.key] = { left: r.left, total: r.total };
+      tourBox.innerHTML = row('Рекорд дня', `${SAVE.daily[dailyNow.key].left} из ${r.total}`);
+    }
     persist();
 
-    $('res-title').textContent = r.encored ? 'Бис! Зал твой!' : r.passed ? (last ? 'Все залы пройдены!' : 'Зал удержан!') : 'Песня окончена';
-    $('res-level').textContent = `${r.levelNo + 1}. ${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала.`;
+    $('res-title').textContent = title;
+    $('res-level').textContent = `${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала` + (r.boss === 'critic' ? ' и критика.' : '.');
     $('res-verdict').textContent = (isRecord ? 'Новый рекорд! ' : '') + (
       share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :
       share > 0.5 ? 'Хороший сет, бармен доволен.' :
@@ -919,7 +1363,11 @@ if (typeof window !== 'undefined') (function () {
     $('res-money-note').textContent = `${r.left} × ${r.perViewer}` +
       (r.bonus ? ` + ${r.bonus} бонус за полный зал` : ' (бонус +100, если осталось больше половины)') +
       (r.encored ? ', ×2 за бис' : '') + (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
-    $('btn-next').classList.toggle('hidden', !r.passed || last);
+    const free = mode === 'free';
+    $('btn-continue').classList.toggle('hidden', free);
+    $('btn-next').classList.toggle('hidden', !free || !r.passed || last);
+    $('btn-again').classList.toggle('hidden', !free);
+    $('btn-menu').classList.toggle('hidden', !free);
 
     const list = $('res-cards');
     list.innerHTML = '';
@@ -932,11 +1380,17 @@ if (typeof window !== 'undefined') (function () {
       el.appendChild(sp);
       list.appendChild(el);
     }
+    lastResult = r;
     show('overlay-results');
   }
 
-  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1));
-  $('btn-again').addEventListener('click', () => startGame(G.levelNo));
+  let lastResult = null;
+  $('btn-continue').addEventListener('click', () => {
+    if (mode === 'daily') { openDaily(); return; }
+    if (tourNode && tourNode.type === 'boss') afterBoss(lastResult); else openMap();
+  });
+  $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1, { mode: 'free', mods: cleanMods() }));
+  $('btn-again').addEventListener('click', () => startGame(G.levelNo, { mode: 'free', mods: cleanMods() }));
   $('btn-menu').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
 
   // ---------- визуальные события ----------
@@ -963,6 +1417,9 @@ if (typeof window !== 'undefined') (function () {
         }
       } else if (ev.type === 'pickup') {
         spawnParticles(ev.x, ev.y, 7, EMO_COLORS[ev.kind], 70, 0.45, 2.2);
+      } else if (ev.type === 'repel') {
+        fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
+        spawnParticles(ev.x, ev.y - 10, 14, ev.kind === 'fear' ? '#ff3d50' : '#b49cff', 130, 0.5, 2.6);
       } else if (ev.type === 'encore') {
         banners.push({ text: 'БИС! Зал просит ещё!', t: 0, life: 3, color: PAL.amber });
         shake = 0.4;
@@ -999,7 +1456,7 @@ if (typeof window !== 'undefined') (function () {
     if (G && (state === 'play' || state === 'ending')) {
       const p = G.player;
       if (Math.random() < dt * (p.moving ? 40 : 18)) {
-        particles.push({ x: p.x + (Math.random() - 0.5) * 8, y: p.y - 14 + (Math.random() - 0.5) * 8, vx: (Math.random() - 0.5) * 12, vy: -18 - Math.random() * 14,
+        particles.push({ x: p.x + (Math.random() - 0.5) * 8, y: p.y + (Math.random() - 0.5) * 6, vx: (Math.random() - 0.5) * 12, vy: 10 + Math.random() * 14,
           life: 0.6, max: 0.6, color: soulColor(), size: 2.2 + Math.random() * 2, g: 0 });
       }
     }
@@ -1125,6 +1582,17 @@ if (typeof window !== 'undefined') (function () {
     }
     ctx.restore();
 
+    // критик: берет, блокнот и шкала его интереса
+    if (v.critic && !v.leaving) {
+      ctx.fillStyle = '#2a1640';
+      ctx.beginPath(); ctx.ellipse(x + 1, y - 23 - bob, 7, 3, -0.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f6e7d0'; ctx.fillRect(x + 6, y - 14 - bob, 6, 8);
+      ctx.fillStyle = '#1a0f09'; ctx.fillRect(x - 12, y - 40, 24, 4);
+      ctx.fillStyle = I > 40 ? PAL.green : I > 20 ? PAL.amber : PAL.pink;
+      ctx.fillRect(x - 12, y - 40, 24 * clamp(I / 100, 0, 1), 4);
+      ctx.strokeStyle = 'rgba(180,140,255,0.7)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y - 10, 15, 0, Math.PI * 2); ctx.stroke();
+    }
     // значки настроения
     if (!v.leaving && I < V.boredThreshold) {
       ctx.fillStyle = '#9a9aa2';
@@ -1142,6 +1610,8 @@ if (typeof window !== 'undefined') (function () {
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
+  function heroIsF() { return !!(SAVE.profile && SAVE.profile.hero === 'f'); }
+
   // ---------- пульс зала в такт музыки ----------
   let beatT = 0, pulse = 0, beatIndex = 0, bodyLife = 0;
   function beatPhase() {
@@ -1151,37 +1621,61 @@ if (typeof window !== 'undefined') (function () {
   }
   // душа разгорается, когда зал доволен: голубая → зелёная → розовая → золотая
   const SOUL_COLORS = ['#3de0ff', '#5dff9e', '#ff3d8b', '#ffd23d'];
-  function soulColor() { return SOUL_COLORS[Math.min(3, Math.floor(bodyLife * 4))]; }
+  function soulColor() {
+    const sk = SOUL_SKINS.find(x => x.id === SAVE.skins.selected);
+    return (sk ? sk.colors : SOUL_COLORS)[Math.min(3, Math.floor(bodyLife * 4))];
+  }
+
+  // Силуэт музыканта с гитарой. Общий для тела на сцене и души-двойника.
+  // o: цвета частей, headDrop — насколько опущена голова, ghost — без ног, с туманным хвостом
+  function drawMusician(o) {
+    if (o.ghost) {
+      ctx.fillStyle = o.jacket;
+      ctx.beginPath();
+      ctx.moveTo(-8, -10);
+      ctx.quadraticCurveTo(-6, 2, Math.sin(clock * 4) * 3, 10);
+      ctx.quadraticCurveTo(6, 2, 8, -10);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = o.legs;
+      ctx.fillRect(-5, -8, 4, 8); ctx.fillRect(1, -8, 4, 8);
+    }
+    ctx.fillStyle = o.jacket;
+    roundRect(-8, -26, 16, 19, 5); ctx.fill();
+    ctx.fillStyle = o.skin;
+    ctx.beginPath(); ctx.arc(0, -32 + o.headDrop, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = o.hair;
+    ctx.beginPath(); ctx.arc(0, -34 + o.headDrop, 7, Math.PI, Math.PI * 2); ctx.fill();
+    if (o.longHair) { ctx.fillRect(-7, -34 + o.headDrop, 3.5, 12); ctx.fillRect(3.5, -34 + o.headDrop, 3.5, 12); }
+    ctx.save();
+    ctx.translate(1, -15); ctx.rotate(-0.55);
+    ctx.fillStyle = o.neck; ctx.fillRect(4, -2, 20, 3.5);
+    ctx.fillStyle = o.guitar;
+    ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-6, 0, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = o.skin;
+    ctx.beginPath(); ctx.arc(-2, -15 + o.strum, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
 
   // Тело музыканта: стоит в центре сцены и играет на автопилоте. Оживает, когда зал доволен.
   function drawBody() {
     const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
     const life = bodyLife; // 0 — серое и неподвижное, 1 — живое
     const bob = pulse * (0.6 + life * 2.4);
-    const gray = '#6b6670';
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save();
     ctx.translate(x, y - bob);
-    ctx.fillStyle = lerpColor('#3a3840', '#2b2b3a', life);
-    ctx.fillRect(-5, -8 + bob, 4, 8); ctx.fillRect(1, -8 + bob, 4, 8);
-    ctx.fillStyle = lerpColor(gray, '#c94f2f', life);
-    roundRect(-8, -26, 16, 19, 5); ctx.fill();
-    // голова смотрит в пол, пока тело «спит»
-    const headDrop = (1 - life) * 3;
-    ctx.fillStyle = lerpColor('#8f8680', '#f1c9a5', life);
-    ctx.beginPath(); ctx.arc(0, -32 + headDrop, 6.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = lerpColor('#4a4448', '#3a1d10', life);
-    ctx.beginPath(); ctx.arc(0, -34 + headDrop, 7, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.save();
-    ctx.translate(1, -15); ctx.rotate(-0.55);
-    ctx.fillStyle = lerpColor('#4a4245', '#5a2c10', life); ctx.fillRect(4, -2, 20, 3.5);
-    ctx.fillStyle = lerpColor('#7d7570', PAL.amber, life);
-    ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(-6, 0, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = lerpColor('#8f8680', '#f1c9a5', life);
-    ctx.beginPath(); ctx.arc(-2, -15 + pulse * 2, 2.6, 0, Math.PI * 2); ctx.fill();
+    drawMusician({
+      legs: lerpColor('#3a3840', '#2b2b3a', life),
+      jacket: lerpColor('#6b6670', '#c94f2f', life),
+      skin: lerpColor('#8f8680', '#f1c9a5', life),
+      hair: lerpColor('#4a4448', '#3a1d10', life),
+      neck: lerpColor('#4a4245', '#5a2c10', life),
+      guitar: lerpColor('#7d7570', PAL.amber, life),
+      headDrop: (1 - life) * 3, strum: pulse * 2, longHair: heroIsF(),
+    });
     ctx.restore();
 
     if (stringBroken()) {
@@ -1194,38 +1688,38 @@ if (typeof window !== 'undefined') (function () {
     }
   }
 
-  // Душа: светящееся пламя над залом.
+  // Душа: прозрачный светящийся двойник музыканта, парит над залом.
   function drawSoul() {
-    const p = G.player, x = p.x, y = p.y - 14;
+    const p = G.player, x = p.x, y = p.y;
     const col = soulColor();
     const broken = stringBroken();
-    // аура и радиус волны
+    // аура и радиус сбора эмоций
     ctx.fillStyle = broken ? 'rgba(120,120,130,0.08)' : 'rgba(255,176,58,0.07)';
-    ctx.beginPath(); ctx.arc(x, y + 8, auraRadius(), 0, Math.PI * 2); ctx.fill();
-    // радиус сбора эмоций
+    ctx.beginPath(); ctx.arc(x, y - 6, auraRadius(), 0, Math.PI * 2); ctx.fill();
     ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,210,61,0.45)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(x, y + 4, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
-    // свечение и пламя
-    const flick = Math.sin(clock * 11) * 1.2, swell = 1 + pulse * 0.12;
+    const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
     ctx.save();
-    ctx.translate(x, y + 4);
-    ctx.scale(swell, swell);
-    ctx.globalAlpha = 0.22; ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 0.9;
-    ctx.beginPath();
-    ctx.moveTo(0, -20 - flick);
-    ctx.bezierCurveTo(9, -10, 11, 2, 0, 9);
-    ctx.bezierCurveTo(-11, 2, -9, -10, 0, -20 - flick);
-    ctx.fill();
-    ctx.globalAlpha = 1; ctx.fillStyle = '#fff6e0';
-    ctx.beginPath();
-    ctx.moveTo(0, -9 - flick * 0.5);
-    ctx.bezierCurveTo(4, -4, 5, 2, 0, 5);
-    ctx.bezierCurveTo(-5, 2, -4, -4, 0, -9 - flick * 0.5);
-    ctx.fill();
+    ctx.translate(x, y - 6 - hover);
+    ctx.scale(p.dir * 1.25, 1.25); // душа чуть крупнее тела, чтобы её было хорошо видно
+    // мягкое свечение
+    ctx.globalAlpha = 0.18; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(0, -14, 18, 24, 0, 0, Math.PI * 2); ctx.fill();
+    // полупрозрачный двойник
+    ctx.globalAlpha = 0.6;
+    const light = lerpColor(col, '#ffffff', 0.55);
+    drawMusician({
+      jacket: col, skin: light, hair: lerpColor(col, '#1a0f09', 0.35),
+      neck: lerpColor(col, '#ffffff', 0.25), guitar: light,
+      headDrop: 0, strum: Math.sin(clock * 9) * 2, ghost: true, longHair: heroIsF(),
+    });
+    // светлый контур
+    ctx.globalAlpha = 0.85; ctx.strokeStyle = light; ctx.lineWidth = 1.2;
+    roundRect(-8, -26, 16, 19, 5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -32, 6.5, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   function drawHeart(x, y, s) {
@@ -1398,7 +1892,7 @@ if (typeof window !== 'undefined') (function () {
     // верхняя плашка
     ctx.fillStyle = 'rgba(16,9,6,0.82)'; ctx.fillRect(0, 0, L.W, L.hudH);
     ctx.fillStyle = PAL.amber; ctx.fillRect(0, L.hudH - 2, L.W, 2);
-    const rest = G.encore ? Math.max(0, CONFIG.encore.duration - G.encore.t) : Math.max(0, CONFIG.songDuration - G.t);
+    const rest = G.encore ? Math.max(0, CONFIG.encore.duration - G.encore.t) : Math.max(0, G.duration - G.t);
     const m = Math.floor(Math.ceil(rest) / 60), s = Math.ceil(rest) % 60;
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 22px system-ui, sans-serif'; ctx.textAlign = 'left';
@@ -1408,7 +1902,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.font = 'bold 22px system-ui, sans-serif';
     // прогресс песни
     ctx.fillStyle = '#3a2416'; ctx.fillRect(74, 19, 110, 6);
-    ctx.fillStyle = PAL.amber; ctx.fillRect(74, 19, 110 * (G.t / CONFIG.songDuration), 6);
+    ctx.fillStyle = PAL.amber; ctx.fillRect(74, 19, 110 * (G.t / G.duration), 6);
     for (const ph of CONFIG.decayPhases.slice(0, -1)) { ctx.fillStyle = PAL.panel; ctx.fillRect(74 + 110 * ph.until / CONFIG.songDuration - 0.5, 18, 1.5, 8); }
     // зрители
     const n = viewersInHall();
@@ -1519,17 +2013,59 @@ if (typeof window !== 'undefined') (function () {
     ctx.fillStyle = `rgba(4,2,1,${0.86 * fade})`;
     ctx.beginPath();
     ctx.rect(0, G.L.hudH, G.L.W, G.L.panelTop - G.L.hudH);
-    ctx.arc(p.x, p.y - 10, B.light, 0, Math.PI * 2, true);
+    ctx.arc(p.x, p.y - 10, B.light * G.mods.blackoutLightMul, 0, Math.PI * 2, true);
     ctx.fill('evenodd');
     ctx.restore();
   }
 
+  // Соперник — тёмный двойник музыканта, Страх — чёрная тень с красными глазами
+  function drawAntagonist() {
+    const A = G.antagonist;
+    if (!A || !A.active) return;
+    const B = CONFIG.bosses[A.kind];
+    const fade = A.stun ? 0.35 : 1;
+    if (!A.stun) {
+      ctx.fillStyle = A.kind === 'fear' ? 'rgba(10,0,20,0.22)' : 'rgba(120,60,160,0.12)';
+      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = A.kind === 'fear' ? 'rgba(255,61,80,0.5)' : 'rgba(180,120,255,0.5)';
+      ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(A.x, A.y - 6 + Math.sin(clock * 3.3) * 2);
+    if (A.kind === 'rival') {
+      ctx.globalAlpha = 0.75 * fade;
+      drawMusician({ jacket: '#4b3a66', skin: '#9a8aa8', hair: '#1c1426', neck: '#2c2238', guitar: '#7a5ca0', headDrop: 0, strum: Math.sin(clock * 9) * 2, ghost: true });
+    } else {
+      const s = 1.35;
+      ctx.scale(s, s);
+      ctx.fillStyle = '#0c0610';
+      ctx.beginPath();
+      ctx.moveTo(0, -34);
+      ctx.bezierCurveTo(16, -30, 14, -4, 10, 8);
+      ctx.quadraticCurveTo(0, 2 + Math.sin(clock * 5) * 3, -10, 8);
+      ctx.bezierCurveTo(-14, -4, -16, -30, 0, -34);
+      ctx.fill();
+      ctx.fillStyle = '#ff3d50';
+      ctx.fillRect(-6, -22, 4, 2); ctx.fillRect(2, -22, 4, 2);
+    }
+    ctx.restore();
+  }
+
   function drawIncidentChip() {
-    const inc = G.incident;
-    if (!inc || (inc.type === 'drunk' && inc.leaving)) return;
-    const text = inc.type === 'string' ? 'Струна! Беги к усилителю слева' :
-      inc.type === 'drunk' ? 'Дебошир! Подойди и постой рядом' :
-      `Нет света: ещё ${Math.ceil(CONFIG.incidents.blackout.duration - inc.age)} с`;
+    const inc = G.incident, A = G.antagonist;
+    let text = null;
+    if (inc && !(inc.type === 'drunk' && inc.leaving)) {
+      text = inc.type === 'string' ? 'Струна! Верни душу к телу на сцене' :
+        inc.type === 'drunk' ? 'Дебошир! Подойди и постой рядом' :
+        `Нет света: ещё ${Math.ceil(CONFIG.incidents.blackout.duration - inc.age)} с`;
+    } else if (A && A.active && !A.stun && !G.encore) {
+      text = A.kind === 'rival' ? 'Соперник уводит зал — коснись его душой' : 'Страх уводит зал — коснись его душой';
+    } else if (G.critic && !G.critic.leaving && G.critic.interest < 35) {
+      text = 'Критик скучает — лети к нему!';
+    }
+    if (!text) return;
     ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const w = ctx.measureText(text).width + 20, y = G.L.hudH + 14;
     ctx.fillStyle = Math.sin(clock * 6) > 0 ? '#5a1430' : '#3a0d20';
@@ -1566,6 +2102,7 @@ if (typeof window !== 'undefined') (function () {
     const list = G.viewers.filter(v => !v.gone).sort((a, b) => a.y - b.y);
     for (const v of list) drawViewer(v);
     drawDrunk();
+    drawAntagonist();
     drawEmotions();
     drawSoul();
     drawFxOver();
@@ -1590,7 +2127,7 @@ if (typeof window !== 'undefined') (function () {
       // тело и душа оживают, когда в зале много довольных
       let happy = 0, inHallN = 0;
       for (const v of G.viewers) if (!v.leaving) { inHallN++; if (v.interest > CONFIG.viewers.happyThreshold) happy++; }
-      const target = inHallN ? happy / inHallN : 0;
+      const target = Math.max(lifeFloor, inHallN ? happy / inHallN : 0);
       bodyLife += (target - bodyLife) * Math.min(1, dt * 1.5);
     }
     if (G && (state === 'play' || state === 'ending') && !document.hidden) {
