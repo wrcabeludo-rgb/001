@@ -78,17 +78,17 @@ const CONFIG = {
   slots: { active: 4, passive: 4 },
 
   cards: {
-    solo: { cooldown: [3.0, 2.7, 2.4], radius: [80, 95, 110], gain: [9, 12, 16] },
-    smoke: { radius: [65, 80, 95], decayMul: [0.5, 0.35, 0.2] },
-    chorus: { cooldown: [4.0, 3.6, 3.2], targets: [3, 5, 7], gain: [16, 20, 25], range: 230 },
-    pyro: { cooldown: [12, 11, 10], gain: [22, 30, 38], reach: [110, 140, 175] },
+    solo: { cooldown: [3.0, 2.7, 2.4], radius: [80, 95, 110], gain: [9, 12, 16], evo: { cooldown: 1.8, radius: 130, gain: 20 } },
+    smoke: { radius: [65, 80, 95], decayMul: [0.5, 0.35, 0.2], evo: { radius: 140, decayMul: 0.05 } },
+    chorus: { cooldown: [4.0, 3.6, 3.2], targets: [3, 5, 7], gain: [16, 20, 25], range: 230, evo: { cooldown: 2.6, targets: 12, gain: 28, range: 320 } },
+    pyro: { cooldown: [12, 11, 10], gain: [22, 30, 38], reach: [110, 140, 175], evo: { cooldown: 8, gain: 45, reach: 1000 } },
     costume: { radiusMul: [1.15, 1.3, 1.45] },
     charisma: { gainMul: [1.15, 1.3, 1.5] },
     amp: { cooldownMul: [0.88, 0.78, 0.68] },
     mic: { pickupBonus: [14, 28, 42], driveMul: [1.15, 1.3, 1.5] },
-    ballad: { cooldown: [4.5, 4.0, 3.5], targets: [1, 2, 3], gain: [40, 48, 56] },
-    breakdown: { cooldown: [16, 14, 12], freeze: [3, 4, 5] },
-    magnet: { cooldown: [7, 6, 5], radius: [90, 110, 130] },
+    ballad: { cooldown: [4.5, 4.0, 3.5], targets: [1, 2, 3], gain: [40, 48, 56], evo: { cooldown: 3.0, targets: 4, gain: 60 } },
+    breakdown: { cooldown: [16, 14, 12], freeze: [3, 4, 5], evo: { cooldown: 10, freeze: 6 } },
+    magnet: { cooldown: [7, 6, 5], radius: [90, 110, 130], evo: { cooldown: 3.5, radius: 180 } },
     fans: { count: [3, 6, 9], decayMul: 0.5 },
     buzz: { gain: [5, 8, 11], radius: 60 },
     second: { saves: [2, 4, 6], interest: 30 },
@@ -128,6 +128,7 @@ const DEFAULT_MODS = {
   cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false,
   blackoutLightMul: 1, drunkCalmMul: 1, auraRadiusMul: 1, decayMul: 1,
   startCards: [],   // закреплённые карты: выдаются на 1-м уровне в начале песни
+  rehearsed: null,  // карта с репетиции тура: выдаётся сразу на 2-м уровне
   boss: null,       // 'critic' | 'rival' | 'fear'
   duration: null,   // длина песни, если не стандартная (концерт босса — 180 с)
 };
@@ -201,6 +202,20 @@ const CARD_DEFS = {
   },
 };
 const CARD_IDS = Object.keys(CARD_DEFS);
+
+// Эволюции: активная карта 3-го уровня + нужная пассивная (любого уровня) →
+// в следующем выборе предлагается усиленная версия. Числа — в CONFIG.cards.*.evo.
+const EVOLUTIONS = {
+  solo: { need: 'amp', name: 'Гитарный запил', desc: e => `Каждые ${f1(e.cooldown)} с мощная волна: +${e.gain} интереса всем в радиусе ${e.radius}.` },
+  chorus: { need: 'charisma', name: 'Весь зал поёт', desc: e => `Каждые ${f1(e.cooldown)} с ${e.targets} ближайших зрителей подпевают: +${e.gain} интереса.` },
+  pyro: { need: 'costume', name: 'Огненное шоу', desc: e => `Раз в ${e.cooldown} с салют на весь зал: +${e.gain} интереса каждому.` },
+  smoke: { need: 'mic', name: 'Сухой лёд', desc: e => `Густой туман вокруг тебя (радиус ${e.radius}): интерес внутри почти не падает.` },
+  ballad: { need: 'fans', name: 'Песня для своих', desc: e => `Каждые ${f1(e.cooldown)} с ${e.targets} самых скучающих: +${e.gain} интереса, и они становятся фанатами.` },
+  breakdown: { need: 'second', name: 'Стоп-кадр', desc: e => `Раз в ${e.cooldown} с зал замирает на ${e.freeze} с.` },
+  magnet: { need: 'buzz', name: 'Слэм', desc: e => `Каждые ${f1(e.cooldown)} с ловит все эмоции в радиусе ${e.radius}.` },
+};
+const EVO_COLOR = '#ffd23d';
+function cardName(id, evolved) { return evolved ? EVOLUTIONS[id].name : CARD_DEFS[id].name; }
 
 function f1(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
 function pct(x) { return Math.round(x * 100) + '%'; }
@@ -285,6 +300,7 @@ function newGame(seed, worldH, levelIndex, mods) {
     driveBySource: {},
     levelUpTimes: [],
     cards: {},          // id -> уровень 1..3
+    evolved: {},        // id -> true, если карта эволюционировала
     cardOrder: [],
     timers: {},         // id -> секунд до срабатывания
     choice: null,       // массив вариантов, когда открыт выбор
@@ -302,6 +318,11 @@ function newGame(seed, worldH, levelIndex, mods) {
   G.incidentPlan = planIncidents(rnd, levelNo, M);
   // закреплённые в туре карты — сразу в игре на 1-м уровне
   for (const id of M.startCards) if (CARD_DEFS[id] && !G.cards[id]) giveCard(id);
+  // карта с репетиции — сразу на 2-м уровне, если для неё есть слот
+  const R = M.rehearsed && CARD_DEFS[M.rehearsed];
+  if (R && (G.cards[M.rehearsed] || G.cardOrder.filter(id => CARD_DEFS[id].type === R.type).length < CONFIG.slots[R.type])) {
+    while (lvl(M.rehearsed) < 2) giveCard(M.rehearsed);
+  }
   // реликвия «Кассета группы»: одна карта на выбор сразу на старте
   if (M.freeCard) G.pendingLevelUps = 1;
   if (M.boss === 'critic') {
@@ -318,6 +339,8 @@ function newGame(seed, worldH, levelIndex, mods) {
 //  Модификаторы от карт
 // ---------------------------------------------------------------------
 function lvl(id) { return G.cards[id] || 0; }
+// Параметр карты на текущем уровне; у эволюционировавшей карты — из её evo
+function cp(id, key) { const c = C[id]; return G.evolved[id] && c.evo[key] != null ? c.evo[key] : c[key][lvl(id) - 1]; }
 function radiusMul() { const l = lvl('costume'); return l ? C.costume.radiusMul[l - 1] : 1; }
 function gainMul() { const l = lvl('charisma'); return l ? C.charisma.gainMul[l - 1] : 1; }
 function cooldownMul() { const l = lvl('amp'); return (l ? C.amp.cooldownMul[l - 1] : 1) * G.mods.cooldownMul; }
@@ -325,7 +348,7 @@ function pickupRadius() { const l = lvl('mic'); return CONFIG.emotion.pickupRadi
 function emotionDriveMul() { const l = lvl('mic'); return l ? C.mic.driveMul[l - 1] : 1; }
 function auraRadius() { return CONFIG.player.auraRadius * radiusMul() * G.mods.auraRadiusMul; }
 function warmupDuration() { return Math.max(5, CONFIG.warmup.duration + G.mods.warmupBonus); }
-function smokeRadius() { const l = lvl('smoke'); return l ? C.smoke.radius[l - 1] * radiusMul() : 0; }
+function smokeRadius() { return lvl('smoke') ? cp('smoke', 'radius') * radiusMul() : 0; }
 
 // Фазы песни растягиваются под её длину (концерт босса длиннее)
 function currentPhase() {
@@ -380,7 +403,10 @@ function rollChoice() {
     const j = (G.rnd() * (i + 1)) | 0;
     [cand[i], cand[j]] = [cand[j], cand[i]];
   }
-  return cand.slice(0, 3);
+  // готовая эволюция всегда среди вариантов
+  const evo = Object.keys(EVOLUTIONS).filter(id => lvl(id) >= 3 && !G.evolved[id] && lvl(EVOLUTIONS[id].need) >= 1);
+  const out = evo.slice(0, 1).map(id => 'evo:' + id);
+  return out.concat(cand.slice(0, 3 - out.length));
 }
 
 function giveCard(id) {
@@ -405,7 +431,11 @@ function makeFans(n) {
 
 function chooseCard(id) {
   if (!G.choice || !G.choice.includes(id)) return;
-  giveCard(id);
+  if (id.startsWith('evo:')) {
+    const base = id.slice(4);
+    G.evolved[base] = true;
+    G.events.push({ type: 'evolve', id: base });
+  } else giveCard(id);
   G.choice = null;
   G.pendingLevelUps--;
 }
@@ -471,37 +501,41 @@ function updateCards(dt) {
   for (const id of ['solo', 'chorus', 'pyro', 'ballad', 'breakdown', 'magnet']) {
     const l = lvl(id);
     if (!l) continue;
-    G.timers[id] = (G.timers[id] == null ? C[id].cooldown[l - 1] : G.timers[id]) - dt;
+    G.timers[id] = (G.timers[id] == null ? cp(id, 'cooldown') : G.timers[id]) - dt;
     if (G.timers[id] > 0) continue;
-    G.timers[id] += C[id].cooldown[l - 1] * cdm;
+    G.timers[id] += cp(id, 'cooldown') * cdm;
     if (G.timers[id] < 0) G.timers[id] = 0;
 
     if (id === 'solo') {
-      const r = C.solo.radius[l - 1] * radiusMul();
-      for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, p.x, p.y) <= r) { gainInterest(v, C.solo.gain[l - 1]); v.flash = 0.5; }
+      const r = cp('solo', 'radius') * radiusMul();
+      for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, p.x, p.y) <= r) { gainInterest(v, cp('solo', 'gain')); v.flash = 0.5; }
       G.events.push({ type: 'solo', x: p.x, y: p.y, r });
     } else if (id === 'chorus') {
-      const range = C.chorus.range * radiusMul();
+      const range = (G.evolved.chorus ? C.chorus.evo.range : C.chorus.range) * radiusMul();
       const list = G.viewers.filter(inHall)
         .map(v => ({ v, d: dist(v.x, v.y, p.x, p.y) }))
         .filter(o => o.d <= range)
         .sort((a, b) => a.d - b.d)
-        .slice(0, C.chorus.targets[l - 1]);
-      for (const o of list) { gainInterest(o.v, C.chorus.gain[l - 1]); o.v.flash = 0.6; }
+        .slice(0, cp('chorus', 'targets'));
+      for (const o of list) { gainInterest(o.v, cp('chorus', 'gain')); o.v.flash = 0.6; }
       G.events.push({ type: 'chorus', x: p.x, y: p.y, targets: list.map(o => ({ x: o.v.x, y: o.v.y })) });
     } else if (id === 'pyro') {
-      const edge = G.L.stageBottom + C.pyro.reach[l - 1] * radiusMul();
-      for (const v of G.viewers) if (inHall(v) && v.y <= edge) { gainInterest(v, C.pyro.gain[l - 1]); v.flash = 0.7; }
+      const edge = G.L.stageBottom + cp('pyro', 'reach') * radiusMul();
+      for (const v of G.viewers) if (inHall(v) && v.y <= edge) { gainInterest(v, cp('pyro', 'gain')); v.flash = 0.7; }
       G.events.push({ type: 'pyro', edge });
     } else if (id === 'ballad') {
-      const list = G.viewers.filter(inHall).sort((a, b) => a.interest - b.interest).slice(0, C.ballad.targets[l - 1]);
-      for (const v of list) { gainInterest(v, C.ballad.gain[l - 1]); v.flash = 0.7; }
+      const list = G.viewers.filter(inHall).sort((a, b) => a.interest - b.interest).slice(0, cp('ballad', 'targets'));
+      for (const v of list) {
+        gainInterest(v, cp('ballad', 'gain')); v.flash = 0.7;
+        // «Песня для своих»: тот, кому спели, становится фанатом
+        if (G.evolved.ballad && !v.fan && !v.critic) { v.fan = true; v.decayMul *= C.fans.decayMul; }
+      }
       if (list.length) G.events.push({ type: 'ballad', x: p.x, y: p.y, targets: list.map(v => ({ x: v.x, y: v.y })) });
     } else if (id === 'breakdown') {
-      G.freeze = C.breakdown.freeze[l - 1];
+      G.freeze = cp('breakdown', 'freeze');
       G.events.push({ type: 'breakdown' });
     } else if (id === 'magnet') {
-      const r = C.magnet.radius[l - 1] * radiusMul();
+      const r = cp('magnet', 'radius') * radiusMul();
       for (let i = G.emotions.length - 1; i >= 0; i--) {
         const e = G.emotions[i];
         if (dist(e.x, e.y, p.x, p.y - 10) <= r) catchEmotion(i);
@@ -518,7 +552,7 @@ function updateViewers(dt, ph) {
   const dr = G.incident && G.incident.type === 'drunk' && !G.incident.leaving ? G.incident : null;
   const auraGain = stringBroken() ? 0 : CONFIG.player.auraGain + G.mods.auraGain;
   const smokeR = smokeRadius();
-  const smokeMul = smokeR ? C.smoke.decayMul[lvl('smoke') - 1] : 1;
+  const smokeMul = smokeR ? cp('smoke', 'decayMul') : 1;
   const auraR = auraRadius();
   const warm = G.t < warmupDuration();
   const encore = !!G.encore;
@@ -751,7 +785,7 @@ function results() {
     money: Math.round((left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (1 + encoreBonus) * G.mods.moneyMul),
     encored: G.encored, encoreBonus,
     incidents: G.incidentsHappened.slice(),
-    cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
+    cards: G.cardOrder.map(id => ({ id, level: G.cards[id], evolved: !!G.evolved[id] })),
     levels: G.level,
     levelNo: G.levelNo,
     passed: bonus > 0,
@@ -764,7 +798,7 @@ function results() {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    CONFIG, CARD_DEFS, CARD_IDS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
+    CONFIG, CARD_DEFS, CARD_IDS, EVOLUTIONS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
     get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul, giveCard,
   };
 }
@@ -1076,6 +1110,9 @@ if (typeof window !== 'undefined') (function () {
     if (n.type === 'concert') return ['&#9834;&#xFE0E;', VENUE_SHORT[n.venue]];
     if (n.type === 'event') return ['?', 'Событие'];
     if (n.type === 'market') return ['&#8381;', 'Барахолка'];
+    if (n.type === 'rest') return ['&#9790;&#xFE0E;', 'Выходной'];
+    if (n.type === 'rehearsal') return ['&#9835;&#xFE0E;', 'Репетиция'];
+    if (n.type === 'special') return ['&#10022;&#xFE0E;', 'Особый концерт'];
     return ['&#9733;&#xFE0E;', 'Босс: ' + TOUR.acts[SAVE.tour.act].boss.name];
   }
 
@@ -1086,7 +1123,9 @@ if (typeof window !== 'undefined') (function () {
     $('map-title').textContent = `Акт ${t.act + 1}. ${act.name}`;
     const pinned = t.pinned.map(id => CARD_DEFS[id].name).join(', ') || 'нет';
     $('map-stats').innerHTML = `<span class="chip">Деньги <b>${t.money} ₽</b></span><span class="chip">Связь <b>${t.bond}</b></span>` +
-      `<span class="chip">Вечеров <b>${t.nights}</b></span><span class="chip">Закреплены: <b>${esc(pinned)}</b></span>`;
+      `<span class="chip">Вечеров <b>${t.nights}</b></span><span class="chip">Закреплены: <b>${esc(pinned)}</b></span>` +
+      (t.rehearsed ? `<span class="chip">Разучена: <b>${esc(CARD_DEFS[t.rehearsed].name)}</b></span>` : '') +
+      (t.nextStart ? `<span class="chip">Выспались: <b>+${t.nextStart}</b></span>` : '');
     const rel = $('map-relics');
     rel.innerHTML = '';
     for (const id of t.relics) {
@@ -1122,10 +1161,65 @@ if (typeof window !== 'undefined') (function () {
     const t = SAVE.tour;
     if (n.type === 'concert') { startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, t, n) }); return; }
     if (n.type === 'boss') { bossIntro(n); return; }
+    if (n.type === 'special') { specialIntro(n); return; }
     enterNode(t, n);
     persist();
     if (n.type === 'event') runEvent();
+    else if (n.type === 'rest') openRest();
+    else if (n.type === 'rehearsal') openRehearsal();
     else openMarket(true);
+  }
+
+  function specialIntro(n) {
+    const tw = specialTwist(n);
+    story({
+      title: 'Особый концерт',
+      paras: [`${CONFIG.levels[n.venue].name}. Сегодня здесь не обычный вечер: позвали на замену хедлайнеру.`, `Условие: ${tw.name}. ${tw.desc}`],
+      result: `Касса ×${String(TOUR.special.moneyMul).replace('.', ',')}, а если удержишь зал — реликвия.`,
+      buttons: [
+        { label: 'На сцену', onClick: () => startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, SAVE.tour, n) }) },
+        { label: 'Назад к карте', cls: 'ghost', onClick: openMap },
+      ],
+    });
+  }
+
+  function openRest() {
+    const t = SAVE.tour;
+    story({
+      title: 'Выходной', paras: ['Вечер без концерта. Можно отдохнуть, подзаработать или наконец ответить на звонки.'],
+      buttons: REST.map(o => ({
+        label: o.label, sub: o.sub(t),
+        onClick: () => { const res = o.effect(t, g); persist(); story({ title: 'Выходной', paras: [], result: res, buttons: [{ label: 'К карте', onClick: openMap }] }); },
+      })),
+    });
+  }
+
+  function openRehearsal() {
+    const t = SAVE.tour;
+    const offer = rehearsalOffer(Math.random, CARD_IDS, t);
+    $('pin-sub').textContent = 'Выбери, что разучить. До конца акта каждый концерт начнётся с этой картой на 2-м уровне' +
+      (t.rehearsed ? ` (вместо «${CARD_DEFS[t.rehearsed].name}»).` : '.');
+    $('pin-title').textContent = 'Репетиция';
+    const box = $('pin-list');
+    box.innerHTML = '';
+    for (const id of offer) box.appendChild(cardButton(id, 1, () => { t.rehearsed = id; persist(); openMap(); }));
+    $('pin-skip').textContent = 'Просто поиграть для себя';
+    $('pin-skip').onclick = openMap;
+    show('overlay-pin');
+  }
+
+  // Карта-кнопка для экранов закрепления и репетиции
+  function cardButton(id, l, onClick) {
+    const def = CARD_DEFS[id];
+    const b = document.createElement('button');
+    b.className = 'card ' + def.type;
+    b.style.setProperty('--c', def.color);
+    const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(iconCanvas(id, 44));
+    const body = document.createElement('div'); body.className = 'card-body';
+    body.innerHTML = `<div class="card-top"><span class="card-name">${def.name}</span><span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'}</span></div><div class="card-desc">${def.desc(l)}</div>`;
+    b.append(ic, body);
+    b.addEventListener('click', onClick);
+    return b;
   }
 
   const BOSS_INTRO = {
@@ -1199,20 +1293,11 @@ if (typeof window !== 'undefined') (function () {
     $('pin-sub').textContent = full
       ? `Все ${slots} места заняты: новая карта заменит «${CARD_DEFS[t.pinned[0]].name}».`
       : `Карта будет у тебя в начале каждого концерта тура на 1-м уровне. Мест: ${t.pinned.length} из ${slots}.`;
+    $('pin-title').textContent = 'Закрепить карту';
     const box = $('pin-list');
     box.innerHTML = '';
-    for (const id of cand) {
-      const def = CARD_DEFS[id];
-      const b = document.createElement('button');
-      b.className = 'card ' + def.type;
-      b.style.setProperty('--c', def.color);
-      const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(iconCanvas(id, 44));
-      const body = document.createElement('div'); body.className = 'card-body';
-      body.innerHTML = `<div class="card-top"><span class="card-name">${def.name}</span><span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'}</span></div><div class="card-desc">${def.desc(0)}</div>`;
-      b.append(ic, body);
-      b.addEventListener('click', () => { if (full) t.pinned.shift(); t.pinned.push(id); persist(); then(); });
-      box.appendChild(b);
-    }
+    for (const id of cand) box.appendChild(cardButton(id, 0, () => { if (full) t.pinned.shift(); t.pinned.push(id); persist(); then(); }));
+    $('pin-skip').textContent = 'Не закреплять';
     $('pin-skip').onclick = then;
     show('overlay-pin');
   }
@@ -1375,13 +1460,13 @@ if (typeof window !== 'undefined') (function () {
     for (const o of document.querySelectorAll('.overlay')) o.classList.toggle('hidden', o.id !== id);
   }
 
-  function iconCanvas(id, size) {
+  function iconCanvas(id, size, evolved) {
     const c = document.createElement('canvas');
     const r = Math.min(window.devicePixelRatio || 1, 3);
     c.width = c.height = size * r; c.style.width = c.style.height = size + 'px';
     const x = c.getContext('2d');
     x.scale(r, r);
-    drawCardIcon(x, id, size / 2, size / 2, size);
+    drawCardIcon(x, id, size / 2, size / 2, size, evolved);
     return c;
   }
 
@@ -1393,17 +1478,22 @@ if (typeof window !== 'undefined') (function () {
     box.innerHTML = '';
     box.classList.remove('armed');
     for (const id of G.choice) {
-      const def = CARD_DEFS[id], l = lvl(id);
+      const isEvo = id.startsWith('evo:'), base = isEvo ? id.slice(4) : id;
+      const def = CARD_DEFS[base], l = lvl(base), evo = EVOLUTIONS[base];
       const b = document.createElement('button');
-      b.className = 'card ' + def.type;
-      b.style.setProperty('--c', def.color);
-      const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(iconCanvas(id, 52));
+      b.className = 'card ' + def.type + (isEvo ? ' evo' : '');
+      b.style.setProperty('--c', isEvo ? EVO_COLOR : def.color);
+      const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(iconCanvas(base, 52, isEvo));
       const body = document.createElement('div'); body.className = 'card-body';
-      body.innerHTML =
-        `<div class="card-top"><span class="card-name">${def.name}</span>` +
-        `<span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'} · ${l === 0 ? 'Новая' : 'Ур. ' + (l + 1)}</span></div>` +
-        `<div class="card-desc">${def.desc(l)}</div>` +
-        `<div class="card-pips">${[0, 1, 2].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div>`;
+      // подсказка: с какой пассивной карта эволюционирует на 3-м уровне
+      const hint = !isEvo && evo ? `<div class="card-evo">Эволюция: 3-й ур. + «${CARD_DEFS[evo.need].name}»</div>` : '';
+      body.innerHTML = isEvo
+        ? `<div class="card-top"><span class="card-name">${evo.name}</span><span class="card-tag">Эволюция · ${def.name} + ${CARD_DEFS[evo.need].name}</span></div>` +
+          `<div class="card-desc">${evo.desc(C[base].evo)}</div>`
+        : `<div class="card-top"><span class="card-name">${def.name}</span>` +
+          `<span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'} · ${l === 0 ? 'Новая' : 'Ур. ' + (l + 1)}</span></div>` +
+          `<div class="card-desc">${def.desc(l)}</div>` +
+          `<div class="card-pips">${[0, 1, 2].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div>` + hint;
       b.append(ic, body);
       b.addEventListener('click', () => {
         if (!box.classList.contains('armed')) return;
@@ -1411,7 +1501,7 @@ if (typeof window !== 'undefined') (function () {
         resumeMusic();
         state = 'play';
         show(null);
-        banners.push({ text: `${def.name}${l ? ' — ур. ' + (l + 1) : ''}!`, t: 0, life: 1.6, color: def.color });
+        if (!isEvo) banners.push({ text: `${def.name}${l ? ' — ур. ' + (l + 1) : ''}!`, t: 0, life: 1.6, color: def.color });
       });
       box.appendChild(b);
     }
@@ -1434,9 +1524,10 @@ if (typeof window !== 'undefined') (function () {
     if (r.boss) title = r.bossBeaten ? 'Босс повержен!' : 'Босс не сдался';
     if (mode === 'tour' && SAVE.tour) {
       const t = SAVE.tour;
-      const st = settleConcert(t, tourNode, r);
+      const st = settleConcert(t, tourNode, r, Math.random);
       enterNode(t, tourNode);
       tourBox.innerHTML = row('В кассу тура', `+${st.money} ₽`) + row('Деньги тура', `${t.money} ₽`) + row('Связь тела и души', `${t.bond} (+${st.bondGain})`) +
+        (st.relic ? row('Награда особого концерта', esc(RELICS[st.relic].name)) : '') +
         (r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
         (r.boss === 'critic' && !r.criticStayed ? '<p class="note">Критик ушёл, не дослушав.</p>' : '');
     } else if (mode === 'daily' && dailyNow) {
@@ -1470,8 +1561,8 @@ if (typeof window !== 'undefined') (function () {
     for (const c of r.cards) {
       const el = document.createElement('div');
       el.className = 'res-card';
-      el.appendChild(iconCanvas(c.id, 34));
-      const sp = document.createElement('span'); sp.textContent = `${CARD_DEFS[c.id].name} ${c.level}`;
+      el.appendChild(iconCanvas(c.id, 34, c.evolved));
+      const sp = document.createElement('span'); sp.textContent = c.evolved ? cardName(c.id, true) : `${CARD_DEFS[c.id].name} ${c.level}`;
       el.appendChild(sp);
       list.appendChild(el);
     }
@@ -1510,6 +1601,10 @@ if (typeof window !== 'undefined') (function () {
             particles.push({ x, y: G.L.stageBottom, vx: (Math.random() - 0.5) * 70, vy: -120 - Math.random() * 160, life: 1.1, max: 1.1, color: Math.random() < 0.5 ? '#ffd23d' : '#ff7a3d', size: 2.5, g: 260 });
           }
         }
+      } else if (ev.type === 'evolve') {
+        banners.push({ text: `Эволюция: ${EVOLUTIONS[ev.id].name}!`, t: 0, life: 2.4, color: EVO_COLOR });
+        shake = 0.3;
+        spawnParticles(G.player.x, G.player.y - 20, 30, EVO_COLOR, 160, 0.9, 3);
       } else if (ev.type === 'ballad') {
         fx.push({ type: 'chorus', x: ev.x, y: ev.y, targets: ev.targets, t: 0, life: 0.9, color: CARD_DEFS.ballad.color });
       } else if (ev.type === 'breakdown') {
@@ -1933,16 +2028,18 @@ if (typeof window !== 'undefined') (function () {
     ctx.globalAlpha = 1;
   }
 
-  function drawCardIcon(c, id, x, y, size) {
+  function drawCardIcon(c, id, x, y, size, evolved) {
     const s = size;
-    const col = CARD_DEFS[id].color;
+    const col = evolved ? EVO_COLOR : CARD_DEFS[id].color;
     c.save();
-    c.fillStyle = '#2a170d'; c.strokeStyle = col; c.lineWidth = Math.max(1.5, s * 0.06);
+    if (evolved) { c.shadowColor = EVO_COLOR; c.shadowBlur = s * 0.3; }
+    c.fillStyle = evolved ? '#3a2408' : '#2a170d'; c.strokeStyle = col; c.lineWidth = Math.max(1.5, s * (evolved ? 0.1 : 0.06));
     c.beginPath();
     const r = s * 0.2, h = s * 0.46;
     c.moveTo(x - h + r, y - h); c.arcTo(x + h, y - h, x + h, y + h, r); c.arcTo(x + h, y + h, x - h, y + h, r);
     c.arcTo(x - h, y + h, x - h, y - h, r); c.arcTo(x - h, y - h, x + h, y - h, r); c.closePath();
     c.fill(); c.stroke();
+    c.shadowBlur = 0;
     c.fillStyle = col; c.strokeStyle = col; c.lineWidth = s * 0.07; c.lineCap = 'round';
     const u = s * 0.3;
     if (id === 'solo') {
@@ -2084,12 +2181,12 @@ if (typeof window !== 'undefined') (function () {
         ctx.strokeStyle = '#3a2416'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
         ctx.strokeRect(x - sz / 2 + 1, cy - sz / 2 + 1, sz - 2, sz - 2); ctx.setLineDash([]);
       } else {
-        drawCardIcon(ctx, id, x, cy, sz);
+        drawCardIcon(ctx, id, x, cy, sz, G.evolved[id]);
         const l = G.cards[id];
         for (let p = 0; p < 3; p++) { ctx.fillStyle = p < l ? CARD_DEFS[id].color : '#3a2416'; ctx.fillRect(x - 7 + p * 5.5, cy + sz / 2 + 1, 4, 2.5); }
         // индикатор перезарядки
         if (G.timers[id] != null && C[id].cooldown) {
-          const cd = C[id].cooldown[l - 1] * cooldownMul();
+          const cd = cp(id, 'cooldown') * cooldownMul();
           const kk = clamp(1 - G.timers[id] / cd, 0, 1);
           ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x - sz / 2 + 2, cy - sz / 2 + 2, sz - 4, (sz - 4) * (1 - kk));
         }

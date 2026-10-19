@@ -13,7 +13,10 @@ const TOUR = {
   ],
   rows: [5, 7],            // вечеров в акте до босса
   rowWidth: [2, 3],        // точек в ряду карты
-  nodeWeights: { concert: 0.6, event: 0.27, market: 0.13 },
+  nodeWeights: { concert: 0.44, event: 0.2, market: 0.1, rest: 0.09, rehearsal: 0.09, special: 0.08 },
+  nodeCaps: { market: 2, rest: 2, rehearsal: 2, special: 2 }, // не больше стольких за акт и одной в ряду
+  special: { moneyMul: 1.5 },  // особый концерт: условие вечера посложнее, касса ×1,5 и реликвия за победу
+  rest: { sleepInterest: 10, workMoney: [120, 170, 220], callBond: 1.5 },
   rowDifficulty: 0.03,     // +3% к спаду интереса за каждый следующий вечер акта
   actDifficulty: [0, 0.12, 0.25], // и ещё столько за номер акта
   pinSlots: 3,             // сколько карт можно закрепить в стартовый набор
@@ -95,7 +98,7 @@ function soulMods(save) {
   const m = {
     auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0, perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
     cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false, blackoutLightMul: 1, drunkCalmMul: 1,
-    auraRadiusMul: 1, decayMul: 1, startCards: [], boss: null, duration: null,
+    auraRadiusMul: 1, decayMul: 1, startCards: [], rehearsed: null, boss: null, duration: null,
   };
   for (const n of SOUL_TREE) { const l = treeLevel(save, n.id); if (l) n.apply(m, l); }
   return m;
@@ -107,7 +110,10 @@ function tourMods(save, tour, node) {
   m.startCards = tour.pinned.slice();
   const act = TOUR.acts[tour.act];
   m.decayMul *= 1 + TOUR.rowDifficulty * (node.row + 1) + TOUR.actDifficulty[tour.act] + (tour.nextDecay || 0);
+  m.startInterest += tour.nextStart || 0;
+  m.rehearsed = tour.rehearsed || null;
   if (node.type === 'boss') { m.boss = act.boss.kind; m.duration = 180; }
+  if (node.type === 'special') { specialTwist(node).apply(m); m.moneyMul *= TOUR.special.moneyMul; }
   return m;
 }
 
@@ -118,27 +124,33 @@ function rint(rnd, a, b) { return a + Math.floor(rnd() * (b - a + 1)); }
 
 function pickType(rnd) {
   const w = TOUR.nodeWeights;
-  let x = rnd() * (w.concert + w.event + w.market);
-  if ((x -= w.concert) < 0) return 'concert';
-  if ((x -= w.event) < 0) return 'event';
-  return 'market';
+  let x = rnd() * Object.values(w).reduce((a, b) => a + b, 0);
+  for (const k of Object.keys(w)) if ((x -= w[k]) < 0) return k;
+  return 'concert';
 }
+
+// Условие особого концерта — одно из условий «Вызова дня»
+function specialTwist(node) { return DAILY_MODS[node.twist % DAILY_MODS.length]; }
 
 function genAct(rnd, actIdx) {
   const act = TOUR.acts[actIdx];
   const nRows = rint(rnd, TOUR.rows[0], TOUR.rows[1]);
   const rows = [];
-  let markets = 0;
+  const used = {};
   for (let r = 0; r < nRows; r++) {
     const w = rint(rnd, TOUR.rowWidth[0], TOUR.rowWidth[1]);
     const row = [];
     for (let i = 0; i < w; i++) {
-      // первый ряд — всегда концерты; барахолок не больше одной в ряду и двух за акт
+      // первый ряд — всегда концерты; редких точек не больше одной в ряду и nodeCaps за акт
       let type = r === 0 ? 'concert' : pickType(rnd);
-      if (type === 'market' && (markets >= 2 || row.some(n => n.type === 'market'))) type = 'event';
-      if (type === 'market') markets++;
+      const cap = TOUR.nodeCaps[type];
+      if (cap && ((used[type] || 0) >= cap || row.some(n => n.type === type))) type = type === 'market' ? 'event' : 'concert';
+      used[type] = (used[type] || 0) + 1;
       const venue = act.venues[r < nRows / 2 ? 0 : 1];
-      row.push({ row: r, col: i, x: (i + 0.5) / w, type, venue: type === 'concert' ? (rnd() < 0.25 ? act.venues[1 - act.venues.indexOf(venue)] : venue) : null });
+      const node = { row: r, col: i, x: (i + 0.5) / w, type, venue: null };
+      if (type === 'concert') node.venue = rnd() < 0.25 ? act.venues[1 - act.venues.indexOf(venue)] : venue;
+      if (type === 'special') { node.venue = act.venues[1]; node.twist = Math.floor(rnd() * 1000); }
+      row.push(node);
     }
     rows.push(row);
   }
@@ -194,16 +206,19 @@ function enterNode(tour, node) {
 }
 
 // Итог концерта в туре. passed — удержано больше половины зала.
-function settleConcert(tour, node, res) {
+function settleConcert(tour, node, res, rnd) {
   const money = Math.round(res.money * (res.passed ? 1 : 0.5));
   tour.money += money;
   tour.nights++;
   tour.kept += res.left;
   tour.nextDecay = 0;
+  tour.nextStart = 0;
   const share = res.total ? res.left / res.total : 0;
   const bondGain = Math.round(share * 10) / 10;
   tour.bond = Math.round((tour.bond + bondGain) * 10) / 10;
-  return { money, bondGain };
+  // особый концерт: за удержанный зал — реликвия
+  const relic = node.type === 'special' && res.passed ? randomRelic(tour, rnd || Math.random) : null;
+  return { money, bondGain, relic };
 }
 
 // Переход в следующий акт после победы над боссом
@@ -212,6 +227,7 @@ function nextAct(tour, seedShift) {
   tour.act++;
   if (tour.act >= TOUR.acts.length) return false;
   tour.map = genAct(mulberry32Tour(tour.seed + 7919 * tour.act + (seedShift || 0)), tour.act);
+  tour.rehearsed = null; // разученная карта действует до конца акта
   tour.row = -1; tour.col = null;
   return true;
 }
@@ -229,6 +245,32 @@ function marketOffer(tour, rnd) {
     const [a, b] = TOUR.marketPrices[Math.min(tour.act || 0, TOUR.marketPrices.length - 1)];
     out.push({ id, price: Math.round((a + rnd() * (b - a)) / 10) * 10 });
   }
+  return out;
+}
+
+// ---------------------------------------------------------------------
+//  Выходной и репетиция
+// ---------------------------------------------------------------------
+const REST = [
+  {
+    id: 'sleep', label: 'Выспаться', sub: () => `следующий зал начнёт с интересом +${TOUR.rest.sleepInterest}`,
+    effect: (t, g) => { t.nextStart = TOUR.rest.sleepInterest; return `Телефон выключен, будильник тоже. ${g('Проснулся', 'Проснулась')} к обеду — и впервые за месяц голова ясная.`; },
+  },
+  {
+    id: 'work', label: 'Взять подработку', sub: t => `+${TOUR.rest.workMoney[t.act]} ₽`,
+    effect: t => { const m = TOUR.rest.workMoney[t.act]; t.money += m; return `Свадьба в ресторане, «Ветер с моря дул» трижды на бис. +${m} ₽. Душа на это время ушла погулять.`; },
+  },
+  {
+    id: 'call', label: 'Позвонить маме', sub: () => `связь тела и души +${String(TOUR.rest.callBond).replace('.', ',')}`,
+    effect: (t, g) => { t.bond = Math.round((t.bond + TOUR.rest.callBond) * 10) / 10; return `Мама долго молчит, а потом говорит: «Я слышала тебя по радио. Ну, мне показалось, что тебя». ${g('Ты не стал', 'Ты не стала')} её разубеждать.`; },
+  },
+];
+
+// Репетиция: три карты на выбор; выбранная до конца акта начинает каждый концерт на 2-м уровне
+function rehearsalOffer(rnd, cardIds, tour) {
+  const pool = cardIds.filter(id => id !== tour.rehearsed);
+  const out = [];
+  while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
   return out;
 }
 
@@ -403,7 +445,7 @@ function mulberry32Tour(seed) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    TOUR, RELICS, RELIC_IDS, SOUL_TREE, SOUL_SKINS, EVENTS, BAR_TALKS, DAILY_MODS, giveRelic,
+    TOUR, RELICS, RELIC_IDS, SOUL_TREE, SOUL_SKINS, EVENTS, BAR_TALKS, DAILY_MODS, REST, giveRelic, rehearsalOffer, specialTwist,
     treeLevel, treePrice, buyTree, buySkin, pinSlots, soulMods, tourMods,
     genAct, availableNodes, newTour, enterNode, settleConcert, nextAct, tourFame, marketOffer, randomRelic,
     dayKey, dailyChallenge, mulberry32Tour,
