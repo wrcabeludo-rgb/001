@@ -305,3 +305,4 @@ html, body {
 .node.special { border-color: #6a4a12; }
 .relics .chip.bond { color: #ffd23d; }
 .bond-note { color: #ffd23d; }
+.note.bad { color: #ff5d7a; }
