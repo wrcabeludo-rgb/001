@@ -736,42 +736,68 @@ if (typeof window !== 'undefined') (function () {
   const persist = () => writeSave(storage(), SAVE);
 
   // ---------- аудио: музыка, часы ритма, звуки ----------
-  // Web Audio вместо <audio>: файл берётся обычным fetch (его отдаёт кэш service worker'а,
-  // музыка работает офлайн), а часы AudioContext дают точное время для пульса зала.
+  // Музыка играет через элемент <audio>: в установленном PWA на iOS Web Audio часто молчит.
+  // Файл берётся обычным fetch (его отдаёт кэш service worker'а, музыка работает офлайн)
+  // и подставляется как blob-ссылка — так Safari не спотыкается о Range-запросы к кэшу.
+  // Часы для пульса зала — currentTime самого элемента.
   const MUSIC_VOLUME = 0.55;
-  let actx = null, musicGain = null, source = null, musicToken = 0;
-  let loadedTrack = { url: null, buffer: null };
-  let trackStart = 0, trackDur = 0; // момент старта трека по часам AudioContext и его длина
+  const player = new Audio();
+  player.loop = true;
+  player.preload = 'auto';
+  player.setAttribute('playsinline', '');
+  let musicToken = 0, playing = false, fadeTimer = null, unlocked = false;
+  const blobs = {}; // url трека → blob-ссылка
 
-  function audio() {
-    if (!actx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return null;
-      // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
-      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ }
-      actx = new AC();
-      musicGain = actx.createGain();
-      musicGain.connect(actx.destination);
-    }
-    return actx;
-  }
-  // iOS может «прервать» звук (звонок, сворачивание PWA); возобновляем при любом касании
+  // Короткая тишина: «разблокирует» элемент первым касанием, дальше play() можно звать без жеста
+  const SILENCE = (() => {
+    const n = 800, b = new DataView(new ArrayBuffer(44 + n));
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) b.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); b.setUint32(4, 36 + n, true); str(8, 'WAVEfmt ');
+    b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true); b.setUint32(28, 8000, true); b.setUint16(32, 1, true); b.setUint16(34, 8, true);
+    str(36, 'data'); b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  })();
+
+  // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ }
+
   function wakeAudio() {
-    if (actx && actx.state !== 'running' && SAVE.settings.music && state !== 'levelup') actx.resume();
+    if (!unlocked && (!player.src || player.src === SILENCE)) {
+      unlocked = true;
+      player.src = SILENCE;
+      const p = player.play();
+      if (p) p.catch(() => { unlocked = false; });
+    }
+    // iOS может прервать звук (звонок, сворачивание PWA); возобновляем при касании
+    if (playing && player.paused && SAVE.settings.music && state !== 'levelup') resumeMusic();
   }
   document.addEventListener('pointerdown', wakeAudio, true);
 
   function loadTrack(url) {
-    if (loadedTrack.url === url) return Promise.resolve(loadedTrack.buffer);
+    if (blobs[url]) return Promise.resolve(blobs[url]);
     return fetch(url)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-      .then(data => new Promise((res, rej) => actx.decodeAudioData(data, res, rej)))
-      .then(buffer => { loadedTrack = { url, buffer }; return buffer; });
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+      .then(blob => (blobs[url] = URL.createObjectURL(blob)));
+  }
+
+  function setVolume(v) { try { player.volume = v; } catch (_) { /* на iOS громкость только системная */ } }
+  function fadeTo(target, sec, done) {
+    clearInterval(fadeTimer);
+    const from = player.volume, t0 = performance.now();
+    fadeTimer = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / (sec * 1000));
+      setVolume(from + (target - from) * k);
+      if (k >= 1) { clearInterval(fadeTimer); if (done) done(); }
+    }, 50);
   }
 
   function stopMusic() {
     musicToken++;
-    if (source) { try { source.stop(); } catch (_) { /* уже остановлен */ } source = null; }
+    clearInterval(fadeTimer);
+    playing = false;
+    player.pause();
   }
 
   // Загружает и запускает трек уровня. Промис выполняется, когда музыка заиграла
@@ -779,46 +805,37 @@ if (typeof window !== 'undefined') (function () {
   function playMusic(levelNo) {
     stopMusic();
     if (!SAVE.settings.music) return Promise.resolve(false);
-    const ctx = audio();
-    if (!ctx) return Promise.resolve(false);
-    ctx.resume();
     const token = musicToken;
-    return loadTrack(CONFIG.levels[levelNo].music).then(buffer => {
+    return loadTrack(CONFIG.levels[levelNo].music).then(src => {
       if (token !== musicToken) return false;
-      source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-      source.connect(musicGain);
-      const t = ctx.currentTime + 0.05;
-      musicGain.gain.cancelScheduledValues(ctx.currentTime);
-      musicGain.gain.setValueAtTime(0, ctx.currentTime);
-      musicGain.gain.linearRampToValueAtTime(MUSIC_VOLUME, t + 1.0);
-      source.start(t);
-      trackStart = t;
-      trackDur = buffer.duration;
-      return true;
+      if (player.src !== src) player.src = src;
+      player.currentTime = 0;
+      setVolume(0);
+      return player.play().then(() => {
+        if (token !== musicToken) { player.pause(); return false; }
+        playing = true;
+        fadeTo(MUSIC_VOLUME, 1.0);
+        return true;
+      });
     }).catch(() => false);
   }
 
   function fadeOutMusic(sec) {
-    if (!actx || !source) return;
-    const t = actx.currentTime;
-    musicGain.gain.cancelScheduledValues(t);
-    musicGain.gain.setValueAtTime(musicGain.gain.value, t);
-    musicGain.gain.linearRampToValueAtTime(0, t + sec);
-    const s = source;
-    source = null;
-    try { s.stop(t + sec + 0.05); } catch (_) { /* уже остановлен */ }
+    if (!playing) return;
+    const token = ++musicToken;
+    playing = false;
+    fadeTo(0, sec, () => { if (token === musicToken) player.pause(); });
   }
 
-  function pauseMusic() { if (actx) actx.suspend(); }
-  function resumeMusic() { if (actx && SAVE.settings.music) actx.resume(); }
+  function pauseMusic() { if (playing) player.pause(); }
+  function resumeMusic() {
+    if (playing && SAVE.settings.music) { const p = player.play(); if (p) p.catch(() => {}); }
+  }
 
-  // Позиция в треке по часам AudioContext; null — музыка не играет
-  function musicPos(ctxTime) {
-    if (!source || !actx) return null;
-    const t = (ctxTime == null ? actx.currentTime : ctxTime) - trackStart;
-    return t < 0 ? t : t % trackDur;
+  // Позиция в треке; null — музыка не играет
+  function musicPos() {
+    if (!playing || player.paused) return null;
+    return player.currentTime;
   }
 
   document.addEventListener('visibilitychange', () => {
@@ -2118,7 +2135,7 @@ if (typeof window !== 'undefined') (function () {
     lastTs = ts;
     clock += dt;
     if (G) {
-      // позиция трека по часам AudioContext, если музыка играет (для пульса зала)
+      // позиция трека по часам элемента <audio>, если музыка играет (для пульса зала)
       const pos = state === 'play' || state === 'ending' ? musicPos() : null;
       if (pos != null && pos >= 0) { G.externalClock = true; G.musicTime = pos; } else G.externalClock = false;
       beatT = G.musicTime;
