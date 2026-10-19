@@ -23,7 +23,14 @@ const TOUR = {
   // цены барахолки по актам: за 2–3 концерта хватает на одну-две вещи, не на все
   marketPrices: [[220, 340], [300, 440], [380, 540]],
   // «Слава» за тур: 1 за каждые perViewers удержанных зрителей, плюс за боссов и победу
-  fame: { perViewers: 10, boss: 15, victory: 30 },
+  fame: { perViewers: 10, boss: 15, victory: 30, trueEnding: 20 },
+  // Связь тела и души: пороги дают бонусы до конца тура, а от trueEndingBond открывается настоящий финал
+  bondPerks: [
+    { at: 3, name: 'Душа увереннее', desc: 'Радиус ауры души +10%.', apply: m => { m.auraRadiusMul *= 1.1; } },
+    { at: 6, name: 'Тело подыгрывает', desc: 'Тело на сцене само подогревает ближние ряды: +1,5 интереса в секунду.', apply: m => { m.bodyGain += 1.5; } },
+    { at: 9, name: 'Зал чувствует связь', desc: 'Бис начинается уже от 85% зала.', apply: m => { m.encoreEase += 0.05; } },
+  ],
+  trueEndingBond: 12,
 };
 
 // ---------------------------------------------------------------------
@@ -98,7 +105,7 @@ function soulMods(save) {
   const m = {
     auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0, perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
     cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false, blackoutLightMul: 1, drunkCalmMul: 1,
-    auraRadiusMul: 1, decayMul: 1, startCards: [], rehearsed: null, boss: null, duration: null,
+    auraRadiusMul: 1, decayMul: 1, startCards: [], rehearsed: null, bodyGain: 0, encoreEase: 0, boss: null, duration: null,
   };
   for (const n of SOUL_TREE) { const l = treeLevel(save, n.id); if (l) n.apply(m, l); }
   return m;
@@ -107,6 +114,7 @@ function soulMods(save) {
 function tourMods(save, tour, node) {
   const m = soulMods(save);
   for (const id of tour.relics) RELICS[id].apply(m);
+  for (const p of bondPerks(tour.bond)) p.apply(m);
   m.startCards = tour.pinned.slice();
   const act = TOUR.acts[tour.act];
   m.decayMul *= 1 + TOUR.rowDifficulty * (node.row + 1) + TOUR.actDifficulty[tour.act] + (tour.nextDecay || 0);
@@ -234,8 +242,15 @@ function nextAct(tour, seedShift) {
 
 function tourFame(tour, victory) {
   const F = TOUR.fame;
-  return Math.floor(tour.kept / F.perViewers) + tour.bosses * F.boss + (victory ? F.victory : 0);
+  return Math.floor(tour.kept / F.perViewers) + tour.bosses * F.boss + (victory ? F.victory : 0) +
+    (victory && trueEnding(tour) ? F.trueEnding : 0);
 }
+
+// Пороги связи, которых тур уже достиг, и следующий порог
+function bondPerks(bond) { return TOUR.bondPerks.filter(p => (bond || 0) >= p.at); }
+function nextBondPerk(bond) { return TOUR.bondPerks.find(p => (bond || 0) < p.at) || null; }
+// Настоящий финал: фестиваль покорён и тело с душой снова одно целое
+function trueEnding(tour) { return tour.bond >= TOUR.trueEndingBond; }
 
 function marketOffer(tour, rnd) {
   const pool = RELIC_IDS.filter(id => !tour.relics.includes(id));
@@ -396,7 +411,7 @@ const BAR_TALKS = [
   { lose: g => `«Ты ${g('спрашивал', 'спрашивала')}, почему я тебя вижу. Потому что сам когда-то вот так же летал над этим залом. Только своё тело я так и не догнал».`,
     win: () => '«Видел твоего бывшего друга по телевизору. Хорошая песня у него. Очень знакомая», — Михалыч долго смотрит на тебя.' },
   { lose: g => `«Мама твоя заходила. Спрашивала, не видел ли я старую кассету. Сказала: „${g('Он думает', 'Она думает')}, что тогда всё испортил${g('', 'а')}. А это не так“». Что это значит?`,
-    win: () => '«Десять лет назад ты стоял на этой сцене и молчал. Весь фестиваль молчал вместе с тобой. Знаешь, что было потом? Тебе ещё рано знать».' },
+    win: g => `«Десять лет назад ты ${g('стоял', 'стояла')} на этой сцене и ${g('молчал', 'молчала')}. Весь фестиваль молчал вместе с тобой. Знаешь, что было потом? Тебе ещё рано знать».` },
   { lose: () => '«Твой друг, — Михалыч понижает голос, — приходил сюда той ночью. Один. Сидел до утра и всё повторял: „Это я виноват“. В чём — не сказал».',
     win: () => '«Каждый раз, когда ты доходишь до конца, тело становится чуточку живее. Ещё немного — и вы снова будете одним целым».' },
   { lose: g => `«Кассета, которую ты боишься слушать… Там не твоя ошибка. Там то, что было после. Но ты ${g('должен', 'должна')} сам${g('', 'а')} до этого дойти».`,
@@ -447,7 +462,7 @@ if (typeof module !== 'undefined') {
   module.exports = {
     TOUR, RELICS, RELIC_IDS, SOUL_TREE, SOUL_SKINS, EVENTS, BAR_TALKS, DAILY_MODS, REST, giveRelic, rehearsalOffer, specialTwist,
     treeLevel, treePrice, buyTree, buySkin, pinSlots, soulMods, tourMods,
-    genAct, availableNodes, newTour, enterNode, settleConcert, nextAct, tourFame, marketOffer, randomRelic,
+    genAct, availableNodes, newTour, enterNode, settleConcert, nextAct, tourFame, bondPerks, nextBondPerk, trueEnding, marketOffer, randomRelic,
     dayKey, dailyChallenge, mulberry32Tour,
   };
 }
