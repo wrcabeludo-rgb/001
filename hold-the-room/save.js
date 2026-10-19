@@ -12,9 +12,8 @@ const STAR_SHARES = [0.5, 0.65, 0.8];
 function defaultSave() {
   return {
     v: 1,
-    records: { levels: [], gigs: 0, bestCombo: 0 },
-    // latency — задержка от доли до тапа по калибровке, секунды; null — не калибровали
-    settings: { music: true, latency: null },
+    records: { levels: [], gigs: 0 },
+    settings: { music: true },
   };
 }
 
@@ -48,16 +47,14 @@ function starsFor(left, total) {
 
 // Возвращает true, если это новый рекорд зала.
 function recordGig(records, levelNo, res) {
-  const r = records.levels[levelNo] || { bestLeft: 0, total: res.total, bestStars: 0, plays: 0, bestCombo: 0 };
+  const r = records.levels[levelNo] || { bestLeft: 0, total: res.total, bestStars: 0, plays: 0 };
   const isBest = res.left > r.bestLeft;
   r.bestLeft = Math.max(r.bestLeft, res.left);
   r.total = res.total;
   r.bestStars = Math.max(r.bestStars, starsFor(res.left, res.total));
-  r.bestCombo = Math.max(r.bestCombo || 0, res.comboBest || 0);
   r.plays++;
   records.levels[levelNo] = r;
   records.gigs++;
-  records.bestCombo = Math.max(records.bestCombo || 0, res.comboBest || 0);
   return isBest;
 }
 
