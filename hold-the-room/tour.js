@@ -38,6 +38,7 @@ const RELICS = {
   coin: { name: 'Монетка на удачу', desc: 'Касса каждого концерта +15%.', apply: m => { m.moneyMul *= 1.15; } },
   thermos: { name: 'Термос с чаем', desc: 'Разогрев длиннее на 6 секунд.', apply: m => { m.warmupBonus += 6; } },
   headphones: { name: 'Мониторные наушники', desc: 'Радиус сбора эмоций +10.', apply: m => { m.pickup += 10; } },
+  setlist: { name: 'Сет-лист на бис', desc: 'Касса за бис +25%.', apply: m => { m.encoreBonus += 0.25; } },
 };
 const RELIC_IDS = Object.keys(RELICS);
 
@@ -50,6 +51,7 @@ const SOUL_TREE = [
   { id: 'light', name: 'Лёгкая душа', cost: [20, 40, 70], desc: l => `Душа летает на ${l * 8}% быстрее.`, apply: (m, l) => { m.speedMul += 0.08 * l; } },
   { id: 'keen', name: 'Чуткость', cost: [20, 40, 70], desc: l => `Радиус сбора эмоций +${l * 6}.`, apply: (m, l) => { m.pickup += 6 * l; } },
   { id: 'spark', name: 'Вдохновение', cost: [30, 60, 90], desc: l => `Зал начинает с интересом на ${l * 3} выше.`, apply: (m, l) => { m.startInterest += 3 * l; } },
+  { id: 'encore', name: 'Любимец публики', cost: [25, 50, 80], desc: l => `Касса за бис +${l * 15}%.`, apply: (m, l) => { m.encoreBonus += 0.15 * l; } },
   { id: 'hands', name: 'Память рук', cost: [120], desc: () => 'Можно закрепить 4 карты вместо 3.', apply: () => {} },
   { id: 'charm', name: 'Талисман', cost: [100], desc: () => 'Каждый тур начинается со случайной реликвией.', apply: () => {} },
 ];
@@ -91,7 +93,7 @@ function pinSlots(save) { return TOUR.pinSlots + (treeLevel(save, 'hands') ? 1 :
 function soulMods(save) {
   const m = {
     auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0, perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
-    cooldownMul: 1, driveMul: 1, moneyMul: 1, warmupBonus: 0, noString: false, blackoutLightMul: 1, drunkCalmMul: 1,
+    cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false, blackoutLightMul: 1, drunkCalmMul: 1,
     auraRadiusMul: 1, decayMul: 1, startCards: [], boss: null, duration: null,
   };
   for (const n of SOUL_TREE) { const l = treeLevel(save, n.id); if (l) n.apply(m, l); }
