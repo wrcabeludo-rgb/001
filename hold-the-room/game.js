@@ -56,7 +56,8 @@ const CONFIG = {
   },
 
   // Бис: если к концу песни в зале столько и больше — ещё немного музыки и ливень эмоций
-  encore: { threshold: 0.8, duration: 20, emitMin: 0.4, emitMax: 0.9, moneyMul: 2 },
+  // moneyBonus — прибавка к кассе за бис; её наращивают перки души и реликвии
+  encore: { threshold: 0.9, duration: 20, emitMin: 0.4, emitMax: 0.9, moneyBonus: 0.2 },
 
   emotion: {
     intervalMin: 3.0,  // как часто довольный зритель выпускает эмоцию
@@ -117,7 +118,7 @@ const CONFIG = {
 const DEFAULT_MODS = {
   auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0,
   perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
-  cooldownMul: 1, driveMul: 1, moneyMul: 1, warmupBonus: 0, noString: false,
+  cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false,
   blackoutLightMul: 1, drunkCalmMul: 1, auraRadiusMul: 1, decayMul: 1,
   startCards: [],   // закреплённые карты: выдаются на 1-м уровне в начале песни
   boss: null,       // 'critic' | 'rival' | 'fear'
@@ -670,11 +671,12 @@ function results() {
   const left = viewersInHall();
   const total = G.total;
   const bonus = left > total / 2 ? CONFIG.money.halfBonus : 0;
+  const encoreBonus = G.encored ? CONFIG.encore.moneyBonus + G.mods.encoreBonus : 0;
   return {
     left, total, bonus,
     perViewer: CONFIG.money.perViewer + G.mods.perViewer,
-    money: Math.round((left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (G.encored ? CONFIG.encore.moneyMul : 1) * G.mods.moneyMul),
-    encored: G.encored,
+    money: Math.round((left * (CONFIG.money.perViewer + G.mods.perViewer) + bonus) * (1 + encoreBonus) * G.mods.moneyMul),
+    encored: G.encored, encoreBonus,
     incidents: G.incidentsHappened.slice(),
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id] })),
     levels: G.level,
@@ -1290,6 +1292,9 @@ if (typeof window !== 'undefined') (function () {
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+  window.addEventListener('pageshow', resize);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
   // ---------- оверлеи ----------
   function show(id) {
@@ -1379,7 +1384,7 @@ if (typeof window !== 'undefined') (function () {
     $('res-money').textContent = `${r.money} ₽`;
     $('res-money-note').textContent = `${r.left} × ${r.perViewer}` +
       (r.bonus ? ` + ${r.bonus} бонус за полный зал` : ' (бонус +100, если осталось больше половины)') +
-      (r.encored ? ', ×2 за бис' : '') + (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
+      (r.encored ? `, +${Math.round(r.encoreBonus * 100)}% за бис` : '') + (r.incidents.length ? `. Происшествий: ${r.incidents.length}.` : '');
     const free = mode === 'free';
     $('btn-continue').classList.toggle('hidden', free);
     $('btn-next').classList.toggle('hidden', !free || !r.passed || last);
@@ -2151,6 +2156,10 @@ if (typeof window !== 'undefined') (function () {
       if (state === 'play') { update(dt); handleEvents(); }
       updateVisuals(dt);
     }
+    // В установленном PWA iOS меняет размер окна и плотность пикселей без события resize —
+    // тогда холст рисуется в старом разрешении и растягивается, картинка «мылится».
+    if (canvas.width !== Math.round(window.innerWidth * Math.min(window.devicePixelRatio || 1, 3)) ||
+        canvas.height !== Math.round(window.innerHeight * Math.min(window.devicePixelRatio || 1, 3))) resize();
     render();
     requestAnimationFrame(frame);
   }
