@@ -22,26 +22,104 @@
   <div id="overlay-start" class="overlay">
     <div class="panel">
       <div class="logo">Удержи зал</div>
-      <button id="btn-play" class="btn menu-btn">Играть<small>выбери зал</small></button>
-      <button id="btn-records" class="btn ghost">Рекорды</button>
+      <button id="btn-tour" class="btn menu-btn">Тур<small id="tour-sub"></small></button>
+      <button id="btn-daily" class="btn alt menu-btn">Вызов дня<small id="daily-sub"></small></button>
+      <button id="btn-soul" class="btn cyan menu-btn">Душа<small id="soul-sub"></small></button>
+      <div class="menu-row">
+        <button id="btn-play" class="btn ghost">Тренировка</button>
+        <button id="btn-records" class="btn ghost">Рекорды</button>
+      </div>
       <div class="res-label how">Как играть</div>
       <p class="lead">Музыкант много лет играет на автопилоте: тело стоит на сцене, а душа давно ушла. Ты — его душа. Удержи зал до конца песни.</p>
       <ul class="rules">
         <li><b>Веди пальцем</b> — душа летит за ним над залом. Рядом с ней зрителям интереснее.</li>
         <li><b>Собирай эмоции</b> довольных зрителей: <span class="emo e1">&#9829;&#xFE0E;</span> <span class="emo e2">&#9834;&#xFE0E;</span> <span class="emo e3">&#10038;&#xFE0E;</span> (сердце, нота, хлопок). Они заряжают драйв, чем крупнее значок, тем больше.</li>
         <li><b>Полная шкала драйва</b> — новая карта на выбор.</li>
-        <li>Чем больше в зале довольных, тем живее тело музыканта на сцене.</li>
+        <li><b>Тур</b> — три акта с развилками: концерты, события, барахолка и босс в конце акта. Победил босса — закрепи одну карту, она будет с тобой каждый вечер. Проиграл — душа возвращается в бар, а «Слава» остаётся.</li>
         <li><b>Происшествия:</b> порвалась струна — верни душу к телу на сцене; дебошир — подлети и побудь рядом; вырубили свет — держи тех, кого видно.</li>
-        <li>Песня идёт 2 минуты. Удержишь 80% зала — будет <b>бис</b>: ливень эмоций и двойная касса.</li>
+        <li>Удержишь 80% зала — будет <b>бис</b>: ливень эмоций и двойная касса.</li>
       </ul>
       <p class="note credits">Музыка: Kevin MacLeod (incompetech.com), лицензия CC BY 4.0. Треки: Bossa Antigua, Backbay Lounge, Funkorama, Hep Cats, Volatile Reaction.</p>
     </div>
   </div>
 
+  <div id="overlay-hero" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Кто стоит на сцене?</div>
+      <p class="sub">Десять лет назад была группа и был шанс. Теперь — офис днём и бары по вечерам.</p>
+      <button id="hero-m" class="btn menu-btn">Музыкант<small>он</small></button>
+      <button id="hero-f" class="btn alt menu-btn">Музыкантша<small>она</small></button>
+      <button class="btn ghost" data-go="overlay-start">Назад</button>
+    </div>
+  </div>
+
+  <div id="overlay-story" class="overlay hidden">
+    <div class="panel">
+      <div id="story-title" class="title"></div>
+      <p id="story-speaker" class="note center"></p>
+      <div id="story-text" class="story-text"></div>
+      <div id="story-buttons"></div>
+    </div>
+  </div>
+
+  <div id="overlay-map" class="overlay hidden">
+    <div class="panel">
+      <div id="map-title" class="title"></div>
+      <div id="map-stats" class="chips"></div>
+      <div id="map-relics" class="chips relics"></div>
+      <p class="note center">Выбери, куда дальше. Сверху — босс акта.</p>
+      <div id="map-rows"></div>
+      <button class="btn ghost" data-go="overlay-start">В меню</button>
+      <button id="btn-giveup" class="link-btn">Сдаться и вернуться в бар</button>
+    </div>
+  </div>
+
+  <div id="overlay-market" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Барахолка</div>
+      <p class="sub">Реликвии действуют до конца тура. Деньги тура: <b id="market-money"></b></p>
+      <div id="market-list" class="list"></div>
+      <button id="market-leave" class="btn ghost">Уйти</button>
+    </div>
+  </div>
+
+  <div id="overlay-pin" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Закрепить карту</div>
+      <p id="pin-sub" class="sub"></p>
+      <div id="pin-list" class="list"></div>
+      <button id="pin-skip" class="btn ghost">Не закреплять</button>
+    </div>
+  </div>
+
+  <div id="overlay-soul" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Душа</div>
+      <p class="sub">Усиления навсегда. «Слава»: <b id="soul-fame"></b></p>
+      <div id="soul-tree" class="list"></div>
+      <div class="res-label how">Облик души</div>
+      <div id="soul-skins" class="list"></div>
+      <button class="btn ghost" data-go="overlay-start">Назад</button>
+    </div>
+  </div>
+
+  <div id="overlay-daily" class="overlay hidden">
+    <div class="panel">
+      <div class="title">Вызов дня</div>
+      <p id="daily-date" class="note center"></p>
+      <div id="daily-info" class="story-text"></div>
+      <p id="daily-best" class="sub"></p>
+      <button id="daily-play" class="btn">Играть</button>
+      <button id="daily-share" class="btn alt">Скопировать результат</button>
+      <p id="daily-share-text" class="note center"></p>
+      <button class="btn ghost" data-go="overlay-start">Назад</button>
+    </div>
+  </div>
+
   <div id="overlay-free" class="overlay hidden">
     <div class="panel">
-      <div class="title">Выбери зал</div>
-      <p class="sub">Туры появятся позже.</p>
+      <div class="title">Тренировка</div>
+      <p class="sub">Любой зал, без тура и наград. Рекорды сохраняются.</p>
       <div id="levels"></div>
       <button class="btn ghost" data-go="overlay-start">Назад</button>
     </div>
@@ -72,8 +150,10 @@
       <div class="res-row"><span>Осталось зрителей</span><b id="res-left"></b></div>
       <div class="res-row"><span>Касса</span><b id="res-money"></b></div>
       <p id="res-money-note" class="note"></p>
+      <div id="res-tour"></div>
       <div class="res-label">Взятые карты</div>
       <div id="res-cards"></div>
+      <button id="btn-continue" class="btn">Дальше</button>
       <button id="btn-next" class="btn">Следующий зал</button>
       <button id="btn-again" class="btn alt">Сыграть ещё раз</button>
       <button id="btn-menu" class="btn ghost">Выбрать зал</button>
@@ -81,6 +161,7 @@
   </div>
 
   <script src="./save.js"></script>
+  <script src="./tour.js"></script>
   <script src="./game.js"></script>
 </body>
 </html>

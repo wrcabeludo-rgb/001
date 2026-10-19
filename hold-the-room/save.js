@@ -2,7 +2,7 @@
 
 // =====================================================================
 //  Сохранения: рекорды и настройки. Только данные, без DOM.
-//  Карьера по дням убрана; туры появятся на этапе 2 (см. DESIGN.md).
+//  Тур, «Слава», дерево души, облики, ежедневный вызов — см. tour.js и DESIGN.md.
 // =====================================================================
 const SAVE_KEY = 'hold-the-room-save-v1';
 
@@ -12,8 +12,15 @@ const STAR_SHARES = [0.5, 0.65, 0.8];
 function defaultSave() {
   return {
     v: 1,
-    records: { levels: [], gigs: 0 },
+    records: { levels: [], gigs: 0, tours: 0, wins: 0, fameTotal: 0 },
     settings: { music: true },
+    profile: { hero: null },            // 'm' | 'f' — выбирается перед первым туром
+    fame: 0,                            // «Слава», тратится между турами
+    tree: {},                           // дерево способностей души: id -> уровень
+    skins: { owned: ['neon'], selected: 'neon' },
+    tour: null,                         // текущий тур (сохраняется между вечерами)
+    story: { intro: false, talks: 0 },  // сколько разговоров с Михалычем уже было
+    daily: {},                          // день -> { left, total }
   };
 }
 
@@ -30,6 +37,13 @@ function loadSave(storage) {
       v: 1,
       records: Object.assign(base.records, data.records),
       settings: Object.assign(base.settings, data.settings),
+      profile: Object.assign(base.profile, data.profile),
+      fame: typeof data.fame === 'number' ? data.fame : 0,
+      tree: Object.assign({}, data.tree),
+      skins: Object.assign(base.skins, data.skins),
+      tour: data.tour || null,
+      story: Object.assign(base.story, data.story),
+      daily: Object.assign({}, data.daily),
     };
   } catch (_) {
     return base;
