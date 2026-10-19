@@ -95,6 +95,9 @@ const CONFIG = {
     second: { saves: [2, 4, 6], interest: 30 },
   },
 
+  // Провал: если к концу песни ушло больше этой доли зала. В туре провал заканчивает тур.
+  defeatShare: 0.8,
+
   // касса концерта; в туре её сравнивают с ценами барахолки (TOUR.marketPrices)
   money: { perViewer: 6, halfBonus: 60 },
 
@@ -794,6 +797,7 @@ function results() {
     levels: G.level,
     levelNo: G.levelNo,
     passed: bonus > 0,
+    defeated: total - left > total * CONFIG.defeatShare,
     boss: G.boss,
     criticStayed: G.critic ? !G.critic.leaving : null,
     // босс побеждён: зал удержан, а критик (если он есть) остался до конца
@@ -1012,7 +1016,8 @@ if (typeof window !== 'undefined') (function () {
   const VENUE_SHORT = ['Вторник', 'Пятница', 'Студенты', 'Клуб', 'Фестиваль'];
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const starsHtml = n => [0, 1, 2].map(i => `<span class="star${i < n ? '' : ' off'}">&#9733;&#xFE0E;</span>`).join('');
-  const g = (m, f) => (heroIsF() ? f : m); // форма слова по герою
+  // Форма слова по герою. Пока герой — только музыкант; выбор героини вернём позже.
+  const g = (m, f) => (heroIsF() ? f : m);
   const cleanMods = () => Object.assign({}, DEFAULT_MODS, { startCards: [] });
 
   function levelButton(i, meta, onClick) {
@@ -1085,7 +1090,6 @@ if (typeof window !== 'undefined') (function () {
 
   // ---------- тур ----------
   function openTour() {
-    if (!SAVE.profile.hero) { show('overlay-hero'); return; }
     if (SAVE.tour) { openMap(); return; }
     SAVE.tour = newTour(SAVE, (Math.random() * 1e9) | 0);
     persist();
@@ -1107,9 +1111,6 @@ if (typeof window !== 'undefined') (function () {
     });
   }
 
-  function setHero(h) { SAVE.profile.hero = h; persist(); openTour(); }
-  $('hero-m').addEventListener('click', () => setHero('m'));
-  $('hero-f').addEventListener('click', () => setHero('f'));
 
   function nodeLabel(n) {
     if (n.type === 'concert') return ['&#9834;&#xFE0E;', VENUE_SHORT[n.venue]];
@@ -1551,6 +1552,7 @@ if (typeof window !== 'undefined') (function () {
 
     let title = r.encored ? 'Бис! Зал твой!' : r.passed ? (last ? 'Все залы пройдены!' : 'Зал удержан!') : 'Песня окончена';
     if (r.boss) title = r.bossBeaten ? 'Босс повержен!' : 'Босс не сдался';
+    if (r.defeated) title = 'Провал: зал опустел';
     if (mode === 'tour' && SAVE.tour) {
       const t = SAVE.tour;
       const st = settleConcert(t, tourNode, r, Math.random);
@@ -1558,7 +1560,8 @@ if (typeof window !== 'undefined') (function () {
       tourBox.innerHTML = row('В кассу тура', `+${st.money} ₽`) + row('Деньги тура', `${t.money} ₽`) + row('Связь тела и души', `${t.bond} (+${st.bondGain})`) +
         (st.relic ? row('Награда особого концерта', esc(RELICS[st.relic].name)) : '') +
         bondPerks(t.bond).filter(p => t.bond - st.bondGain < p.at).map(p => `<p class="note bond-note">Порог связи ${p.at}: «${esc(p.name)}». ${esc(p.desc)}</p>`).join('') +
-        (r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
+        (r.defeated && !r.boss ? `<p class="note bad">Ушло больше ${Math.round(CONFIG.defeatShare * 100)}% зрителей. Тур окончен.</p>`
+          : r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
         (r.boss === 'critic' && !r.criticStayed ? '<p class="note">Критик ушёл, не дослушав.</p>' : '');
     } else if (mode === 'daily' && dailyNow) {
       const prev = SAVE.daily[dailyNow.key];
@@ -1569,7 +1572,8 @@ if (typeof window !== 'undefined') (function () {
 
     $('res-title').textContent = title;
     $('res-level').textContent = `${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала` + (r.boss === 'critic' ? ' и критика.' : '.');
-    $('res-verdict').textContent = (isRecord ? 'Новый рекорд! ' : '') + (
+    $('res-verdict').textContent = (isRecord && !r.defeated ? 'Новый рекорд! ' : '') + (
+      r.defeated ? `Ушло больше ${Math.round(CONFIG.defeatShare * 100)}% зала. Так больше нельзя.` :
       share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :
       share > 0.5 ? 'Хороший сет, бармен доволен.' :
       share >= 0.25 ? 'Половина ушла, но кто-то остался.' : 'Тихий вечер. Попробуй другую сборку.');
@@ -1603,7 +1607,9 @@ if (typeof window !== 'undefined') (function () {
   let lastResult = null;
   $('btn-continue').addEventListener('click', () => {
     if (mode === 'daily') { openDaily(); return; }
-    if (tourNode && tourNode.type === 'boss') afterBoss(lastResult); else openMap();
+    if (tourNode && tourNode.type === 'boss') afterBoss(lastResult);
+    else if (lastResult.defeated) tourEnd(false, `Зал опустел: ушло больше ${Math.round(CONFIG.defeatShare * 100)}% зрителей.`);
+    else openMap();
   });
   $('btn-next').addEventListener('click', () => startGame(G.levelNo + 1, { mode: 'free', mods: cleanMods() }));
   $('btn-again').addEventListener('click', () => startGame(G.levelNo, { mode: 'free', mods: cleanMods() }));
@@ -1841,7 +1847,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
-  function heroIsF() { return !!(SAVE.profile && SAVE.profile.hero === 'f'); }
+  function heroIsF() { return false; }
 
   // ---------- пульс зала в такт музыки ----------
   let beatT = 0, pulse = 0, beatIndex = 0, bodyLife = 0;
