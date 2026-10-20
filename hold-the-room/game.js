@@ -68,7 +68,8 @@ const CONFIG = {
   // Кульминация: шкала копится от пойманных эмоций (быстрее на длинной цепочке).
   // Полная — duration секунд эмоции сыплются чаще и золотые, интерес почти не падает,
   // все активные карты срабатывают разом.
-  climax: { perCatch: 0.004, chainBonus: 0.01, duration: 6, emitMul: 2.5, driveMul: 1.5, decayMul: 0.6 },
+  // Копят шкалу только эмоции из цепочки длиной от minChain; за песню — не больше maxPerSong раз.
+  climax: { perCatch: 0.004, chainBonus: 0.01, minChain: 5, maxPerSong: 1, duration: 6, emitMul: 2.5, driveMul: 1.5, decayMul: 0.6 },
 
   emotion: {
     intervalMin: 3.0,  // как часто довольный зритель выпускает эмоцию
@@ -116,10 +117,13 @@ const CONFIG = {
   bosses: {
     passShare: 0.6, // на концерте босса нужно удержать больше этой доли зала
     // критик: один особый зритель, теряет интерес быстрее и не даёт эмоций; должен остаться до конца
-    critic: { decayMul: 2.3 },
+    critic: { decayMul: 2.3, sniffEvery: 12, sniffBelow: 60, sniffRadius: 130, sniffDrain: 10 },
     // соперник и страх летают по залу и гасят интерес вокруг; касание души отгоняет их
-    rival: { speed: 55, radius: 80, drain: 6.5, touch: 34, stun: 2.0, retarget: 2.2, start: 10 },
-    fear: { speed: 80, radius: 95, drain: 9.5, touch: 34, stun: 1.6, retarget: 1.8, start: 8 },
+    // соперник крадёт эмоции рядом с собой; за каждые stealPerLeave украденных один зритель уходит к нему
+    rival: { speed: 55, radius: 80, drain: 4.5, touch: 34, stun: 2.0, retarget: 2.2, start: 10, stealPerLeave: 14, stealRadius: 50 },
+    // страх раз в waveEvery секунд кричит: интерес вокруг падает, цепочка рвётся, шкала Кульминации тает
+    fear: { speed: 80, radius: 95, drain: 9.5, touch: 34, stun: 1.6, retarget: 1.8, start: 8,
+      waveEvery: 15, waveRadius: 150, waveDrain: 14, waveClimax: 0.3 },
   },
 
   // Происшествия во время песни. count — сколько их запланировано на уровне,
@@ -132,7 +136,8 @@ const CONFIG = {
     // струну чинит душа, вернувшись к телу на сцене
     string: { spot: { x: 180, y: 150 }, radius: 26, repairTime: 1.5 },
     blackout: { duration: 10, decayMul: 1.7, light: 85 },
-    drunk: { speed: 26, radius: 60, drain: 4, calmRadius: 32, calmTime: 1.8, maxTime: 40 },
+    // дебошир гасит интерес вокруг, давит эмоции, а пока его не успокоили — раз в fightEvery с выгоняет соседа
+    drunk: { speed: 30, radius: 80, drain: 7, calmRadius: 32, calmTime: 2.5, maxTime: 35, fightEvery: 6 },
   },
 };
 
@@ -246,7 +251,7 @@ const CARD_TAGS = {
 };
 const TAGS = {
   sound: { name: 'Звук', color: '#3de0ff', bonus: { 2: 'цепочка рвётся на 0,4 с позже', 4: 'множитель цепочки до ×2,5' } },
-  show: { name: 'Шоу', color: '#ff7a3d', bonus: { 2: 'радиус всех эффектов +10%', 4: 'Кульминация длится на 3 с дольше' } },
+  show: { name: 'Шоу', color: '#ff7a3d', bonus: { 2: 'радиус всех эффектов +10%', 4: 'вторая Кульминация за песню' } },
   crowd: { name: 'Публика', color: '#ff3d8b', bonus: { 2: 'интерес падает на 10% медленнее', 4: 'бонус за три одинаковых ×2' } },
 };
 
@@ -401,7 +406,8 @@ function tagCount(tag) { return G.cardOrder.filter(id => CARD_TAGS[id] === tag).
 function setOn(tag, n) { return tagCount(tag) >= n; }
 function chainGap() { return CONFIG.chain.gap + G.mods.chainGap + (setOn('sound', 2) ? 0.4 : 0); }
 function chainMul() { const ch = CONFIG.chain; return Math.min(ch.maxMul + (setOn('sound', 4) ? 0.5 : 0), 1 + (G.chain - 1) * ch.step); }
-function climaxDuration() { return CONFIG.climax.duration + (setOn('show', 4) ? 3 : 0); }
+function climaxDuration() { return CONFIG.climax.duration; }
+function climaxMax() { return CONFIG.climax.maxPerSong + (setOn('show', 4) ? 1 : 0); }
 function radiusMul() { const l = lvl('costume'); return (l ? C.costume.radiusMul[l - 1] : 1) * (setOn('show', 2) ? 1.1 : 1); }
 function gainMul() { const l = lvl('charisma'); return l ? C.charisma.gainMul[l - 1] : 1; }
 function cooldownMul() { const l = lvl('amp'); return (l ? C.amp.cooldownMul[l - 1] : 1) * G.mods.cooldownMul; }
@@ -732,8 +738,8 @@ function catchEmotion(i) {
     tripleBonus(e.kind);
   }
   // Кульминация копится, пока её нет
-  if (!G.climaxT && !G.encore) {
-    const K = CONFIG.climax;
+  const K = CONFIG.climax;
+  if (!G.climaxT && !G.encore && G.chain >= K.minChain && G.climaxes < climaxMax()) {
     G.climax += K.perCatch * (1 + K.chainBonus * Math.min(G.chain, 30)) * G.mods.climaxMul;
     if (G.climax >= 1) startClimax();
   }
@@ -841,6 +847,23 @@ function updateIncidents(dt) {
     if (!inc.leaving) {
       if (dist(p.x, p.y, inc.x, inc.y) <= D.calmRadius) inc.progress += dt * G.mods.drunkCalmMul / D.calmTime;
       else inc.progress = Math.max(0, inc.progress - dt * 0.5);
+      // давит эмоции рядом с собой
+      for (let i = G.emotions.length - 1; i >= 0; i--) {
+        const e = G.emotions[i];
+        if (dist(e.x, e.y + 22, inc.x, inc.y) <= D.radius * 0.6) { G.events.push({ type: 'smash', x: e.x, y: e.y }); G.emotions.splice(i, 1); }
+      }
+      // драка: ближайший зритель уходит
+      inc.fight = (inc.fight || 0) + dt;
+      if (inc.fight >= D.fightEvery) {
+        inc.fight = 0;
+        let near = null, nd = D.radius;
+        for (const v of G.viewers) {
+          if (v.leaving || v.critic) continue;
+          const d = dist(v.x, v.y, inc.x, inc.y);
+          if (d < nd) { nd = d; near = v; }
+        }
+        if (near) { near.interest = 0; G.events.push({ type: 'fight', x: near.x, y: near.y }); }
+      }
       if (inc.progress >= 1 || inc.age >= D.maxTime) {
         inc.leaving = true;
         G.events.push({ type: 'banner', text: inc.progress >= 1 ? 'Дебошира успокоили' : 'Дебошир ушёл сам' });
@@ -863,7 +886,20 @@ function updateIncidents(dt) {
 // ---------------------------------------------------------------------
 //  Боссы: соперник и страх летают по залу и гасят интерес; душа отгоняет их касанием
 // ---------------------------------------------------------------------
+// Критик раз в sniffEvery секунд «фыркает», если ему скучно: зрители рядом сомневаются
+function updateCritic(dt) {
+  const c = G.critic, B = CONFIG.bosses.critic;
+  if (!c || c.leaving || G.encore) return;
+  G.sniff = (G.sniff || 0) + dt;
+  if (G.sniff < B.sniffEvery) return;
+  G.sniff = 0;
+  if (c.interest >= B.sniffBelow) return;
+  for (const v of G.viewers) if (v !== c && !v.leaving && dist(v.x, v.y, c.x, c.y) <= B.sniffRadius) { v.interest -= B.sniffDrain; v.flash = 0.5; }
+  G.events.push({ type: 'sniff', x: c.x, y: c.y, r: B.sniffRadius });
+}
+
 function updateAntagonist(dt) {
+  updateCritic(dt);
   const A = G.antagonist;
   if (!A) return;
   const B = CONFIG.bosses[A.kind], p = G.player, L = G.L;
@@ -891,6 +927,31 @@ function updateAntagonist(dt) {
   if (A.stun) return;
   for (const v of G.viewers) {
     if (!v.leaving && dist(v.x, v.y, A.x, A.y) <= B.radius) v.interest -= B.drain * dt;
+  }
+  if (A.kind === 'rival') {
+    // крадёт эмоции; набрал достаточно — самый скучающий зритель уходит на его концерт
+    for (let i = G.emotions.length - 1; i >= 0; i--) {
+      const e = G.emotions[i];
+      if (dist(e.x, e.y + 22, A.x, A.y) <= B.stealRadius) {
+        G.events.push({ type: 'steal', x: e.x, y: e.y, tx: A.x, ty: A.y });
+        G.emotions.splice(i, 1);
+        A.stolen = (A.stolen || 0) + 1;
+        if (A.stolen % B.stealPerLeave === 0) {
+          const v = G.viewers.filter(x => !x.leaving).sort((a, b) => a.interest - b.interest)[0];
+          if (v) { v.interest = 0; G.events.push({ type: 'banner', text: 'Зритель ушёл на концерт соперника' }); }
+        }
+      }
+    }
+  } else if (A.kind === 'fear') {
+    // волна страха
+    A.wave = (A.wave || 0) + dt;
+    if (A.wave >= B.waveEvery) {
+      A.wave = 0;
+      for (const v of G.viewers) if (!v.leaving && dist(v.x, v.y, A.x, A.y) <= B.waveRadius) { v.interest -= B.waveDrain; v.flash = 0.6; }
+      if (G.chain) { G.events.push({ type: 'chainBreak', n: G.chain }); G.chain = 0; G.chainT = 0; }
+      G.climax = Math.max(0, G.climax - B.waveClimax);
+      G.events.push({ type: 'fearWave', x: A.x, y: A.y, r: B.waveRadius });
+    }
   }
   if (dist(p.x, p.y, A.x, A.y) <= B.touch) {
     A.stun = B.stun;
@@ -1374,9 +1435,9 @@ if (typeof window !== 'undefined') (function () {
   }
 
   const BOSS_INTRO = {
-    critic: () => [`В зале — критик журнала «Звук». Тот самый, что десять лет назад написал: «Сцена не для ${g('него', 'неё')}».`, 'Он скучает быстрее остальных и не хлопает. Если он уйдёт — провал, даже при полном зале.'],
-    rival: () => ['На соседней сцене — бывший друг. Сегодня у него сольный концерт, и он уводит твой зал к себе.', 'Его тень летает над залом и гасит интерес. Коснись её душой — она отлетит.'],
-    fear: () => ['Городской фестиваль. Та самая сцена. Свет бьёт в глаза, и где-то в темноте шевелится Страх.', 'Он летает по залу и уводит людей. Не дай ему забрать их — касайся его душой.'],
+    critic: () => [`В зале — критик журнала «Звук». Тот самый, что десять лет назад написал: «Сцена не для ${g('него', 'неё')}».`, 'Он скучает быстрее остальных и не хлопает. Когда ему скучно, он громко фыркает — и соседи начинают сомневаться. Если он уйдёт — провал, даже при полном зале.'],
+    rival: () => ['На соседней сцене — бывший друг. Сегодня у него сольный концерт, и он уводит твой зал к себе.', 'Его тень летает над залом, гасит интерес и крадёт эмоции. Чем больше украдёт — тем больше людей уйдёт к нему. Коснись её душой — она отлетит.'],
+    fear: () => ['Городской фестиваль. Та самая сцена. Свет бьёт в глаза, и где-то в темноте шевелится Страх.', 'Он летает по залу и уводит людей, а время от времени кричит: интерес вокруг падает, цепочка эмоций рвётся. Касайся его душой, чтобы отогнать.'],
   };
   function bondHint(t) {
     return trueEnding(t)
@@ -1474,6 +1535,8 @@ if (typeof window !== 'undefined') (function () {
   function afterBoss(r) {
     const t = SAVE.tour;
     if (!r.bossBeaten) { tourEnd(false, r.boss === 'critic' && !r.criticStayed ? 'Критик ушёл, не дослушав.' : 'Зал не удержан.'); return; }
+    // после финального босса закреплять карты уже незачем — тур окончен
+    if (t.act >= TOUR.acts.length - 1) { nextAct(t); tourEnd(true); return; }
     openPin(r.cards, () => {
       if (!nextAct(t)) { tourEnd(true); return; }
       persist();
@@ -1856,6 +1919,21 @@ if (typeof window !== 'undefined') (function () {
         banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
         shake = Math.max(shake, 0.2);
         spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
+      } else if (ev.type === 'smash') {
+        spawnParticles(ev.x, ev.y, 6, '#9a9aa2', 60, 0.4, 2.2);
+      } else if (ev.type === 'fight') {
+        pops.push({ x: ev.x, y: ev.y - 30, text: 'драка!', color: PAL.pink, t: 0, life: 1.0, size: 12 });
+        spawnParticles(ev.x, ev.y - 14, 12, PAL.pink, 110, 0.5, 2.4);
+        shake = Math.max(shake, 0.2);
+      } else if (ev.type === 'steal') {
+        fx.push({ type: 'steal', x: ev.x, y: ev.y, tx: ev.tx, ty: ev.ty, t: 0, life: 0.3 });
+      } else if (ev.type === 'fearWave') {
+        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.7, color: '#ff3d50' });
+        banners.push({ text: 'Волна страха!', t: 0, life: 1.4, color: '#ff3d50' });
+        shake = 0.4;
+      } else if (ev.type === 'sniff') {
+        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.6, color: '#b48cff' });
+        pops.push({ x: ev.x, y: ev.y - 48, text: 'Пф-ф…', color: '#b48cff', t: 0, life: 1.2, size: 13 });
       } else if (ev.type === 'chainBreak') {
         pops.push({ x: G.player.x, y: G.player.y - 60, text: `цепочка ×${ev.n}`, color: PAL.dim, t: 0, life: 1.1, size: 11 });
       } else if (ev.type === 'triple') {
@@ -2281,6 +2359,12 @@ if (typeof window !== 'undefined') (function () {
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
         }
         ctx.globalAlpha = 1;
+      } else if (f.type === 'steal') {
+        // соперник утягивает эмоцию к себе
+        const k = f.t / f.life, x = f.x + (f.tx - f.x) * k, y = f.y + (f.ty - 10 - f.y) * k;
+        ctx.fillStyle = '#b49cff'; ctx.globalAlpha = 1 - k * 0.5;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
       } else if (f.type === 'fly') {
         // эмоция за доли секунды долетает до души
         const k = f.t / f.life, p = G.player;
@@ -2479,7 +2563,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.fillStyle = PAL.pink; ctx.fillRect(bx, by, bw * k, bh);
     ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(bx, by, bw * k, 3);
     // шкала Кульминации
-    const ck = G.climaxT > 0 ? G.climaxT / climaxDuration() : G.climax;
+    const ck = G.climaxT > 0 ? G.climaxT / climaxDuration() : G.climaxes >= climaxMax() ? 0 : G.climax;
     ctx.fillStyle = '#3a2416'; ctx.fillRect(bx, by + bh + 2, bw, 3);
     ctx.fillStyle = G.climaxT > 0 && Math.floor(clock * 8) % 2 ? '#fff3b0' : EVO_COLOR; ctx.fillRect(bx, by + bh + 2, bw * clamp(ck, 0, 1), 3);
     ctx.textAlign = 'right'; ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif';
