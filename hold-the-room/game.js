@@ -60,6 +60,16 @@ const CONFIG = {
   // moneyBonus — прибавка к кассе за бис; её наращивают перки души и реликвии
   encore: { threshold: 0.9, duration: 20, emitMin: 0.4, emitMax: 0.9, moneyBonus: 0.2 },
 
+  // Цепочка: эмоции, пойманные с промежутком не больше gap, складываются в цепочку.
+  // Каждая следующая даёт на step больше драйва (до maxMul). На ярусах tiers — праздник.
+  chain: { gap: 1.2, step: 0.02, maxMul: 2, tiers: [10, 25, 50, 100], breakShow: 5 },
+  // Три одинаковые эмоции подряд: драйв и интерес зрителям рядом с душой
+  triple: { drive: 3, interest: 5, radiusMul: 2 },
+  // Кульминация: шкала копится от пойманных эмоций (быстрее на длинной цепочке).
+  // Полная — duration секунд эмоции сыплются чаще и золотые, интерес почти не падает,
+  // все активные карты срабатывают разом.
+  climax: { perCatch: 0.004, chainBonus: 0.01, duration: 6, emitMul: 2.5, driveMul: 1.5, decayMul: 0.6 },
+
   emotion: {
     intervalMin: 3.0,  // как часто довольный зритель выпускает эмоцию
     intervalMax: 6.0,
@@ -74,7 +84,8 @@ const CONFIG = {
 
   // Сколько драйва нужно на каждый следующий уровень
   // (по симуляции: ~4-7 уровней за 2-минутную песню, 1-2 из них в разогреве)
-  drive: { thresholds: [28, 50, 75, 105, 140, 180, 225, 275], extraPerLevel: 55 },
+  // (пороги подняты под цепочку эмоций: она умножает драйв до ×2)
+  drive: { thresholds: [55, 105, 165, 230, 305, 390, 490, 600], extraPerLevel: 125 },
 
   slots: { active: 4, passive: 4 },
 
@@ -135,6 +146,10 @@ const DEFAULT_MODS = {
   rehearsed: null,  // карта с репетиции тура: выдаётся сразу на 2-м уровне
   bodyGain: 0,      // порог связи: тело на сцене само даёт интерес ближним рядам
   encoreEase: 0,    // порог связи: на столько ниже порог биса
+  chainGap: 0,      // жанр: цепочка рвётся на столько секунд позже
+  emitMul: 1,       // жанр: как часто зрители выпускают эмоции
+  climaxMul: 1,     // жанр: как быстро копится Кульминация
+  tagBonus: null,   // жанр: карты этого тега считаются за одну больше
   boss: null,       // 'critic' | 'rival' | 'fear'
   duration: null,   // длина песни, если не стандартная (концерт босса — 180 с)
 };
@@ -221,6 +236,30 @@ const EVOLUTIONS = {
   magnet: { need: 'buzz', name: 'Слэм', desc: e => `Каждые ${f1(e.cooldown)} с ловит все эмоции в радиусе ${e.radius}.` },
 };
 const EVO_COLOR = '#ffd23d';
+
+// Теги карт: собери 2 или 4 карты одного тега — включится бонус набора
+const CARD_TAGS = {
+  solo: 'sound', amp: 'sound', mic: 'sound', breakdown: 'sound', ballad: 'sound',
+  pyro: 'show', smoke: 'show', costume: 'show', magnet: 'show',
+  chorus: 'crowd', charisma: 'crowd', fans: 'crowd', buzz: 'crowd', second: 'crowd',
+};
+const TAGS = {
+  sound: { name: 'Звук', color: '#3de0ff', bonus: { 2: 'цепочка рвётся на 0,4 с позже', 4: 'множитель цепочки до ×2,5' } },
+  show: { name: 'Шоу', color: '#ff7a3d', bonus: { 2: 'радиус всех эффектов +10%', 4: 'Кульминация длится на 3 с дольше' } },
+  crowd: { name: 'Публика', color: '#ff3d8b', bonus: { 2: 'интерес падает на 10% медленнее', 4: 'бонус за три одинаковых ×2' } },
+};
+
+// Дуэты: особые улучшения, которые предлагаются, когда у тебя есть обе карты пары.
+// Не занимают слот.
+const DUOS = {
+  laser: { a: 'pyro', b: 'smoke', name: 'Лазерное шоу', desc: 'Пиротехника перезаряжается на 40% быстрее.' },
+  hit: { a: 'solo', b: 'chorus', name: 'Хит', desc: 'Каждая волна Соло продлевает цепочку эмоций.' },
+  fanzone: { a: 'fans', b: 'buzz', name: 'Фан-зона', desc: 'Фанаты выпускают эмоции вдвое чаще.' },
+  dancebreak: { a: 'breakdown', b: 'magnet', name: 'Танцевальный брейк', desc: 'Когда срабатывает Брейк, душа ловит все эмоции в зале.' },
+  voice: { a: 'mic', b: 'charisma', name: 'Голос зала', desc: 'Три одинаковых эмоции подряд дают двойной бонус.' },
+  lastchord: { a: 'second', b: 'ballad', name: 'Последний аккорд', desc: 'Зритель, которого спасло Второе дыхание, становится фанатом.' },
+};
+const DUO_COLOR = '#ff8fe0';
 function cardName(id, evolved) { return evolved ? EVOLUTIONS[id].name : CARD_DEFS[id].name; }
 
 function f1(n) { return String(Math.round(n * 10) / 10).replace('.', ','); }
@@ -301,6 +340,11 @@ function newGame(seed, worldH, levelIndex, mods) {
     externalClock: false,
     encore: null, encored: false,
     freeze: 0,          // «Брейк»: сколько ещё секунд зал не теряет интерес
+    chain: 0, chainT: 0, bestChain: 0, // цепочка эмоций и сколько секунд до её обрыва
+    kinds: [],          // виды последних пойманных эмоций (для «три одинаковых»)
+    triples: 0,
+    climax: 0, climaxT: 0, climaxes: 0, // шкала Кульминации, её остаток и сколько раз была
+    duos: {},           // id дуэта -> true
     saves: 0,           // сколько раз сработало «Второе дыхание»
     drive: 0, level: 0, pendingLevelUps: 0,
     driveBySource: {},
@@ -346,8 +390,18 @@ function newGame(seed, worldH, levelIndex, mods) {
 // ---------------------------------------------------------------------
 function lvl(id) { return G.cards[id] || 0; }
 // Параметр карты на текущем уровне; у эволюционировавшей карты — из её evo
-function cp(id, key) { const c = C[id]; return G.evolved[id] && c.evo[key] != null ? c.evo[key] : c[key][lvl(id) - 1]; }
-function radiusMul() { const l = lvl('costume'); return l ? C.costume.radiusMul[l - 1] : 1; }
+function cp(id, key) {
+  const c = C[id], v = G.evolved[id] && c.evo[key] != null ? c.evo[key] : c[key][lvl(id) - 1];
+  return key === 'cooldown' && id === 'pyro' && G.duos.laser ? v * 0.6 : v;
+}
+
+// Сколько карт тега собрано (жанр может добавить одну) и включён ли бонус набора
+function tagCount(tag) { return G.cardOrder.filter(id => CARD_TAGS[id] === tag).length + (G.mods.tagBonus === tag ? 1 : 0); }
+function setOn(tag, n) { return tagCount(tag) >= n; }
+function chainGap() { return CONFIG.chain.gap + G.mods.chainGap + (setOn('sound', 2) ? 0.4 : 0); }
+function chainMul() { const ch = CONFIG.chain; return Math.min(ch.maxMul + (setOn('sound', 4) ? 0.5 : 0), 1 + (G.chain - 1) * ch.step); }
+function climaxDuration() { return CONFIG.climax.duration + (setOn('show', 4) ? 3 : 0); }
+function radiusMul() { const l = lvl('costume'); return (l ? C.costume.radiusMul[l - 1] : 1) * (setOn('show', 2) ? 1.1 : 1); }
 function gainMul() { const l = lvl('charisma'); return l ? C.charisma.gainMul[l - 1] : 1; }
 function cooldownMul() { const l = lvl('amp'); return (l ? C.amp.cooldownMul[l - 1] : 1) * G.mods.cooldownMul; }
 function pickupRadius() { const l = lvl('mic'); return CONFIG.emotion.pickupRadius + G.mods.pickup + (l ? C.mic.pickupBonus[l - 1] : 0); }
@@ -412,6 +466,11 @@ function rollChoice() {
   // готовая эволюция всегда среди вариантов
   const evo = Object.keys(EVOLUTIONS).filter(id => lvl(id) >= 3 && !G.evolved[id] && lvl(EVOLUTIONS[id].need) >= 1);
   const out = evo.slice(0, 1).map(id => 'evo:' + id);
+  // дуэт — если есть обе карты пары; предлагается не всегда, чтобы оставался сюрпризом
+  if (!out.length) {
+    const duo = Object.keys(DUOS).filter(id => !G.duos[id] && lvl(DUOS[id].a) && lvl(DUOS[id].b));
+    if (duo.length && G.rnd() < 0.6) out.push('duo:' + duo[(G.rnd() * duo.length) | 0]);
+  }
   return out.concat(cand.slice(0, 3 - out.length));
 }
 
@@ -420,6 +479,8 @@ function giveCard(id) {
   G.cards[id] = l + 1;
   if (l === 0) {
     G.cardOrder.push(id);
+    const tag = CARD_TAGS[id], n = tagCount(tag);
+    if (n === 2 || n === 4) G.events.push({ type: 'setBonus', tag, n });
     // первое срабатывание вскоре, чтобы было видно, что карта работает
     if (id === 'solo' || id === 'chorus') G.timers[id] = 0.6;
     if (id === 'pyro') G.timers[id] = 2.0;
@@ -441,6 +502,9 @@ function chooseCard(id) {
     const base = id.slice(4);
     G.evolved[base] = true;
     G.events.push({ type: 'evolve', id: base });
+  } else if (id.startsWith('duo:')) {
+    G.duos[id.slice(4)] = true;
+    G.events.push({ type: 'duo', id: id.slice(4) });
   } else giveCard(id);
   G.choice = null;
   G.pendingLevelUps--;
@@ -462,6 +526,17 @@ function update(dt) {
 
   G.t += dt;
   G.freeze = Math.max(0, G.freeze - dt);
+  if (G.chain) {
+    G.chainT -= dt;
+    if (G.chainT <= 0) {
+      if (G.chain >= CONFIG.chain.breakShow) G.events.push({ type: 'chainBreak', n: G.chain });
+      G.chain = 0;
+    }
+  }
+  if (G.climaxT > 0) {
+    G.climaxT -= dt;
+    if (G.climaxT <= 0) { G.climaxT = 0; G.events.push({ type: 'climaxEnd' }); }
+  }
   if (!G.externalClock) G.musicTime += dt;
   if (G.encore) {
     G.encore.t += dt;
@@ -516,6 +591,7 @@ function updateCards(dt) {
       const r = cp('solo', 'radius') * radiusMul();
       for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, p.x, p.y) <= r) { gainInterest(v, cp('solo', 'gain')); v.flash = 0.5; }
       G.events.push({ type: 'solo', x: p.x, y: p.y, r });
+      if (G.duos.hit && G.chain) G.chainT = chainGap(); // дуэт «Хит»: волна держит цепочку
     } else if (id === 'chorus') {
       const range = (G.evolved.chorus ? C.chorus.evo.range : C.chorus.range) * radiusMul();
       const list = G.viewers.filter(inHall)
@@ -540,6 +616,7 @@ function updateCards(dt) {
     } else if (id === 'breakdown') {
       G.freeze = cp('breakdown', 'freeze');
       G.events.push({ type: 'breakdown' });
+      if (G.duos.dancebreak) for (let i = G.emotions.length - 1; i >= 0; i--) catchEmotion(i);
     } else if (id === 'magnet') {
       const r = cp('magnet', 'radius') * radiusMul();
       for (let i = G.emotions.length - 1; i >= 0; i--) {
@@ -563,7 +640,9 @@ function updateViewers(dt, ph) {
   const body = CONFIG.incidents.string.spot, bodyGain = stringBroken() ? 0 : G.mods.bodyGain;
   const warm = G.t < warmupDuration();
   const encore = !!G.encore;
-  const emitThr = warm || encore ? CONFIG.warmup.emitThreshold : V.happyThreshold;
+  const climax = G.climaxT > 0;
+  const emitThr = warm || encore || climax ? CONFIG.warmup.emitThreshold : V.happyThreshold;
+  const decayK = (climax ? CONFIG.climax.decayMul : 1) * (setOn('crowd', 2) ? 0.9 : 1);
 
   for (const v of G.viewers) {
     if (v.gone) continue;
@@ -575,7 +654,7 @@ function updateViewers(dt, ph) {
       continue;
     }
     const d = dist(v.x, v.y, p.x, p.y);
-    let rate = encore || G.freeze > 0 ? 0 : baseRate * v.decayMul;
+    let rate = encore || G.freeze > 0 ? 0 : baseRate * v.decayMul * decayK;
     if (smokeR && d <= smokeR) rate *= smokeMul;
     v.interest -= rate * dt;
     if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
@@ -584,6 +663,7 @@ function updateViewers(dt, ph) {
     const sl = lvl('second');
     if (v.interest <= 0 && sl && G.saves < C.second.saves[sl - 1]) {
       v.interest = C.second.interest; v.flash = 0.8; G.saves++;
+      if (G.duos.lastchord && !v.fan && !v.critic) { v.fan = true; v.decayMul *= C.fans.decayMul; }
       G.events.push({ type: 'saved', x: v.x, y: v.y });
     }
     if (v.interest <= 0) {
@@ -613,7 +693,8 @@ function updateViewers(dt, ph) {
       const E = CONFIG.emotion;
       v.emitTimer = encore
         ? CONFIG.encore.emitMin + G.rnd() * (CONFIG.encore.emitMax - CONFIG.encore.emitMin)
-        : E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin);
+        : (E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin)) /
+          (G.mods.emitMul * (climax ? CONFIG.climax.emitMul : 1) * (v.fan && G.duos.fanzone ? 2 : 1));
       if (v.interest > emitThr && !v.critic) {
         const k = clamp((v.interest - emitThr) / (100 - emitThr), 0, 1);
         G.emotions.push({
@@ -621,7 +702,7 @@ function updateViewers(dt, ph) {
           kind: (G.rnd() * 3) | 0, // 0 сердце, 1 нота, 2 хлопок
           size: E.sizeMin + (E.sizeMax - E.sizeMin) * k,
           drive: E.baseDrive * (1 + E.maxDriveBonus * k),
-          life: E.life, age: 0,
+          life: E.life, age: 0, gold: climax,
           drift: (G.rnd() - 0.5) * 10,
         });
         G.emotionsSpawned++;
@@ -633,15 +714,53 @@ function updateViewers(dt, ph) {
 // Душа поймала эмоцию: драйв, а с «Сарафаном» — интерес зрителям рядом с эмоцией
 function catchEmotion(i) {
   const e = G.emotions[i];
-  addDrive(e.drive * emotionDriveMul() * G.mods.driveMul, 'emotion');
+  // цепочка
+  G.chain = G.chainT > 0 ? G.chain + 1 : 1;
+  G.chainT = chainGap();
+  G.bestChain = Math.max(G.bestChain, G.chain);
+  const drive = e.drive * emotionDriveMul() * G.mods.driveMul * chainMul() * (e.gold ? CONFIG.climax.driveMul : 1);
+  addDrive(drive, 'emotion');
   G.emotionsCollected++;
-  G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind });
+  G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind, chain: G.chain, drive, gold: e.gold });
+  if (CONFIG.chain.tiers.includes(G.chain)) G.events.push({ type: 'chainTier', n: G.chain });
+  // три одинаковых подряд
+  G.kinds.push(e.kind);
+  if (G.kinds.length > 3) G.kinds.shift();
+  if (G.kinds.length === 3 && G.kinds[0] === e.kind && G.kinds[1] === e.kind) {
+    G.kinds = [];
+    tripleBonus(e.kind);
+  }
+  // Кульминация копится, пока её нет
+  if (!G.climaxT && !G.encore) {
+    const K = CONFIG.climax;
+    G.climax += K.perCatch * (1 + K.chainBonus * Math.min(G.chain, 30)) * G.mods.climaxMul;
+    if (G.climax >= 1) startClimax();
+  }
   const bl = lvl('buzz');
   if (bl) {
     const r = C.buzz.radius * radiusMul();
     for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, e.x, e.y + 22) <= r) gainInterest(v, C.buzz.gain[bl - 1]);
   }
   G.emotions.splice(i, 1);
+}
+
+function tripleBonus(kind) {
+  const T = CONFIG.triple, p = G.player;
+  const k = (setOn('crowd', 4) ? 2 : 1) * (G.duos.voice ? 2 : 1);
+  G.triples++;
+  addDrive(T.drive * k, 'triple');
+  const r = auraRadius() * T.radiusMul;
+  for (const v of G.viewers) if (inHall(v) && dist(v.x, v.y, p.x, p.y) <= r) { gainInterest(v, T.interest * k); v.flash = 0.5; }
+  G.events.push({ type: 'triple', kind, x: p.x, y: p.y, r, k });
+}
+
+function startClimax() {
+  G.climax = 0;
+  G.climaxT = climaxDuration();
+  G.climaxes++;
+  // все активные карты срабатывают разом
+  for (const id of G.cardOrder) if (CARD_DEFS[id].type === 'active' && C[id].cooldown) G.timers[id] = 0;
+  G.events.push({ type: 'climax' });
 }
 
 function updateEmotions(dt) {
@@ -794,6 +913,8 @@ function results() {
     encored: G.encored, encoreBonus,
     incidents: G.incidentsHappened.slice(),
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id], evolved: !!G.evolved[id] })),
+    duos: Object.keys(G.duos),
+    bestChain: G.bestChain, triples: G.triples, climaxes: G.climaxes,
     levels: G.level,
     levelNo: G.levelNo,
     passed: bonus > 0,
@@ -807,7 +928,7 @@ function results() {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    CONFIG, CARD_DEFS, CARD_IDS, EVOLUTIONS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
+    CONFIG, CARD_DEFS, CARD_IDS, EVOLUTIONS, CARD_TAGS, TAGS, DUOS, DEFAULT_MODS, newGame, update, addDrive, chooseCard, skipChoice, results,
     get G() { return G; }, viewersInHall, pickupRadius, auraRadius, smokeRadius, radiusMul, giveCard,
   };
 }
@@ -829,7 +950,7 @@ if (typeof window !== 'undefined') (function () {
   const $ = id => document.getElementById(id);
   let dpr = 1, scale = 1, offX = 0, offY = 0, cssW = 0, cssH = 0;
   let state = 'start'; // start | loading | play | levelup | ending | results
-  let fx = [], particles = [], smoke = [], banners = [];
+  let fx = [], particles = [], smoke = [], banners = [], pops = [];
   let lastTs = 0, clock = 0, shake = 0;
 
   function worldHeightFor(w, h) {
@@ -992,7 +1113,7 @@ if (typeof window !== 'undefined') (function () {
     mode = opts.mode || 'free';
     tourNode = opts.node || null;
     newGame(opts.seed == null ? null : opts.seed, worldHeightFor(window.innerWidth, window.innerHeight), levelNo, opts.mods);
-    fx = []; particles = []; smoke = []; banners = [];
+    fx = []; particles = []; smoke = []; banners = []; pops = [];
     lifeFloor = mode === 'tour' && SAVE.tour ? Math.min(0.45, SAVE.tour.bond / 30) : 0;
     bodyLife = lifeFloor;
     resize();
@@ -1084,14 +1205,27 @@ if (typeof window !== 'undefined') (function () {
         `<b>${r ? `${r.bestLeft}/${r.total} ${starsHtml(r.bestStars)}` : '—'}</b></div>`;
     });
     html += `<div class="rec-head">Всего</div><div class="rec-row"><span>Концертов</span><b>${R.gigs}</b></div>`;
+    const nf = SAVE.story.fragments || 0;
+    html += `<div class="rec-head">Загадка: улик ${nf} из ${FRAGMENTS.length}</div>`;
+    FRAGMENTS.slice(0, nf).forEach((f, i) => { html += `<div class="rec-row"><span>${i + 1}. ${esc(f.title)}<small>${esc(f.text(g))}</small></span></div>`; });
+    if (SAVE.story.solved) html += `<div class="rec-row"><span>Ответ<small>${esc(EPILOGUE.join(' '))}</small></span></div>`;
     $('records').innerHTML = html;
     show('overlay-records');
   }
 
   // ---------- тур ----------
-  function openTour() {
+  function openTour(genre) {
     if (SAVE.tour) { openMap(); return; }
-    SAVE.tour = newTour(SAVE, (Math.random() * 1e9) | 0);
+    const open = genresUnlocked(SAVE);
+    if (!genre && open.length > 1) {
+      story({
+        title: 'Жанр тура', paras: ['Каким будет этот тур? Жанр меняет стартовую карту и правила вечеров.'],
+        buttons: open.map(x => ({ label: x.name, sub: x.desc, onClick: () => openTour(x.id) }))
+          .concat([{ label: 'Назад', cls: 'ghost', onClick: openMenu }]),
+      });
+      return;
+    }
+    SAVE.tour = newTour(SAVE, (Math.random() * 1e9) | 0, genre);
     persist();
     const relic = SAVE.tour.relics[0];
     const paras = SAVE.story.intro ? [
@@ -1133,6 +1267,7 @@ if (typeof window !== 'undefined') (function () {
     $('map-stats').innerHTML = `<span class="chip">Деньги <b>${t.money} ₽</b></span><span class="chip">Связь <b>${t.bond}</b>${esc(bondTip)}</span>` +
       `<span class="chip">Вечеров <b>${t.nights}</b></span><span class="chip">Закреплены: <b>${esc(pinned)}</b></span>` +
       (t.rehearsed ? `<span class="chip">Разучена: <b>${esc(CARD_DEFS[t.rehearsed].name)}</b></span>` : '') +
+      (t.genre && t.genre !== 'acoustic' ? `<span class="chip">Жанр: <b>${esc(genreOf(t).name)}</b></span>` : '') +
       (t.nextStart ? `<span class="chip">Выспались: <b>+${t.nextStart}</b></span>` : '');
     const rel = $('map-relics');
     rel.innerHTML = '';
@@ -1349,7 +1484,15 @@ if (typeof window !== 'undefined') (function () {
     SAVE.records.tours++;
     if (victory) SAVE.records.wins++;
     const whole = victory && trueEnding(t);
+    const genresBefore = genresUnlocked(SAVE).length;
     if (whole) SAVE.records.trueEnds++;
+    const newGenre = genresUnlocked(SAVE).length > genresBefore ? genresUnlocked(SAVE).slice(-1)[0] : null;
+    // улики загадки: одна за тур, за настоящий финал — две
+    const had = SAVE.story.fragments || 0;
+    SAVE.story.fragments = Math.min(FRAGMENTS.length, had + (whole ? 2 : 1));
+    const found = FRAGMENTS.slice(had, SAVE.story.fragments).map((f, i) => `Улика ${had + i + 1} из ${FRAGMENTS.length} — «${f.title}» (${f.speaker}). ${f.text(g)}`);
+    const solvedNow = whole && SAVE.story.fragments >= FRAGMENTS.length && !SAVE.story.solved;
+    if (solvedNow) SAVE.story.solved = true;
     SAVE.records.fameTotal += fame;
     const talk = BAR_TALKS[Math.min(SAVE.story.talks, BAR_TALKS.length - 1)];
     SAVE.story.talks++;
@@ -1359,16 +1502,18 @@ if (typeof window !== 'undefined') (function () {
     story({
       title: whole ? 'Снова одно целое' : victory ? 'Фестиваль покорён' : 'Душа вернулась в бар',
       speaker: whole ? '' : 'Михалыч',
-      paras: whole ? [
+      paras: (whole ? [
         stats,
         `Последний аккорд. Зал встаёт. И в этот момент душа опускается на сцену — и входит в тело. Пальцы на грифе тёплые. ${g('Он', 'Она')} поднимает голову и впервые за десять лет видит зал своими глазами.`,
         `Где-то у барной стойки Михалыч поднимает стакан. Кажется, он плачет. Или это свет.`,
+        ...(solvedNow ? EPILOGUE : SAVE.story.solved ? [] : [`Но почему тогда, десять лет назад, душа ушла? Улик собрано ${SAVE.story.fragments} из ${FRAGMENTS.length}. Ответ ещё впереди.`]),
       ] : victory ? [
         stats,
         `Зал аплодирует, а тело кланяется — вежливо, как на корпоративе. Душа висит над сценой и не может войти обратно: связь ${t.bond} из ${TOUR.trueEndingBond}.`,
         talk.win(g),
-      ] : [stats, talk.lose(g)],
-      result: `+${fame} «Славы»${whole ? ` (из них ${TOUR.fame.trueEnding} — за настоящий финал)` : ''}. Её можно потратить на душу.`,
+      ] : [stats, talk.lose(g)]).concat(found),
+      result: `+${fame} «Славы»${whole ? ` (из них ${TOUR.fame.trueEnding} — за настоящий финал)` : ''}. Её можно потратить на душу.` +
+        (newGenre ? ` Открыт новый жанр: «${newGenre.name}» — выбери его в начале следующего тура.` : ''),
       buttons: [{ label: 'Прокачать душу', onClick: openSoul }, { label: 'В меню', cls: 'ghost', onClick: openMenu }],
     });
   }
@@ -1446,7 +1591,7 @@ if (typeof window !== 'undefined') (function () {
   for (const b of document.querySelectorAll('[data-go]')) {
     b.addEventListener('click', () => { if (b.dataset.go === 'overlay-start') openMenu(); else show(b.dataset.go); });
   }
-  $('btn-tour').addEventListener('click', openTour);
+  $('btn-tour').addEventListener('click', () => openTour());
   $('btn-daily').addEventListener('click', openDaily);
   $('btn-soul').addEventListener('click', openSoul);
   $('btn-play').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
@@ -1500,6 +1645,38 @@ if (typeof window !== 'undefined') (function () {
     return c;
   }
 
+  // Карта дуэта на экране выбора
+  function duoButton(id, box) {
+    const d = DUOS[id];
+    const b = document.createElement('button');
+    b.className = 'card duo';
+    b.style.setProperty('--c', DUO_COLOR);
+    const ic = document.createElement('div'); ic.className = 'card-icon'; ic.appendChild(duoIcon(id, 52));
+    const body = document.createElement('div'); body.className = 'card-body';
+    body.innerHTML = `<div class="card-top"><span class="card-name">${d.name}</span><span class="card-tag">Дуэт · ${CARD_DEFS[d.a].name} + ${CARD_DEFS[d.b].name}</span></div>` +
+      `<div class="card-desc">${d.desc}</div>`;
+    b.append(ic, body);
+    b.addEventListener('click', () => {
+      if (!box.classList.contains('armed')) return;
+      chooseCard('duo:' + id);
+      resumeMusic();
+      state = 'play';
+      show(null);
+    });
+    return b;
+  }
+
+  function duoIcon(id, size) {
+    const c = document.createElement('canvas');
+    const r = Math.min(window.devicePixelRatio || 1, 3);
+    c.width = c.height = size * r; c.style.width = c.style.height = size + 'px';
+    const x = c.getContext('2d');
+    x.scale(r, r);
+    drawCardIcon(x, DUOS[id].a, size * 0.36, size * 0.36, size * 0.66);
+    drawCardIcon(x, DUOS[id].b, size * 0.64, size * 0.64, size * 0.66);
+    return c;
+  }
+
   function openLevelUp() {
     state = 'levelup';
     pauseMusic();
@@ -1508,8 +1685,9 @@ if (typeof window !== 'undefined') (function () {
     box.innerHTML = '';
     box.classList.remove('armed');
     for (const id of G.choice) {
+      if (id.startsWith('duo:')) { box.appendChild(duoButton(id.slice(4), box)); continue; }
       const isEvo = id.startsWith('evo:'), base = isEvo ? id.slice(4) : id;
-      const def = CARD_DEFS[base], l = lvl(base), evo = EVOLUTIONS[base];
+      const def = CARD_DEFS[base], l = lvl(base), evo = EVOLUTIONS[base], tag = TAGS[CARD_TAGS[base]];
       const b = document.createElement('button');
       b.className = 'card ' + def.type + (isEvo ? ' evo' : '');
       b.style.setProperty('--c', isEvo ? EVO_COLOR : def.color);
@@ -1521,7 +1699,7 @@ if (typeof window !== 'undefined') (function () {
         ? `<div class="card-top"><span class="card-name">${evo.name}</span><span class="card-tag">Эволюция · ${def.name} + ${CARD_DEFS[evo.need].name}</span></div>` +
           `<div class="card-desc">${evo.desc(C[base].evo)}</div>`
         : `<div class="card-top"><span class="card-name">${def.name}</span>` +
-          `<span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'} · ${l === 0 ? 'Новая' : 'Ур. ' + (l + 1)}</span></div>` +
+          `<span class="card-tag">${def.type === 'active' ? 'Активная' : 'Пассивная'} · <b style="color:${tag.color}">${tag.name} ${tagCount(CARD_TAGS[base]) + (l ? 0 : 1)}</b> · ${l === 0 ? 'Новая' : 'Ур. ' + (l + 1)}</span></div>` +
           `<div class="card-desc">${def.desc(l)}</div>` +
           `<div class="card-pips">${[0, 1, 2].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</div>` + hint;
       b.append(ic, body);
@@ -1589,6 +1767,9 @@ if (typeof window !== 'undefined') (function () {
     $('btn-again').classList.toggle('hidden', !free);
     $('btn-menu').classList.toggle('hidden', !free);
 
+    $('res-show').innerHTML = row('Лучшая цепочка', `×${r.bestChain}`) +
+      (r.climaxes ? row('Кульминаций', r.climaxes) : '') + (r.triples ? row('Три подряд', r.triples) : '') +
+      (r.duos.length ? row('Дуэты', r.duos.map(id => esc(DUOS[id].name)).join(', ')) : '');
     const list = $('res-cards');
     list.innerHTML = '';
     if (!r.cards.length) list.innerHTML = '<span class="muted">Без карт</span>';
@@ -1651,7 +1832,34 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'saved') {
         spawnParticles(ev.x, ev.y - 18, 10, CARD_DEFS.second.color, 80, 0.6, 2.4);
       } else if (ev.type === 'pickup') {
-        spawnParticles(ev.x, ev.y, 7, EMO_COLORS[ev.kind], 70, 0.45, 2.2);
+        const col = ev.gold ? EVO_COLOR : EMO_COLORS[ev.kind];
+        spawnParticles(ev.x, ev.y, ev.gold ? 12 : 7, col, ev.gold ? 110 : 70, 0.45, 2.2);
+        // эмоция влетает в душу
+        fx.push({ type: 'fly', x: ev.x, y: ev.y, t: 0, life: 0.18, color: col });
+        pops.push({ x: ev.x, y: ev.y - 8, text: '+' + (ev.drive < 10 ? f1(ev.drive) : Math.round(ev.drive)), color: col, t: 0, life: 0.7, size: 10 + Math.min(6, ev.chain / 10) });
+      } else if (ev.type === 'chainTier') {
+        banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
+        shake = Math.max(shake, 0.2);
+        spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
+      } else if (ev.type === 'chainBreak') {
+        pops.push({ x: G.player.x, y: G.player.y - 60, text: `цепочка ×${ev.n}`, color: PAL.dim, t: 0, life: 1.1, size: 11 });
+      } else if (ev.type === 'triple') {
+        const col = EMO_COLORS[ev.kind];
+        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
+        pops.push({ x: ev.x, y: ev.y - 74, text: (ev.k > 1 ? `Три ×${ev.k}!` : 'Три подряд!'), color: col, t: 0, life: 1.0, size: 14 });
+        spawnParticles(ev.x, ev.y - 20, 14, col, 120, 0.6, 2.6);
+      } else if (ev.type === 'climax') {
+        banners.push({ text: 'КУЛЬМИНАЦИЯ!', t: 0, life: 2.2, color: EVO_COLOR });
+        shake = 0.5;
+        for (let i = 0; i < 50; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? EVO_COLOR : PAL.pink, 180, 1.2, 3, 140);
+      } else if (ev.type === 'climaxEnd') {
+        spawnParticles(G.player.x, G.player.y - 20, 24, EVO_COLOR, 160, 0.8, 2.6);
+      } else if (ev.type === 'setBonus') {
+        const T = TAGS[ev.tag];
+        banners.push({ text: `Набор «${T.name}» ×${ev.n}: ${T.bonus[ev.n]}`, t: 0, life: 2.4, color: T.color });
+      } else if (ev.type === 'duo') {
+        banners.push({ text: `Дуэт: ${DUOS[ev.id].name}!`, t: 0, life: 2.2, color: DUO_COLOR });
+        spawnParticles(G.player.x, G.player.y - 20, 26, DUO_COLOR, 150, 0.8, 2.8);
       } else if (ev.type === 'repel') {
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
         spawnParticles(ev.x, ev.y - 10, 14, ev.kind === 'fear' ? '#ff3d50' : '#b49cff', 130, 0.5, 2.6);
@@ -1687,6 +1895,8 @@ if (typeof window !== 'undefined') (function () {
     particles = particles.filter(p => p.life > 0);
     for (const b of banners) b.t += dt;
     banners = banners.filter(b => b.t < b.life).slice(-2);
+    for (const o of pops) { o.t += dt; o.y -= 26 * dt; }
+    pops = pops.filter(o => o.t < o.life).slice(-14);
     // след души
     if (G && (state === 'play' || state === 'ending')) {
       const p = G.player;
@@ -1993,7 +2203,11 @@ if (typeof window !== 'undefined') (function () {
       const s = e.size * pulse * Math.min(1, e.age * 6);
       ctx.fillStyle = 'rgba(20,12,8,0.55)';
       ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.62, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = EMO_COLORS[e.kind];
+      if (e.gold) { // золотые эмоции Кульминации
+        ctx.strokeStyle = EVO_COLOR; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8;
+        ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.8, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = e.gold ? EVO_COLOR : EMO_COLORS[e.kind];
       if (e.kind === 0) drawHeart(e.x, e.y + s * 0.05, s * 0.85);
       else if (e.kind === 1) drawNote(e.x, e.y, s);
       else drawBurst(e.x, e.y, s, 6, 0.3);
@@ -2052,6 +2266,13 @@ if (typeof window !== 'undefined') (function () {
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
         }
         ctx.globalAlpha = 1;
+      } else if (f.type === 'fly') {
+        // эмоция за доли секунды долетает до души
+        const k = f.t / f.life, p = G.player;
+        const x = f.x + (p.x - f.x) * k, y = f.y + (p.y - 16 - f.y) * k;
+        ctx.strokeStyle = f.color; ctx.globalAlpha = 0.8 * (1 - k); ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(f.x + (x - f.x) * 0.4, f.y + (y - f.y) * 0.4); ctx.lineTo(x, y); ctx.stroke();
+        ctx.globalAlpha = 1;
       } else if (f.type === 'flash') {
         const k = f.t / f.life;
         ctx.fillStyle = '#ffcf6a'; ctx.globalAlpha = (1 - k) * 0.35;
@@ -2066,6 +2287,42 @@ if (typeof window !== 'undefined') (function () {
       ctx.fillStyle = p.color;
       ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
     }
+    ctx.globalAlpha = 1;
+    // всплывающие цифры драйва и надписи
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const o of pops) {
+      ctx.globalAlpha = clamp(1 - o.t / o.life, 0, 1);
+      ctx.font = `bold ${o.size}px system-ui, sans-serif`;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,12,8,0.8)'; ctx.strokeText(o.text, o.x, o.y);
+      ctx.fillStyle = o.color; ctx.fillText(o.text, o.x, o.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Счётчик цепочки над душой: число растёт, кольцо показывает, сколько осталось до обрыва
+  function drawChain() {
+    if (G.chain < 2) return;
+    const p = G.player, x = p.x, y = p.y - 66;
+    const tier = CONFIG.chain.tiers.filter(t => G.chain >= t).length;
+    const col = [PAL.text, PAL.cyan, '#5dff9e', PAL.pink, EVO_COLOR][Math.min(4, tier)];
+    const sz = 13 + tier * 2 + Math.min(4, (G.chain % 10) * 0.3);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${sz}px system-ui, sans-serif`;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,12,8,0.85)';
+    const txt = `×${G.chain}`;
+    ctx.strokeText(txt, x, y); ctx.fillStyle = col; ctx.fillText(txt, x, y);
+    const k = clamp(G.chainT / chainGap(), 0, 1);
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.7; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, sz * 0.95, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Кульминация: золотое свечение по краям зала
+  function drawClimax() {
+    if (!(G.climaxT > 0)) return;
+    const L = G.L, a = 0.25 + Math.sin(clock * 10) * 0.08;
+    ctx.strokeStyle = EVO_COLOR; ctx.globalAlpha = a; ctx.lineWidth = 10;
+    ctx.strokeRect(5, L.hallTop + 5, L.W - 10, L.hallBottom - L.hallTop - 10);
     ctx.globalAlpha = 1;
   }
 
@@ -2206,6 +2463,10 @@ if (typeof window !== 'undefined') (function () {
     ctx.fillStyle = '#3a2416'; ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = PAL.pink; ctx.fillRect(bx, by, bw * k, bh);
     ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(bx, by, bw * k, 3);
+    // шкала Кульминации
+    const ck = G.climaxT > 0 ? G.climaxT / climaxDuration() : G.climax;
+    ctx.fillStyle = '#3a2416'; ctx.fillRect(bx, by + bh + 2, bw, 3);
+    ctx.fillStyle = G.climaxT > 0 && Math.floor(clock * 8) % 2 ? '#fff3b0' : EVO_COLOR; ctx.fillRect(bx, by + bh + 2, bw * clamp(ck, 0, 1), 3);
     ctx.textAlign = 'right'; ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillStyle = PAL.text;
     ctx.fillText(`ур. ${G.level}`, L.W - 8, y0 + 13);
@@ -2383,6 +2644,8 @@ if (typeof window !== 'undefined') (function () {
     drawEmotions();
     drawSoul();
     drawFxOver();
+    drawChain();
+    drawClimax();
     if (G.freeze > 0) { // «Брейк»: зал замер — рамка по краю зала
       ctx.strokeStyle = CARD_DEFS.breakdown.color; ctx.globalAlpha = Math.min(1, G.freeze) * 0.6; ctx.lineWidth = 4;
       ctx.strokeRect(2, G.L.hallTop, G.L.W - 4, G.L.hallBottom - G.L.hallTop); ctx.globalAlpha = 1;

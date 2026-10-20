@@ -19,7 +19,7 @@ function defaultSave() {
     tree: {},                           // дерево способностей души: id -> уровень
     skins: { owned: ['neon'], selected: 'neon' },
     tour: null,                         // текущий тур (сохраняется между вечерами)
-    story: { intro: false, talks: 0 },  // сколько разговоров с Михалычем уже было
+    story: { intro: false, talks: 0, fragments: 0, solved: false }, // разговоры с Михалычем, улики загадки
     daily: {},                          // день -> { left, total }
   };
 }
