@@ -1185,6 +1185,7 @@ if (typeof window !== 'undefined') (function () {
   }
 
   function openMenu() {
+    $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
     const d = dailyChallenge(new Date(), CONFIG.levels.length), best = SAVE.daily[d.key];

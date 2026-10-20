@@ -1,11 +1,13 @@
-// При изменении файлов игры увеличивайте версию — так клиенты подхватят обновление.
-const VERSION = 'v15';
+// Версия кэша берётся из version.js (APP_VERSION) — её меняют при каждом релизе.
+importScripts('./version.js');
+const VERSION = 'v' + APP_VERSION;
 const PREFIX = 'hold-the-room-';
 const CACHE = PREFIX + VERSION;
 const FILES = [
   './',
   './index.html',
   './style.css',
+  './version.js',
   './save.js',
   './tour.js',
   './game.js',
