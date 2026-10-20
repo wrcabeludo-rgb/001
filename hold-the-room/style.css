@@ -306,3 +306,7 @@ html, body {
 .relics .chip.bond { color: #ffd23d; }
 .bond-note { color: #ffd23d; }
 .note.bad { color: #ff5d7a; }
+
+/* дуэт карт */
+.card.duo { background: #2a1430; box-shadow: 0 0 0 2px rgba(255, 143, 224, 0.35), 0 0 18px rgba(255, 143, 224, 0.3); }
+#res-show:not(:empty) { margin-bottom: 12px; }

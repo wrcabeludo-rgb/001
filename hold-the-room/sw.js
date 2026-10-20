@@ -1,5 +1,5 @@
 // При изменении файлов игры увеличивайте версию — так клиенты подхватят обновление.
-const VERSION = 'v13';
+const VERSION = 'v14';
 const PREFIX = 'hold-the-room-';
 const CACHE = PREFIX + VERSION;
 const FILES = [

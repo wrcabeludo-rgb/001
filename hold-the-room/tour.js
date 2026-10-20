@@ -17,8 +17,8 @@ const TOUR = {
   nodeCaps: { market: 2, rest: 2, rehearsal: 2, special: 2 }, // не больше стольких за акт и одной в ряду
   special: { moneyMul: 1.5 },  // особый концерт: условие вечера посложнее, касса ×1,5 и реликвия за победу
   rest: { sleepInterest: 10, workMoney: [120, 170, 220], callBond: 1.5 },
-  rowDifficulty: 0.03,     // +3% к спаду интереса за каждый следующий вечер акта
-  actDifficulty: [0, 0.12, 0.25], // и ещё столько за номер акта
+  rowDifficulty: 0.05,     // +5% к спаду интереса за каждый следующий вечер акта
+  actDifficulty: [0, 0.2, 0.4], // и ещё столько за номер акта
   pinSlots: 3,             // сколько карт можно закрепить в стартовый набор
   // цены барахолки по актам: за 2–3 концерта хватает на одну-две вещи, не на все
   marketPrices: [[220, 340], [300, 440], [380, 540]],
@@ -105,7 +105,8 @@ function soulMods(save) {
   const m = {
     auraGain: 0, speedMul: 1, startInterest: 0, pickup: 0, perViewer: 0, incidentMul: 1, repairMul: 1, freeCard: false,
     cooldownMul: 1, driveMul: 1, moneyMul: 1, encoreBonus: 0, warmupBonus: 0, noString: false, blackoutLightMul: 1, drunkCalmMul: 1,
-    auraRadiusMul: 1, decayMul: 1, startCards: [], rehearsed: null, bodyGain: 0, encoreEase: 0, boss: null, duration: null,
+    auraRadiusMul: 1, decayMul: 1, startCards: [], rehearsed: null, bodyGain: 0, encoreEase: 0,
+    chainGap: 0, emitMul: 1, climaxMul: 1, tagBonus: null, boss: null, duration: null,
   };
   for (const n of SOUL_TREE) { const l = treeLevel(save, n.id); if (l) n.apply(m, l); }
   return m;
@@ -116,6 +117,7 @@ function tourMods(save, tour, node) {
   for (const id of tour.relics) RELICS[id].apply(m);
   for (const p of bondPerks(tour.bond)) p.apply(m);
   m.startCards = tour.pinned.slice();
+  genreOf(tour).apply(m);
   const act = TOUR.acts[tour.act];
   m.decayMul *= 1 + TOUR.rowDifficulty * (node.row + 1) + TOUR.actDifficulty[tour.act] + (tour.nextDecay || 0);
   m.startInterest += tour.nextStart || 0;
@@ -197,10 +199,10 @@ function availableNodes(tour) {
   return (cur.next || []).map(c => rows[tour.row + 1][c]);
 }
 
-function newTour(save, seed) {
+function newTour(save, seed, genre) {
   const rnd = mulberry32Tour(seed);
   const tour = {
-    seed, act: 0, row: -1, col: null, map: genAct(rnd, 0),
+    seed, act: 0, row: -1, col: null, map: genAct(rnd, 0), genre: genre || 'acoustic',
     money: 0, relics: [], pinned: [], bond: 0, nextDecay: 0,
     nights: 0, kept: 0, bosses: 0, flags: {}, path: [],
   };
@@ -262,6 +264,55 @@ function marketOffer(tour, rnd) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------
+//  Жанры: открываются по одному за каждый настоящий финал. Жанр выбирают в начале тура.
+// ---------------------------------------------------------------------
+const GENRES = [
+  { id: 'acoustic', name: 'Акустика', desc: 'Классический путь, без особенностей.', apply: () => {} },
+  {
+    id: 'rock', name: 'Рок', desc: 'Каждый концерт начинается с Пиротехникой. Карты «Шоу» считаются за одну больше. Зал устаёт на 5% быстрее.',
+    apply: m => { m.startCards.push('pyro'); m.tagBonus = 'show'; m.decayMul *= 1.05; },
+  },
+  {
+    id: 'jazz', name: 'Джаз', desc: 'Каждый концерт начинается с Балладой. Цепочка эмоций рвётся на 0,5 с позже. Эмоций на 10% меньше.',
+    apply: m => { m.startCards.push('ballad'); m.chainGap += 0.5; m.emitMul *= 0.9; },
+  },
+  {
+    id: 'electro', name: 'Электроника', desc: 'Каждый концерт начинается с Танцполом. Кульминация копится на 30% быстрее. Аура души даёт на 1 интереса меньше.',
+    apply: m => { m.startCards.push('magnet'); m.climaxMul *= 1.3; m.auraGain -= 1; },
+  },
+];
+function genresUnlocked(save) { return GENRES.slice(0, 1 + Math.min(GENRES.length - 1, (save.records && save.records.trueEnds) || 0)); }
+function genreOf(tour) { return GENRES.find(x => x.id === tour.genre) || GENRES[0]; }
+
+// ---------------------------------------------------------------------
+//  Загадка: почему ушла душа. Одна улика за каждый тур (за настоящий финал — две).
+//  Когда собраны все и пройден настоящий финал — эпилог с ответом.
+// ---------------------------------------------------------------------
+const FRAGMENTS = [
+  { title: 'Афиша', speaker: 'Найдена в подсобке бара',
+    text: () => 'Городской фестиваль, десять лет назад. «Группа „Подвал“ — 21:40». Твоё имя первым. Ниже кто-то дописал ручкой: «В последний раз».' },
+  { title: 'Мама', speaker: 'Разговор на кухне',
+    text: () => '«Ты тогда пришёл домой и сказал: „Я всё испортил“. И больше ни слова — десять лет. А я ведь была в зале, сынок. С диктофоном, как всегда».' },
+  { title: 'Критик', speaker: 'После концерта',
+    text: () => '«Ту рецензию я написал в такси. Ушёл после тишины, не дождавшись конца. Говорят, конец был самым интересным. Я его так и не услышал».' },
+  { title: 'Сообщение в три ночи', speaker: 'Бывший друг',
+    text: () => '«За час до выхода позвонили с лейбла. Им нужна была песня. Только песня — и я. Я сказал „да“. Тебе не сказал».' },
+  { title: 'Звукорежиссёр', speaker: 'Встреча у служебного входа',
+    text: () => '«На третьей песне звук пропал. Не техника — кто-то выдернул шнур из пульта. Я видел, кто стоял у пульта. Десять лет молчал».' },
+  { title: 'Признание', speaker: 'Бывший друг',
+    text: () => '«Это был я. Я хотел, чтобы ты сорвался и лейбл поверил: без тебя лучше. Я не думал, что ты просто замолчишь. И что не вернёшься».' },
+  { title: 'Михалыч', speaker: 'За стойкой',
+    text: () => '«Ты стоял и молчал. Минуту, две. Весь фестиваль молчал вместе с тобой. А потом ты ушёл со сцены. И не услышал, что было дальше».' },
+  { title: 'Кассета', speaker: 'Мамин диктофон, запись из зала',
+    text: () => 'Шипение. Тишина. И вдруг — сначала один голос, потом сотни: зал поёт твою песню сам, без звука, без тебя. Поёт до последнего припева.' },
+];
+const EPILOGUE = [
+  'Тело ставит мамину кассету. Шипение, тишина — и зал, который поёт.',
+  'Душа наконец понимает: тогда ничего не было испорчено. Зал не ушёл. Он остался и допел за тебя. Ушла только душа — решив, что проиграла.',
+  'Теперь она дома. А песня — снова твоя.',
+];
 
 // ---------------------------------------------------------------------
 //  Выходной и репетиция
@@ -461,6 +512,7 @@ function mulberry32Tour(seed) {
 if (typeof module !== 'undefined') {
   module.exports = {
     TOUR, RELICS, RELIC_IDS, SOUL_TREE, SOUL_SKINS, EVENTS, BAR_TALKS, DAILY_MODS, REST, giveRelic, rehearsalOffer, specialTwist,
+    GENRES, genresUnlocked, genreOf, FRAGMENTS, EPILOGUE,
     treeLevel, treePrice, buyTree, buySkin, pinSlots, soulMods, tourMods,
     genAct, availableNodes, newTour, enterNode, settleConcert, nextAct, tourFame, bondPerks, nextBondPerk, trueEnding, marketOffer, randomRelic,
     dayKey, dailyChallenge, mulberry32Tour,
