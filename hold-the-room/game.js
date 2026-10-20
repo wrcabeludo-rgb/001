@@ -110,15 +110,16 @@ const CONFIG = {
   defeatShare: 0.8,
 
   // касса концерта; в туре её сравнивают с ценами барахолки (TOUR.marketPrices)
-  money: { perViewer: 6, halfBonus: 60 },
+  money: { perViewer: 4, halfBonus: 40 },
 
   // Боссы концертов тура
   bosses: {
+    passShare: 0.6, // на концерте босса нужно удержать больше этой доли зала
     // критик: один особый зритель, теряет интерес быстрее и не даёт эмоций; должен остаться до конца
-    critic: { decayMul: 2.0 },
+    critic: { decayMul: 2.3 },
     // соперник и страх летают по залу и гасят интерес вокруг; касание души отгоняет их
-    rival: { speed: 45, radius: 70, drain: 5.0, touch: 34, stun: 2.5, retarget: 2.5, start: 12 },
-    fear: { speed: 68, radius: 82, drain: 7.5, touch: 34, stun: 2.0, retarget: 2.0, start: 10 },
+    rival: { speed: 55, radius: 80, drain: 6.5, touch: 34, stun: 2.0, retarget: 2.2, start: 10 },
+    fear: { speed: 80, radius: 95, drain: 9.5, touch: 34, stun: 1.6, retarget: 1.8, start: 8 },
   },
 
   // Происшествия во время песни. count — сколько их запланировано на уровне,
@@ -922,7 +923,7 @@ function results() {
     boss: G.boss,
     criticStayed: G.critic ? !G.critic.leaving : null,
     // босс побеждён: зал удержан, а критик (если он есть) остался до конца
-    bossBeaten: !!G.boss && bonus > 0 && (!G.critic || !G.critic.leaving),
+    bossBeaten: !!G.boss && left > total * CONFIG.bosses.passShare && (!G.critic || !G.critic.leaving),
   };
 }
 
@@ -1436,6 +1437,17 @@ if (typeof window !== 'undefined') (function () {
       el.appendChild(b);
       box.appendChild(el);
     }
+    // подарок маме: деньги превращаются в связь тела и души; каждый следующий дороже
+    const gift = giftPrice(t), el = document.createElement('div');
+    el.className = 'item';
+    el.innerHTML = `<div class="info"><div class="name">Подарок маме</div><div class="desc">Связь тела и души +${String(TOUR.giftBond).replace('.', ',')}.</div></div>`;
+    const gb = document.createElement('button');
+    gb.className = 'buy';
+    gb.textContent = `${gift} ₽`;
+    gb.disabled = t.money < gift;
+    gb.addEventListener('click', () => { buyGift(t); persist(); openMarket(false); });
+    el.appendChild(gb);
+    box.appendChild(el);
     show('overlay-market');
   }
   $('market-leave').addEventListener('click', () => { SAVE.tour.market = null; persist(); openMap(); });
@@ -1512,7 +1524,8 @@ if (typeof window !== 'undefined') (function () {
         `Зал аплодирует, а тело кланяется — вежливо, как на корпоративе. Душа висит над сценой и не может войти обратно: связь ${t.bond} из ${TOUR.trueEndingBond}.`,
         talk.win(g),
       ] : [stats, talk.lose(g)]).concat(found),
-      result: `+${fame} «Славы»${whole ? ` (из них ${TOUR.fame.trueEnding} — за настоящий финал)` : ''}. Её можно потратить на душу.` +
+      result: `+${fame} «Славы»${whole ? ` (из них ${TOUR.fame.trueEnding} — за настоящий финал)` : ''}` +
+        (t.money >= TOUR.fame.perMoney ? `, в том числе ${Math.floor(t.money / TOUR.fame.perMoney)} за оставшиеся ${t.money} ₽` : '') + '. Её можно потратить на душу.' +
         (newGenre ? ` Открыт новый жанр: «${newGenre.name}» — выбери его в начале следующего тура.` : ''),
       buttons: [{ label: 'Прокачать душу', onClick: openSoul }, { label: 'В меню', cls: 'ghost', onClick: openMenu }],
     });
@@ -1749,7 +1762,8 @@ if (typeof window !== 'undefined') (function () {
     persist();
 
     $('res-title').textContent = title;
-    $('res-level').textContent = `${CONFIG.levels[r.levelNo].name}. Цель: удержать больше половины зала` + (r.boss === 'critic' ? ' и критика.' : '.');
+    $('res-level').textContent = `${CONFIG.levels[r.levelNo].name}. Цель: удержать ` +
+      (r.boss ? `больше ${Math.round(CONFIG.bosses.passShare * 100)}% зала` : 'больше половины зала') + (r.boss === 'critic' ? ' и критика.' : '.');
     $('res-verdict').textContent = (isRecord && !r.defeated ? 'Новый рекорд! ' : '') + (
       r.defeated ? `Ушло больше ${Math.round(CONFIG.defeatShare * 100)}% зала. Так больше нельзя.` :
       share >= 0.75 ? 'Зал твой! Тебя зовут снова.' :

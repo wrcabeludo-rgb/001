@@ -16,14 +16,16 @@ const TOUR = {
   nodeWeights: { concert: 0.44, event: 0.2, market: 0.1, rest: 0.09, rehearsal: 0.09, special: 0.08 },
   nodeCaps: { market: 2, rest: 2, rehearsal: 2, special: 2 }, // не больше стольких за акт и одной в ряду
   special: { moneyMul: 1.5 },  // особый концерт: условие вечера посложнее, касса ×1,5 и реликвия за победу
-  rest: { sleepInterest: 10, workMoney: [120, 170, 220], callBond: 1.5 },
-  rowDifficulty: 0.05,     // +5% к спаду интереса за каждый следующий вечер акта
-  actDifficulty: [0, 0.2, 0.4], // и ещё столько за номер акта
+  rest: { sleepInterest: 10, workMoney: [90, 120, 160], callBond: 1.5 },
+  rowDifficulty: 0.06,     // +6% к спаду интереса за каждый следующий вечер акта
+  actDifficulty: [0, 0.25, 0.5], // и ещё столько за номер акта
   pinSlots: 3,             // сколько карт можно закрепить в стартовый набор
   // цены барахолки по актам: за 2–3 концерта хватает на одну-две вещи, не на все
-  marketPrices: [[220, 340], [300, 440], [380, 540]],
+  marketPrices: [[260, 380], [340, 500], [440, 620]],
+  // подарок маме на барахолке: цена по актам (+giftStep за каждый уже купленный) и сколько связи даёт
+  gift: [200, 260, 320], giftStep: 100, giftBond: 1,
   // «Слава» за тур: 1 за каждые perViewers удержанных зрителей, плюс за боссов и победу
-  fame: { perViewers: 10, boss: 15, victory: 30, trueEnding: 20 },
+  fame: { perViewers: 10, boss: 15, victory: 30, trueEnding: 20, perMoney: 100 }, // perMoney: остаток денег → «Слава»
   // Связь тела и души: пороги дают бонусы до конца тура, а от trueEndingBond открывается настоящий финал
   bondPerks: [
     { at: 3, name: 'Душа увереннее', desc: 'Радиус ауры души +10%.', apply: m => { m.auraRadiusMul *= 1.1; } },
@@ -57,11 +59,11 @@ const RELIC_IDS = Object.keys(RELICS);
 //  Дерево способностей души и облики (за «Славу», навсегда)
 // ---------------------------------------------------------------------
 const SOUL_TREE = [
-  { id: 'warm', name: 'Тёплая душа', cost: [20, 40, 70], desc: l => `Аура даёт +${l} интереса в секунду.`, apply: (m, l) => { m.auraGain += l; } },
-  { id: 'wide', name: 'Широкая душа', cost: [25, 50, 80], desc: l => `Радиус ауры +${l * 12}%.`, apply: (m, l) => { m.auraRadiusMul *= 1 + 0.12 * l; } },
-  { id: 'light', name: 'Лёгкая душа', cost: [20, 40, 70], desc: l => `Душа летает на ${l * 8}% быстрее.`, apply: (m, l) => { m.speedMul += 0.08 * l; } },
-  { id: 'keen', name: 'Чуткость', cost: [20, 40, 70], desc: l => `Радиус сбора эмоций +${l * 6}.`, apply: (m, l) => { m.pickup += 6 * l; } },
-  { id: 'spark', name: 'Вдохновение', cost: [30, 60, 90], desc: l => `Зал начинает с интересом на ${l * 3} выше.`, apply: (m, l) => { m.startInterest += 3 * l; } },
+  { id: 'warm', name: 'Тёплая душа', cost: [20, 40, 70], desc: l => `Аура даёт +${String(l * 0.5).replace('.', ',')} интереса в секунду.`, apply: (m, l) => { m.auraGain += 0.5 * l; } },
+  { id: 'wide', name: 'Широкая душа', cost: [25, 50, 80], desc: l => `Радиус ауры +${l * 7}%.`, apply: (m, l) => { m.auraRadiusMul *= 1 + 0.07 * l; } },
+  { id: 'light', name: 'Лёгкая душа', cost: [20, 40, 70], desc: l => `Душа летает на ${l * 5}% быстрее.`, apply: (m, l) => { m.speedMul += 0.05 * l; } },
+  { id: 'keen', name: 'Чуткость', cost: [20, 40, 70], desc: l => `Радиус сбора эмоций +${l * 4}.`, apply: (m, l) => { m.pickup += 4 * l; } },
+  { id: 'spark', name: 'Вдохновение', cost: [30, 60, 90], desc: l => `Зал начинает с интересом на ${l * 2} выше.`, apply: (m, l) => { m.startInterest += 2 * l; } },
   { id: 'encore', name: 'Любимец публики', cost: [25, 50, 80], desc: l => `Касса за бис +${l * 15}%.`, apply: (m, l) => { m.encoreBonus += 0.15 * l; } },
   { id: 'hands', name: 'Память рук', cost: [120], desc: () => 'Можно закрепить 4 карты вместо 3.', apply: () => {} },
   { id: 'charm', name: 'Талисман', cost: [100], desc: () => 'Каждый тур начинается со случайной реликвией.', apply: () => {} },
@@ -244,7 +246,7 @@ function nextAct(tour, seedShift) {
 
 function tourFame(tour, victory) {
   const F = TOUR.fame;
-  return Math.floor(tour.kept / F.perViewers) + tour.bosses * F.boss + (victory ? F.victory : 0) +
+  return Math.floor(tour.kept / F.perViewers) + tour.bosses * F.boss + (victory ? F.victory : 0) + Math.floor(tour.money / F.perMoney) +
     (victory && trueEnding(tour) ? F.trueEnding : 0);
 }
 
@@ -338,6 +340,16 @@ function rehearsalOffer(rnd, cardIds, tour) {
   const out = [];
   while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
   return out;
+}
+
+function giftPrice(tour) { return TOUR.gift[tour.act] + TOUR.giftStep * (tour.gifts || 0); }
+function buyGift(tour) {
+  const price = giftPrice(tour);
+  if (tour.money < price) return false;
+  tour.money -= price;
+  tour.gifts = (tour.gifts || 0) + 1;
+  tour.bond = Math.round((tour.bond + TOUR.giftBond) * 10) / 10;
+  return true;
 }
 
 function randomRelic(tour, rnd) {
@@ -512,7 +524,7 @@ function mulberry32Tour(seed) {
 if (typeof module !== 'undefined') {
   module.exports = {
     TOUR, RELICS, RELIC_IDS, SOUL_TREE, SOUL_SKINS, EVENTS, BAR_TALKS, DAILY_MODS, REST, giveRelic, rehearsalOffer, specialTwist,
-    GENRES, genresUnlocked, genreOf, FRAGMENTS, EPILOGUE,
+    GENRES, genresUnlocked, genreOf, FRAGMENTS, EPILOGUE, giftPrice, buyGift,
     treeLevel, treePrice, buyTree, buySkin, pinSlots, soulMods, tourMods,
     genAct, availableNodes, newTour, enterNode, settleConcert, nextAct, tourFame, bondPerks, nextBondPerk, trueEnding, marketOffer, randomRelic,
     dayKey, dailyChallenge, mulberry32Tour,
