@@ -1039,10 +1039,18 @@ if (typeof window !== 'undefined') (function () {
   // ---------- картинки ----------
   // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
   const ART = {};
+  // Пробные стили (тест перед выбором): зрители, тело и душа из листов стиля, фон рисуется кодом.
+  // 'proto' — графика прототипа.
+  const STYLES = { proto: 'Прототип', light: 'Свет', notebook: 'Тетрадь', theater: 'Театр' };
+  const STYLE_IDS = ['light', 'notebook', 'theater'];
+  const STYLE_PARTS = ['v-bored', 'v-neutral', 'v-interested', 'v-ecstatic', 'body-off', 'body-on', 'soul'];
+  const curStyle = () => (STYLES[SAVE.settings.style] ? SAVE.settings.style : 'proto');
+  const styleArt = n => (curStyle() === 'proto' ? null : ART[`${curStyle()}-${n}`]);
   // Сейчас в спрайтах только эмоции и эффекты. Сцены, тело, душа и зрители рисуются векторно,
   // пока не утверждён стиль игры (код для их спрайтов остаётся: bg-N, body-*, ghost-*, vN-K).
   const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap']
-    .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8));
+    .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8))
+    .concat(STYLE_IDS.flatMap(st => STYLE_PARTS.map(n => `${st}-${n}`)));
   function frameNames(base, n) { return Array.from({ length: n }, (_, i) => `${base}-${i}`); }
   for (const n of ART_NAMES) {
     const im = new Image();
@@ -1413,7 +1421,17 @@ if (typeof window !== 'undefined') (function () {
     show('overlay-story');
   }
 
+  // Переключатель пробного стиля в главном меню
+  function syncStyleButton() { $('btn-style').textContent = `Стиль (тест): ${STYLES[curStyle()]}`; }
+  $('btn-style').addEventListener('click', () => {
+    const ids = Object.keys(STYLES);
+    SAVE.settings.style = ids[(ids.indexOf(curStyle()) + 1) % ids.length];
+    persist();
+    syncStyleButton();
+  });
+
   function openMenu() {
+    syncStyleButton();
     $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
@@ -2219,8 +2237,50 @@ if (typeof window !== 'undefined') (function () {
     return `rgb(${r | 0},${g | 0},${bl | 0})`;
   }
 
+  // Фон пробного стиля: нарочно простой, чтобы персонажи и эффекты читались
+  function drawStyledBackground(st) {
+    const L = G.L;
+    const C = {
+      light: { wall: '#050303', stage: '#120c0a', edge: '#2a1a12', floor: '#070405', line: 'rgba(255,176,58,0.18)' },
+      notebook: { wall: '#e9dac2', stage: '#e2d1b5', edge: '#5a4a3a', floor: '#eee0cb', line: 'rgba(60,40,30,0.12)' },
+      theater: { wall: '#140d0a', stage: '#6b4a2e', edge: '#3d2817', floor: '#1d140e', line: 'rgba(255,200,140,0.06)' },
+    }[st];
+    ctx.fillStyle = C.wall; ctx.fillRect(0, 0, L.W, L.wallBottom);
+    ctx.fillStyle = C.stage; ctx.fillRect(0, L.wallBottom, L.W, L.stageBottom - L.wallBottom);
+    ctx.fillStyle = C.edge; ctx.fillRect(0, L.stageBottom, L.W, L.hallTop - L.stageBottom);
+    ctx.fillStyle = C.floor; ctx.fillRect(0, L.hallTop, L.W, L.H - L.hallTop);
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    if (st === 'notebook') {
+      // нотный стан по всему залу
+      for (let y0 = L.hallTop + 30; y0 < L.H; y0 += 110) for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, y0 + i * 7); ctx.lineTo(L.W, y0 + i * 7); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(60,40,30,0.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(14, L.wallBottom + 4, L.W - 28, L.stageBottom - L.wallBottom - 6);
+    } else if (st === 'theater') {
+      // картонная сцена: полосы гофры и кулисы
+      for (let x0 = 0; x0 < L.W; x0 += 9) { ctx.beginPath(); ctx.moveTo(x0, L.wallBottom); ctx.lineTo(x0, L.stageBottom); ctx.stroke(); }
+      ctx.fillStyle = '#5a1620';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(46, 0); ctx.quadraticCurveTo(30, L.wallBottom, 18, L.stageBottom); ctx.lineTo(0, L.stageBottom); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(L.W, 0); ctx.lineTo(L.W - 46, 0); ctx.quadraticCurveTo(L.W - 30, L.wallBottom, L.W - 18, L.stageBottom); ctx.lineTo(L.W, L.stageBottom); ctx.fill();
+    } else {
+      // «Свет»: зал во тьме, только край сцены и пятно прожектора
+      ctx.beginPath(); ctx.moveTo(0, L.stageBottom); ctx.lineTo(L.W, L.stageBottom); ctx.stroke();
+      const g = ctx.createRadialGradient(L.W / 2, L.stageBottom - 30, 10, L.W / 2, L.stageBottom - 30, 160);
+      g.addColorStop(0, 'rgba(255,176,58,0.16)'); g.addColorStop(1, 'rgba(255,176,58,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, L.W, L.hallTop + 60);
+    }
+    // вывеска
+    ctx.save();
+    ctx.font = st === 'notebook' ? 'italic bold 20px Georgia, serif' : 'bold 20px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (st !== 'notebook') { ctx.shadowColor = PAL.pink; ctx.shadowBlur = 12; }
+    ctx.fillStyle = st === 'notebook' ? '#c2185b' : lerpColor('#a3275d', PAL.pink, 0.55 + 0.45 * pulse);
+    ctx.fillText('ЖИВАЯ МУЗЫКА', L.W / 2, 74);
+    ctx.restore();
+    drawExit();
+  }
+
   function drawBackground() {
     const L = G.L;
+    if (curStyle() !== 'proto') { drawStyledBackground(curStyle()); return; }
     const bg = ART['bg-' + (G.levelNo + 1)];
     if (bg) {
       // нарисованный зал: по ширине экрана, лишнее снизу обрезается
@@ -2310,13 +2370,16 @@ if (typeof window !== 'undefined') (function () {
     // спрайт зрителя: у каждого свой облик, поза — по настроению
     if (v.look == null) v.look = (G.viewers.indexOf(v) * 5 + 3) % 8;
     const pose = v.leaving || bored ? 2 : I > 78 ? 1 : 0;
-    const spr = ART[`v${v.look}-${pose}`];
+    // пробный стиль: поза по настроению — скучает, нейтрален, увлечён, в восторге
+    const styled = styleArt(v.leaving || bored ? 'v-bored' : !happy ? 'v-neutral' : I < 80 ? 'v-interested' : 'v-ecstatic');
+    const spr = styled || ART[`v${v.look}-${pose}`];
     let top = -32;
     if (spr) {
-      const h = 46, cy = y - bob - h / 2 + 4;
+      const h = styled ? 44 : 46, cy = y - bob - h / 2 + 4;
       ctx.save(); ctx.translate(x, cy); ctx.rotate(sway * 0.6);
+      if (styled && v.look % 2) ctx.scale(-1, 1); // половина зала зеркально — толпа разнообразнее
       ctx.drawImage(spr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h);
-      if (k < 1) { const gr = grayed(`v${v.look}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
+      if (!styled && k < 1) { const gr = grayed(`v${v.look}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
       if (v.flash > 0) {
         ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.9; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.stroke();
@@ -2437,10 +2500,10 @@ if (typeof window !== 'undefined') (function () {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
-    const gray = ART['body-gray'], color = ART['body-color'];
+    const gray = styleArt('body-off') || ART['body-gray'], color = styleArt('body-on') || ART['body-color'];
     if (gray && color) {
       // серое тело и живое — одно поверх другого, живое проступает с ростом связи
-      const h = 70, cy = y - bob - h / 2 + 3;
+      const h = styleArt('body-on') ? 78 : 70, cy = y - bob - h / 2 + 6;
       const k = clamp(life, 0, 1);
       if (k < 1) { ctx.globalAlpha = 1 - k; blit(gray, x, cy, h); }
       if (k > 0) { ctx.globalAlpha = k; blit(color, x, cy, h); }
@@ -2482,7 +2545,7 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
-    const ghost = tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
+    const ghost = styleArt('soul') ? tinted(`${curStyle()}-soul`, GHOST_HUE, col) : tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
     if (ghost) {
       // мягкое свечение и сам призрак-музыкант; на длинной цепочке душа чуть крупнее
       const grow = 1 + Math.min(0.25, G.chain / 200);
