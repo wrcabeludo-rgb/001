@@ -1040,7 +1040,10 @@ if (typeof window !== 'undefined') (function () {
   // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
   const ART = {};
   const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap',
-    'ghost-0', 'ghost-1', 'ghost-2', 'ghost-3', 'body-gray', 'body-color'].concat([0, 1, 2, 3, 4, 5, 6, 7].map(i => 'spark-' + i));
+    'ghost-0', 'ghost-1', 'ghost-2', 'ghost-3', 'body-gray', 'body-color', 'bg-1']
+    .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8), frameNames('smoke', 8))
+    .concat([0, 1, 2, 3, 4, 5, 6, 7].flatMap(g => [0, 1, 2].map(k => `v${g}-${k}`))); // зрители: 8 человек × (обычный, ликует, в телефоне)
+  function frameNames(base, n) { return Array.from({ length: n }, (_, i) => `${base}-${i}`); }
   for (const n of ART_NAMES) {
     const im = new Image();
     im.onload = () => { ART[n] = im; };
@@ -1084,7 +1087,33 @@ if (typeof window !== 'undefined') (function () {
     } catch (_) { /* без доступа к пикселям — рисуем как есть */ }
     return (tintCache[key] = c);
   }
-  const GHOST_HUE = 192, SPARK_HUE = 330;
+  const GHOST_HUE = 192, SPARK_HUE = 330, RING_HUE = 195;
+
+  // Обесцвеченная копия спрайта: скучающий зритель тускнеет
+  function grayed(name) {
+    const key = name + '#gray', img = ART[name];
+    if (!img) return null;
+    if (tintCache[key]) return tintCache[key];
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    try {
+      const data = x.getImageData(0, 0, c.width, c.height), px = data.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const l = (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) * 0.8;
+        px[i] = l; px[i + 1] = l; px[i + 2] = l * 1.05;
+      }
+      x.putImageData(data, 0, 0);
+    } catch (_) { /* без доступа к пикселям — как есть */ }
+    return (tintCache[key] = c);
+  }
+
+  // Кадр анимации по имени листа; color — перекраска, hue — исходный оттенок листа
+  function animFrame(sheet, n, k, color, hue) {
+    const fr = Math.min(n - 1, Math.floor(k * n));
+    return color ? tinted(`${sheet}-${fr}`, hue, color) : ART[`${sheet}-${fr}`];
+  }
 
   // Рисует картинку по центру (cx, cy) нужной высоты
   function blit(img, cx, cy, h, flip) {
@@ -2015,6 +2044,12 @@ if (typeof window !== 'undefined') (function () {
   $('btn-menu').addEventListener('click', () => { buildLevelMenu(); show('overlay-free'); });
 
   // ---------- визуальные события ----------
+  // Ряд конфетти вдоль края сцены (Кульминация, бис)
+  function confettiRow(life) {
+    if (!ART['confetti-0']) return;
+    for (let i = 0; i < 4; i++) fx.push({ type: 'anim', sheet: 'confetti', n: 10, x: 45 + i * (G.L.W - 90) / 3, y: G.L.stageBottom + 30, bottom: true, t: -i * 0.12, life, size: 150 });
+  }
+
   function spawnParticles(x, y, n, color, speed, life, size, gravity) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = speed * (0.4 + Math.random() * 0.6);
@@ -2030,6 +2065,7 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'pyro') {
         sfx('pyro');
         fx.push({ type: 'flash', t: 0, life: 0.5, edge: ev.edge });
+        if (ART['fire-0']) for (let i = 0; i < 5; i++) fx.push({ type: 'anim', sheet: 'fire', n: 8, x: 36 + i * (G.L.W - 72) / 4, y: G.L.stageBottom + 4, bottom: true, t: -i * 0.04, life: 0.8, size: 80 });
         shake = 0.35;
         for (let i = 0; i < 6; i++) {
           const x = 30 + i * (G.L.W - 60) / 5;
@@ -2062,7 +2098,7 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'chainTier') {
         sfx('tier');
         banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
-        fx.push({ type: 'spark', x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, color: PAL.cyan, size: 120 });
+        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, size: 130 });
         shake = Math.max(shake, 0.2);
         spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
       } else if (ev.type === 'smash') {
@@ -2076,12 +2112,12 @@ if (typeof window !== 'undefined') (function () {
         fx.push({ type: 'steal', x: ev.x, y: ev.y, tx: ev.tx, ty: ev.ty, t: 0, life: 0.3 });
       } else if (ev.type === 'fearWave') {
         sfx('fear');
-        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.7, color: '#ff3d50' });
+        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 10, t: 0, life: 0.7, size: ev.r * 2.2, color: '#ff3d50', hue: RING_HUE });
         banners.push({ text: 'Волна страха!', t: 0, life: 1.4, color: '#ff3d50' });
         shake = 0.4;
       } else if (ev.type === 'sniff') {
         sfx('sniff');
-        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.6, color: '#b48cff' });
+        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 10, t: 0, life: 0.6, size: ev.r * 2, color: '#b48cff', hue: RING_HUE });
         pops.push({ x: ev.x, y: ev.y - 48, text: 'Пф-ф…', color: '#b48cff', t: 0, life: 1.2, size: 13 });
       } else if (ev.type === 'chainBreak') {
         sfx('chainBreak');
@@ -2090,12 +2126,13 @@ if (typeof window !== 'undefined') (function () {
         sfx('triple');
         const col = EMO_COLORS[ev.kind];
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
-        fx.push({ type: 'spark', x: ev.x, y: ev.y - 20, t: 0, life: 0.5, color: col, size: 100 });
+        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 20, t: 0, life: 0.5, size: ev.r * 1.6, color: col, hue: RING_HUE });
         pops.push({ x: ev.x, y: ev.y - 74, text: (ev.k > 1 ? `Три ×${ev.k}!` : 'Три подряд!'), color: col, t: 0, life: 1.0, size: 14 });
         spawnParticles(ev.x, ev.y - 20, 14, col, 120, 0.6, 2.6);
       } else if (ev.type === 'climax') {
         sfx('climax');
         banners.push({ text: 'КУЛЬМИНАЦИЯ!', t: 0, life: 2.2, color: EVO_COLOR });
+        confettiRow(1.4);
         shake = 0.5;
         for (let i = 0; i < 50; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? EVO_COLOR : PAL.pink, 180, 1.2, 3, 140);
       } else if (ev.type === 'climaxEnd') {
@@ -2114,6 +2151,7 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'encore') {
         sfx('encore');
         banners.push({ text: 'БИС! Зал просит ещё!', t: 0, life: 3, color: PAL.amber });
+        confettiRow(1.8);
         shake = 0.4;
         for (let i = 0; i < 40; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? PAL.amber : PAL.pink, 160, 1.2, 3, 140);
       } else if (ev.type === 'leave') {
@@ -2183,6 +2221,14 @@ if (typeof window !== 'undefined') (function () {
 
   function drawBackground() {
     const L = G.L;
+    const bg = ART['bg-' + (G.levelNo + 1)];
+    if (bg) {
+      // нарисованный зал: по ширине экрана, лишнее снизу обрезается
+      ctx.drawImage(bg, 0, 0, L.W, L.W * bg.naturalHeight / bg.naturalWidth);
+      ctx.fillStyle = 'rgba(10,6,4,0.38)'; ctx.fillRect(0, L.hallTop, L.W, L.H - L.hallTop); // зал чуть темнее — зрители читаются лучше
+      drawExit();
+      return;
+    }
     ctx.fillStyle = PAL.wall; ctx.fillRect(0, 0, L.W, L.wallBottom);
     ctx.fillStyle = PAL.wallBrick;
     for (let y = 0, row = 0; y < L.wallBottom; y += 14, row++) {
@@ -2228,8 +2274,11 @@ if (typeof window !== 'undefined') (function () {
       for (let x = (r % 2) * ts; x < L.W; x += ts * 2) ctx.fillRect(x, y, ts, Math.min(ts, L.hallBottom + 6 - y));
     }
     drawAmp();
-    // выход
-    const ex = L.exit;
+    drawExit();
+  }
+
+  function drawExit() {
+    const L = G.L, ex = L.exit;
     ctx.fillStyle = '#0d1f14'; ctx.fillRect(L.W - 10, ex.y - 26, 10, 52);
     ctx.fillStyle = PAL.green; ctx.fillRect(L.W - 10, ex.y - 26, 2, 52);
     ctx.save();
@@ -2258,6 +2307,24 @@ if (typeof window !== 'undefined') (function () {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
 
+    // спрайт зрителя: у каждого свой облик, поза — по настроению
+    if (v.look == null) v.look = (G.viewers.indexOf(v) * 5 + 3) % 8;
+    const pose = v.leaving || bored ? 2 : I > 78 ? 1 : 0;
+    const spr = ART[`v${v.look}-${pose}`];
+    let top = -32;
+    if (spr) {
+      const h = 46, cy = y - bob - h / 2 + 4;
+      ctx.save(); ctx.translate(x, cy); ctx.rotate(sway * 0.6);
+      ctx.drawImage(spr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h);
+      if (k < 1) { const gr = grayed(`v${v.look}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
+      if (v.flash > 0) {
+        ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.9; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = v.leaving ? 0.65 : 1;
+      top = -48;
+    } else {
     ctx.save();
     ctx.translate(x, y - bob);
     ctx.rotate(sway);
@@ -2278,6 +2345,7 @@ if (typeof window !== 'undefined') (function () {
       ctx.globalAlpha = 1;
     }
     ctx.restore();
+    }
 
     // критик: берет, блокнот и шкала его интереса
     if (v.critic && !v.leaving) {
@@ -2291,14 +2359,14 @@ if (typeof window !== 'undefined') (function () {
       ctx.beginPath(); ctx.arc(x, y - 10, 15, 0, Math.PI * 2); ctx.stroke();
     }
     // фанат: маленькое сердечко над головой
-    if (v.fan && !v.leaving) { ctx.fillStyle = CARD_DEFS.fans.color; drawHeart(x - 9, y - 27 - bob, 5); }
+    if (v.fan && !v.leaving) { ctx.fillStyle = CARD_DEFS.fans.color; drawHeart(x - 10, y + top + 6 - bob, 5); }
     // значки настроения
     if (!v.leaving && I < V.boredThreshold) {
       ctx.fillStyle = '#9a9aa2';
-      for (let i = 0; i < 3; i++) ctx.fillRect(x - 5 + i * 4, y - 32, 2, 2);
+      for (let i = 0; i < 3; i++) ctx.fillRect(x - 5 + i * 4, y + top, 2, 2);
     } else if (v.leaving) {
       ctx.fillStyle = '#9a9aa2'; ctx.font = 'bold 9px system-ui, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('пока', x, y - 30);
+      ctx.fillText('пока', x, y + top + 2);
     }
     ctx.globalAlpha = 1;
   }
@@ -2480,7 +2548,7 @@ if (typeof window !== 'undefined') (function () {
           ctx.globalAlpha = 0.35 + Math.sin(clock * 10 + e.x) * 0.15; ctx.fillStyle = EVO_COLOR;
           ctx.beginPath(); ctx.arc(e.x, e.y, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
         }
-        blit(art, e.x, e.y, s * (e.gold ? 2.1 : 1.85));
+        blit(art, e.x, e.y, s * (e.gold ? 1.9 : 1.65));
         continue;
       }
       ctx.fillStyle = 'rgba(20,12,8,0.55)';
@@ -2548,6 +2616,17 @@ if (typeof window !== 'undefined') (function () {
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
         }
         ctx.globalAlpha = 1;
+      } else if (f.type === 'anim' && f.t < 0) {
+        // ещё не началась
+      } else if (f.type === 'anim') {
+        // кадровая анимация из листа; bottom — низ кадра на точке (огонь, конфетти)
+        const img = animFrame(f.sheet, f.n, f.t / f.life, f.color, f.hue);
+        if (img) {
+          const h = f.size, w = h * (img.width || img.naturalWidth) / (img.height || img.naturalHeight);
+          ctx.globalAlpha = f.alpha || 1;
+          ctx.drawImage(img, f.x - w / 2, f.bottom ? f.y - h : f.y - h / 2, w, h);
+          ctx.globalAlpha = 1;
+        }
       } else if (f.type === 'spark') {
         const fr = Math.min(7, Math.floor(f.t / f.life * 8));
         const img = f.color === PAL.pink ? ART['spark-' + fr] : tinted('spark-' + fr, SPARK_HUE, f.color);
