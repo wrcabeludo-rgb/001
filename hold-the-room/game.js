@@ -1040,7 +1040,7 @@ if (typeof window !== 'undefined') (function () {
   // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
   const ART = {};
   const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap',
-    'ghost-0', 'ghost-1', 'ghost-2', 'ghost-3', 'body-gray', 'body-color', 'bg-1']
+    'ghost-0', 'ghost-1', 'ghost-2', 'ghost-3', 'body-gray', 'body-color', 'bg-1', 'bg-2', 'bg-3', 'bg-4', 'bg-5']
     .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8), frameNames('smoke', 8))
     .concat([0, 1, 2, 3, 4, 5, 6, 7].flatMap(g => [0, 1, 2].map(k => `v${g}-${k}`))); // зрители: 8 человек × (обычный, ликует, в телефоне)
   function frameNames(base, n) { return Array.from({ length: n }, (_, i) => `${base}-${i}`); }
