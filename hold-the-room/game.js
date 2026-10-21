@@ -1044,7 +1044,8 @@ if (typeof window !== 'undefined') (function () {
   const STYLES = { proto: 'Прототип', light: 'Свет', notebook: 'Тетрадь', theater: 'Театр' };
   const STYLE_IDS = ['light', 'notebook', 'theater'];
   const STYLE_PARTS = ['v-bored', 'v-neutral', 'v-interested', 'v-ecstatic', 'body-off', 'body-on', 'soul'];
-  const curStyle = () => (STYLES[SAVE.settings.style] ? SAVE.settings.style : 'proto');
+  // «Свет» — выбранный стиль игры (решение 41); остальные оставлены для сравнения
+  const curStyle = () => (STYLES[SAVE.settings.style] ? SAVE.settings.style : 'light');
   const styleArt = n => (curStyle() === 'proto' ? null : ART[`${curStyle()}-${n}`]);
   // Сейчас в спрайтах только эмоции и эффекты. Сцены, тело, душа и зрители рисуются векторно,
   // пока не утверждён стиль игры (код для их спрайтов остаётся: bg-N, body-*, ghost-*, vN-K).
