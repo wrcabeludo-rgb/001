@@ -1036,6 +1036,63 @@ if (typeof window !== 'undefined') (function () {
   let SAVE = loadSave(storage());
   const persist = () => writeSave(storage(), SAVE);
 
+  // ---------- картинки ----------
+  // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
+  const ART = {};
+  const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap',
+    'ghost-0', 'ghost-1', 'ghost-2', 'ghost-3', 'body-gray', 'body-color'].concat([0, 1, 2, 3, 4, 5, 6, 7].map(i => 'spark-' + i));
+  for (const n of ART_NAMES) {
+    const im = new Image();
+    im.onload = () => { ART[n] = im; };
+    im.src = `./assets/${n}.webp`;
+  }
+  const EMO_ART = ['heart', 'note', 'clap'];
+
+  // Перекраска спрайта в другой оттенок (душа — под цвет облика, искры — под вид эмоции).
+  // Считается один раз на пару «картинка + цвет» и кешируется.
+  const tintCache = {};
+  function hexHue(hex) {
+    const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (!d) return { h: 0, s: 0 };
+    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: d / (1 - Math.abs(mx + mn - 1)) };
+  }
+  function tinted(name, baseHue, color) {
+    const key = name + color, img = ART[name];
+    if (!img) return null;
+    if (tintCache[key]) return tintCache[key];
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    const target = hexHue(color);
+    try {
+      const data = x.getImageData(0, 0, c.width, c.height), px = data.data;
+      // перекраска: оттенок каждого пикселя — цвет облика, насыщенность и яркость свои;
+      // для почти белых обликов («Призрак») насыщенность приглушается
+      const th = target.h / 360, sMul = target.s < 0.5 ? 0.25 : 1;
+      const hue2 = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+      for (let i = 0; i < px.length; i += 4) {
+        const r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+        const sat = (d ? d / (1 - Math.abs(2 * l - 1)) : 0) * sMul;
+        const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat, pp = 2 * l - q;
+        px[i] = hue2(pp, q, th + 1 / 3) * 255; px[i + 1] = hue2(pp, q, th) * 255; px[i + 2] = hue2(pp, q, th - 1 / 3) * 255;
+      }
+      x.putImageData(data, 0, 0);
+    } catch (_) { /* без доступа к пикселям — рисуем как есть */ }
+    return (tintCache[key] = c);
+  }
+  const GHOST_HUE = 192, SPARK_HUE = 330;
+
+  // Рисует картинку по центру (cx, cy) нужной высоты
+  function blit(img, cx, cy, h, flip) {
+    const w = h * (img.width || img.naturalWidth) / (img.height || img.naturalHeight);
+    if (flip) { ctx.save(); ctx.translate(cx, cy); ctx.scale(-1, 1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore(); }
+    else ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  }
+
   // ---------- аудио: музыка, часы ритма, звуки ----------
   // Музыка играет через элемент <audio>: в установленном PWA на iOS Web Audio часто молчит.
   // Файл берётся обычным fetch (его отдаёт кэш service worker'а, музыка работает офлайн)
@@ -1064,7 +1121,89 @@ if (typeof window !== 'undefined') (function () {
   // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ }
 
+  // ---------- звуки игры ----------
+  // Синтезируются на лету через Web Audio: ничего не весят и работают офлайн.
+  // Контекст создаётся и «будится» внутри касания — так требует iOS.
+  // Пока играет музыка через <audio>, iOS слышит и эти звуки даже в беззвучном режиме.
+  let sctx = null, sfxOut = null, noiseBuf = null, lastPick = 0, lastLeave = 0;
+  function sfxUnlock() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!sctx) {
+      sctx = new AC();
+      sfxOut = sctx.createGain(); sfxOut.gain.value = 0.55; sfxOut.connect(sctx.destination);
+      const n = sctx.sampleRate;
+      noiseBuf = sctx.createBuffer(1, n, n);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      // короткий беззвучный звук внутри касания разблокирует вывод на iOS
+      const b = sctx.createBufferSource(); b.buffer = sctx.createBuffer(1, 1, 22050); b.connect(sctx.destination); b.start(0);
+    }
+    if (sctx.state !== 'running') sctx.resume();
+  }
+  const sfxOn = () => sctx && sctx.state === 'running' && SAVE.settings.music;
+  // тон: частота (можно со скольжением к f1), форма, громкость, атака, длина
+  function tone(f, t, dur, vol, type, f1) {
+    const o = sctx.createOscillator(), g = sctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(sfxOut);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  // шум через фильтр: шорох, удар, свист; f1 — куда скользит частота фильтра
+  function noise(t, dur, vol, type, f, f1, q) {
+    const src = sctx.createBufferSource(), flt = sctx.createBiquadFilter(), g = sctx.createGain();
+    src.buffer = noiseBuf;
+    flt.type = type; flt.frequency.setValueAtTime(f, t); flt.Q.value = q || 1;
+    if (f1) flt.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.03, dur / 3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(flt); flt.connect(g); g.connect(sfxOut);
+    src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+  }
+  const PENTA = [0, 2, 4, 7, 9];
+  const note = i => 523.25 * Math.pow(2, (PENTA[i % 5] + 12 * Math.floor(i / 5)) / 12); // до-мажорная пентатоника от C5
+  const SFX = {
+    // эмоция: нота пентатоники, на цепочке — всё выше (мелодия из трёх октав, потом по кругу)
+    pickup(chain, gold) {
+      const now = sctx.currentTime;
+      if (now - lastPick < 0.035) return;
+      lastPick = now;
+      const f = note((Math.max(1, chain) - 1) % 15);
+      tone(f, now, 0.22, 0.13, 'triangle');
+      tone(f * 2, now, 0.12, 0.04, 'sine');
+      if (gold) tone(f * 3, now + 0.03, 0.25, 0.05, 'sine');
+    },
+    tier() { const t = sctx.currentTime; [0, 2, 4, 5].forEach((k, i) => tone(note(5 + k), t + i * 0.06, 0.35, 0.1, 'sine')); noise(t, 0.5, 0.05, 'highpass', 6000, 9000); },
+    triple() { const t = sctx.currentTime; [0, 2, 4].forEach((k, i) => tone(note(5 + k) , t + i * 0.07, 0.25, 0.1, 'triangle')); },
+    chainBreak() { const t = sctx.currentTime; tone(392, t, 0.18, 0.06, 'triangle', 300); tone(294, t + 0.1, 0.25, 0.05, 'triangle', 220); },
+    climax() {
+      const t = sctx.currentTime;
+      noise(t, 1.6, 0.18, 'bandpass', 400, 3000, 0.7);
+      [0, 2, 4, 5, 7].forEach((k, i) => tone(note(5 + k), t + 0.25 + i * 0.07, 0.9, 0.08, 'sawtooth'));
+      tone(65, t, 1.2, 0.18, 'sine', 130);
+    },
+    card() { const t = sctx.currentTime; noise(t, 0.3, 0.12, 'bandpass', 800, 5000, 1.2); tone(note(9), t + 0.12, 0.3, 0.07, 'sine'); },
+    evolve() { const t = sctx.currentTime; [0, 2, 4, 5, 7, 10].forEach((k, i) => tone(note(3 + k), t + i * 0.06, 0.5, 0.09, 'triangle')); noise(t, 0.8, 0.06, 'highpass', 5000, 10000); },
+    encore() { const t = sctx.currentTime; for (let i = 0; i < 40; i++) noise(t + Math.random() * 2.2, 0.05, 0.12 * Math.random() + 0.04, 'bandpass', 1500 + Math.random() * 1500, 0, 1.5); tone(note(5), t, 0.6, 0.07, 'sine'); },
+    leave() { const now = sctx.currentTime; if (now - lastLeave < 0.4) return; lastLeave = now; tone(220, now, 0.25, 0.05, 'sine', 140); },
+    incident() { const t = sctx.currentTime; tone(330, t, 0.18, 0.08, 'square', 320); tone(247, t + 0.2, 0.25, 0.08, 'square', 240); },
+    fixed() { const t = sctx.currentTime; tone(note(5), t, 0.15, 0.08, 'triangle'); tone(note(7), t + 0.08, 0.3, 0.08, 'triangle'); },
+    fight() { const t = sctx.currentTime; noise(t, 0.12, 0.3, 'lowpass', 900); noise(t + 0.15, 0.1, 0.25, 'lowpass', 700); tone(120, t, 0.2, 0.12, 'sine', 60); },
+    fear() { const t = sctx.currentTime; tone(90, t, 0.9, 0.22, 'sawtooth', 40); noise(t, 0.9, 0.2, 'lowpass', 2000, 200); },
+    sniff() { const t = sctx.currentTime; noise(t, 0.28, 0.16, 'bandpass', 2400, 1400, 3); },
+    pyro() { const t = sctx.currentTime; noise(t, 0.6, 0.3, 'lowpass', 3000, 300); tone(70, t, 0.4, 0.15, 'sine', 40); },
+    solo() { const t = sctx.currentTime; [0, 2, 4].forEach((k, i) => tone(note(k) / 2, t + i * 0.018, 0.4, 0.035, 'triangle')); },
+  };
+  function sfx(name, ...args) { if (sfxOn()) try { SFX[name](...args); } catch (_) { /* звук не обязателен */ } }
+
   function wakeAudio() {
+    sfxUnlock();
     if (!unlocked && (!player.src || player.src === SILENCE)) {
       unlocked = true;
       player.src = SILENCE;
@@ -1146,7 +1285,7 @@ if (typeof window !== 'undefined') (function () {
   const soundBtn = $('btn-sound');
   function syncSoundButton() {
     soundBtn.classList.toggle('off', !SAVE.settings.music);
-    soundBtn.setAttribute('aria-label', SAVE.settings.music ? 'Выключить музыку' : 'Включить музыку');
+    soundBtn.setAttribute('aria-label', SAVE.settings.music ? 'Выключить звук' : 'Включить звук');
   }
   function placeSoundButton() {
     // в верхней плашке HUD между полосой песни и счётчиком зрителей
@@ -1783,6 +1922,7 @@ if (typeof window !== 'undefined') (function () {
       b.addEventListener('click', () => {
         if (!box.classList.contains('armed')) return;
         chooseCard(id);
+        if (!isEvo) sfx('card');
         resumeMusic();
         state = 'play';
         show(null);
@@ -1884,10 +2024,11 @@ if (typeof window !== 'undefined') (function () {
 
   function handleEvents() {
     for (const ev of G.events) {
-      if (ev.type === 'solo') fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.r, t: 0, life: 0.6, color: CARD_DEFS.solo.color });
+      if (ev.type === 'solo') sfx('solo'), fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.r, t: 0, life: 0.6, color: CARD_DEFS.solo.color });
       else if (ev.type === 'chorus') {
         fx.push({ type: 'chorus', x: ev.x, y: ev.y, targets: ev.targets, t: 0, life: 0.8 });
       } else if (ev.type === 'pyro') {
+        sfx('pyro');
         fx.push({ type: 'flash', t: 0, life: 0.5, edge: ev.edge });
         shake = 0.35;
         for (let i = 0; i < 6; i++) {
@@ -1897,6 +2038,7 @@ if (typeof window !== 'undefined') (function () {
           }
         }
       } else if (ev.type === 'evolve') {
+        sfx('evolve');
         banners.push({ text: `Эволюция: ${EVOLUTIONS[ev.id].name}!`, t: 0, life: 2.4, color: EVO_COLOR });
         shake = 0.3;
         spawnParticles(G.player.x, G.player.y - 20, 30, EVO_COLOR, 160, 0.9, 3);
@@ -1910,62 +2052,79 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'saved') {
         spawnParticles(ev.x, ev.y - 18, 10, CARD_DEFS.second.color, 80, 0.6, 2.4);
       } else if (ev.type === 'pickup') {
+        sfx('pickup', ev.chain, ev.gold);
         const col = ev.gold ? EVO_COLOR : EMO_COLORS[ev.kind];
-        spawnParticles(ev.x, ev.y, ev.gold ? 12 : 7, col, ev.gold ? 110 : 70, 0.45, 2.2);
+        if (ART['spark-0']) fx.push({ type: 'spark', x: ev.x, y: ev.y, t: 0, life: 0.38, color: col, size: ev.gold ? 64 : 44 });
+        else spawnParticles(ev.x, ev.y, ev.gold ? 12 : 7, col, ev.gold ? 110 : 70, 0.45, 2.2);
         // эмоция влетает в душу
         fx.push({ type: 'fly', x: ev.x, y: ev.y, t: 0, life: 0.18, color: col });
         pops.push({ x: ev.x, y: ev.y - 8, text: '+' + (ev.drive < 10 ? f1(ev.drive) : Math.round(ev.drive)), color: col, t: 0, life: 0.7, size: 10 + Math.min(6, ev.chain / 10) });
       } else if (ev.type === 'chainTier') {
+        sfx('tier');
         banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
+        fx.push({ type: 'spark', x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, color: PAL.cyan, size: 120 });
         shake = Math.max(shake, 0.2);
         spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
       } else if (ev.type === 'smash') {
         spawnParticles(ev.x, ev.y, 6, '#9a9aa2', 60, 0.4, 2.2);
       } else if (ev.type === 'fight') {
+        sfx('fight');
         pops.push({ x: ev.x, y: ev.y - 30, text: 'драка!', color: PAL.pink, t: 0, life: 1.0, size: 12 });
         spawnParticles(ev.x, ev.y - 14, 12, PAL.pink, 110, 0.5, 2.4);
         shake = Math.max(shake, 0.2);
       } else if (ev.type === 'steal') {
         fx.push({ type: 'steal', x: ev.x, y: ev.y, tx: ev.tx, ty: ev.ty, t: 0, life: 0.3 });
       } else if (ev.type === 'fearWave') {
+        sfx('fear');
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.7, color: '#ff3d50' });
         banners.push({ text: 'Волна страха!', t: 0, life: 1.4, color: '#ff3d50' });
         shake = 0.4;
       } else if (ev.type === 'sniff') {
+        sfx('sniff');
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.6, color: '#b48cff' });
         pops.push({ x: ev.x, y: ev.y - 48, text: 'Пф-ф…', color: '#b48cff', t: 0, life: 1.2, size: 13 });
       } else if (ev.type === 'chainBreak') {
+        sfx('chainBreak');
         pops.push({ x: G.player.x, y: G.player.y - 60, text: `цепочка ×${ev.n}`, color: PAL.dim, t: 0, life: 1.1, size: 11 });
       } else if (ev.type === 'triple') {
+        sfx('triple');
         const col = EMO_COLORS[ev.kind];
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
+        fx.push({ type: 'spark', x: ev.x, y: ev.y - 20, t: 0, life: 0.5, color: col, size: 100 });
         pops.push({ x: ev.x, y: ev.y - 74, text: (ev.k > 1 ? `Три ×${ev.k}!` : 'Три подряд!'), color: col, t: 0, life: 1.0, size: 14 });
         spawnParticles(ev.x, ev.y - 20, 14, col, 120, 0.6, 2.6);
       } else if (ev.type === 'climax') {
+        sfx('climax');
         banners.push({ text: 'КУЛЬМИНАЦИЯ!', t: 0, life: 2.2, color: EVO_COLOR });
         shake = 0.5;
         for (let i = 0; i < 50; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? EVO_COLOR : PAL.pink, 180, 1.2, 3, 140);
       } else if (ev.type === 'climaxEnd') {
         spawnParticles(G.player.x, G.player.y - 20, 24, EVO_COLOR, 160, 0.8, 2.6);
       } else if (ev.type === 'setBonus') {
+        sfx('tier');
         const T = TAGS[ev.tag];
         banners.push({ text: `Набор «${T.name}» ×${ev.n}: ${T.bonus[ev.n]}`, t: 0, life: 2.4, color: T.color });
       } else if (ev.type === 'duo') {
+        sfx('evolve');
         banners.push({ text: `Дуэт: ${DUOS[ev.id].name}!`, t: 0, life: 2.2, color: DUO_COLOR });
         spawnParticles(G.player.x, G.player.y - 20, 26, DUO_COLOR, 150, 0.8, 2.8);
       } else if (ev.type === 'repel') {
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
         spawnParticles(ev.x, ev.y - 10, 14, ev.kind === 'fear' ? '#ff3d50' : '#b49cff', 130, 0.5, 2.6);
       } else if (ev.type === 'encore') {
+        sfx('encore');
         banners.push({ text: 'БИС! Зал просит ещё!', t: 0, life: 3, color: PAL.amber });
         shake = 0.4;
         for (let i = 0; i < 40; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? PAL.amber : PAL.pink, 160, 1.2, 3, 140);
       } else if (ev.type === 'leave') {
+        sfx('leave');
         fx.push({ type: 'leaveMark', x: ev.x, y: ev.y, t: 0, life: 1.0 });
       } else if (ev.type === 'incident') {
+        sfx('incident');
         banners.push({ text: ev.text, t: 0, life: 2.6, color: PAL.pink });
         shake = 0.3;
       } else if (ev.type === 'incidentEnd') {
+        sfx('fixed');
         banners.push({ text: ev.text, t: 0, life: 1.8, color: PAL.green });
         spawnParticles(G.player.x, G.player.y - 20, 12, PAL.green, 90, 0.6, 2.5);
       } else if (ev.type === 'banner') {
@@ -2210,6 +2369,15 @@ if (typeof window !== 'undefined') (function () {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    const gray = ART['body-gray'], color = ART['body-color'];
+    if (gray && color) {
+      // серое тело и живое — одно поверх другого, живое проступает с ростом связи
+      const h = 70, cy = y - bob - h / 2 + 3;
+      const k = clamp(life, 0, 1);
+      if (k < 1) { ctx.globalAlpha = 1 - k; blit(gray, x, cy, h); }
+      if (k > 0) { ctx.globalAlpha = k; blit(color, x, cy, h); }
+      ctx.globalAlpha = 1;
+    } else {
     ctx.save();
     ctx.translate(x, y - bob);
     drawMusician({
@@ -2222,6 +2390,7 @@ if (typeof window !== 'undefined') (function () {
       headDrop: (1 - life) * 3, strum: pulse * 2, longHair: heroIsF(),
     });
     ctx.restore();
+    }
 
     if (stringBroken()) {
       const blink = Math.sin(clock * 8) > 0;
@@ -2245,6 +2414,17 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
+    const ghost = tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
+    if (ghost) {
+      // мягкое свечение и сам призрак-музыкант; на длинной цепочке душа чуть крупнее
+      const grow = 1 + Math.min(0.25, G.chain / 200);
+      ctx.globalAlpha = 0.2; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.ellipse(x, y - 24 - hover, 22 * grow, 30 * grow, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.95;
+      blit(ghost, x, y - 22 - hover, 60 * grow, p.dir < 0);
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.save();
     ctx.translate(x, y - 6 - hover);
     ctx.scale(p.dir * 1.25, 1.25); // душа чуть крупнее тела, чтобы её было хорошо видно
@@ -2294,6 +2474,15 @@ if (typeof window !== 'undefined') (function () {
       if (rest < 1.2 && Math.floor(rest * 8) % 2 === 0) continue; // мигает перед исчезновением
       const pulse = 1 + Math.sin(clock * 8 + e.x) * 0.06;
       const s = e.size * pulse * Math.min(1, e.age * 6);
+      const art = ART[(e.gold ? 'gold-' : 'emo-') + EMO_ART[e.kind]];
+      if (art) {
+        if (e.gold) { // золотые эмоции Кульминации — с пульсирующим ореолом
+          ctx.globalAlpha = 0.35 + Math.sin(clock * 10 + e.x) * 0.15; ctx.fillStyle = EVO_COLOR;
+          ctx.beginPath(); ctx.arc(e.x, e.y, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+        }
+        blit(art, e.x, e.y, s * (e.gold ? 2.1 : 1.85));
+        continue;
+      }
       ctx.fillStyle = 'rgba(20,12,8,0.55)';
       ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.62, 0, Math.PI * 2); ctx.fill();
       if (e.gold) { // золотые эмоции Кульминации
@@ -2359,6 +2548,10 @@ if (typeof window !== 'undefined') (function () {
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
         }
         ctx.globalAlpha = 1;
+      } else if (f.type === 'spark') {
+        const fr = Math.min(7, Math.floor(f.t / f.life * 8));
+        const img = f.color === PAL.pink ? ART['spark-' + fr] : tinted('spark-' + fr, SPARK_HUE, f.color);
+        if (img) blit(img, f.x, f.y, f.size);
       } else if (f.type === 'steal') {
         // соперник утягивает эмоцию к себе
         const k = f.t / f.life, x = f.x + (f.tx - f.x) * k, y = f.y + (f.ty - 10 - f.y) * k;
