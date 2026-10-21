@@ -1039,6 +1039,7 @@ if (typeof window !== 'undefined') (function () {
   // ---------- картинки ----------
   // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
   const ART = {};
+  const LIGHT_ART = lightNames();
   // Пробные стили (тест перед выбором): зрители, тело и душа из листов стиля, фон рисуется кодом.
   // 'proto' — графика прототипа.
   const STYLES = { proto: 'Прототип', light: 'Свет', notebook: 'Тетрадь', theater: 'Театр' };
@@ -1051,7 +1052,16 @@ if (typeof window !== 'undefined') (function () {
   // пока не утверждён стиль игры (код для их спрайтов остаётся: bg-N, body-*, ghost-*, vN-K).
   const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap']
     .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8))
-    .concat(STYLE_IDS.flatMap(st => STYLE_PARTS.map(n => `${st}-${n}`)));
+    .concat(['notebook', 'theater'].flatMap(st => STYLE_PARTS.map(n => `${st}-${n}`)))
+    .concat(LIGHT_ART);
+  // «Свет»: 6 зрителей × 4 состояния, тело в 3 стадиях, 4 кадра души, антагонисты, фон первого зала
+  function lightNames() {
+    const out = ['light-bg-1', 'light-critic', 'light-rival', 'light-fear', 'light-drunk'];
+    for (let i = 0; i < 6; i++) for (const st of ['bored', 'neutral', 'interested', 'ecstatic']) out.push(`light-v${i}-${st}`);
+    for (let i = 0; i < 3; i++) out.push(`light-body-${i}`);
+    for (let i = 0; i < 4; i++) out.push(`light-soul-${i}`);
+    return out;
+  }
   function frameNames(base, n) { return Array.from({ length: n }, (_, i) => `${base}-${i}`); }
   for (const n of ART_NAMES) {
     const im = new Image();
@@ -2241,6 +2251,13 @@ if (typeof window !== 'undefined') (function () {
   // Фон пробного стиля: нарочно простой, чтобы персонажи и эффекты читались
   function drawStyledBackground(st) {
     const L = G.L;
+    const bg = st === 'light' && ART['light-bg-' + (G.levelNo + 1)];
+    if (bg) {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, L.W, L.H);
+      ctx.drawImage(bg, 0, 0, L.W, L.W * bg.naturalHeight / bg.naturalWidth);
+      drawExit();
+      return;
+    }
     const C = {
       light: { wall: '#050303', stage: '#120c0a', edge: '#2a1a12', floor: '#070405', line: 'rgba(255,176,58,0.18)' },
       notebook: { wall: '#e9dac2', stage: '#e2d1b5', edge: '#5a4a3a', floor: '#eee0cb', line: 'rgba(60,40,30,0.12)' },
@@ -2369,18 +2386,31 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.ellipse(x, y + 1, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
 
     // спрайт зрителя: у каждого свой облик, поза — по настроению
-    if (v.look == null) v.look = (G.viewers.indexOf(v) * 5 + 3) % 8;
+    if (v.look == null) v.look = (G.viewers.indexOf(v) * 7 + 3) % 12;
     const pose = v.leaving || bored ? 2 : I > 78 ? 1 : 0;
+    if (v.critic && styleArt('critic')) {
+      const img = styleArt('critic'), h = 50;
+      ctx.globalAlpha = v.leaving ? 0.5 : 1;
+      blit(img, x, y - bob - h / 2 + 4, h);
+      ctx.globalAlpha = 1;
+      if (!v.leaving) {
+        ctx.fillStyle = '#1a0f09'; ctx.fillRect(x - 12, y - 56, 24, 4);
+        ctx.fillStyle = I > 40 ? PAL.green : I > 20 ? PAL.amber : PAL.pink;
+        ctx.fillRect(x - 12, y - 56, 24 * clamp(I / 100, 0, 1), 4);
+      }
+      return;
+    }
     // пробный стиль: поза по настроению — скучает, нейтрален, увлечён, в восторге
-    const styled = styleArt(v.leaving || bored ? 'v-bored' : !happy ? 'v-neutral' : I < 80 ? 'v-interested' : 'v-ecstatic');
-    const spr = styled || ART[`v${v.look}-${pose}`];
+    const mood = v.leaving || bored ? 'bored' : !happy ? 'neutral' : I < 80 ? 'interested' : 'ecstatic';
+    const styled = styleArt(`v${v.look % 6}-${mood}`) || styleArt(`v-${mood}`);
+    const spr = styled || ART[`v${v.look % 8}-${pose}`];
     let top = -32;
     if (spr) {
       const h = styled ? 44 : 46, cy = y - bob - h / 2 + 4;
       ctx.save(); ctx.translate(x, cy); ctx.rotate(sway * 0.6);
-      if (styled && v.look % 2) ctx.scale(-1, 1); // половина зала зеркально — толпа разнообразнее
+      if (styled && Math.floor(v.look / 6) % 2 === 0 && v.look % 3 === 1) ctx.scale(-1, 1); // часть зала зеркально — толпа разнообразнее
       ctx.drawImage(spr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h);
-      if (!styled && k < 1) { const gr = grayed(`v${v.look}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
+      if (!styled && k < 1) { const gr = grayed(`v${v.look % 8}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
       if (v.flash > 0) {
         ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.9; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.stroke();
@@ -2501,8 +2531,17 @@ if (typeof window !== 'undefined') (function () {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    const b0 = styleArt('body-0'), b1 = styleArt('body-1'), b2 = styleArt('body-2');
+    if (b0 && b1 && b2) {
+      // неживое → просыпается → живое; соседние стадии плавно сменяют друг друга
+      const h = 80, cy = y - bob - h / 2 + 6, k = clamp(life, 0, 1) * 2;
+      const [from, to, t] = k < 1 ? [b0, b1, k] : [b1, b2, k - 1];
+      ctx.globalAlpha = 1 - t; blit(from, x, cy, h);
+      ctx.globalAlpha = t; blit(to, x, cy, h);
+      ctx.globalAlpha = 1;
+    }
     const gray = styleArt('body-off') || ART['body-gray'], color = styleArt('body-on') || ART['body-color'];
-    if (gray && color) {
+    if (b0 && b1 && b2) { /* уже нарисовано */ } else if (gray && color) {
       // серое тело и живое — одно поверх другого, живое проступает с ростом связи
       const h = styleArt('body-on') ? 78 : 70, cy = y - bob - h / 2 + 6;
       const k = clamp(life, 0, 1);
@@ -2546,7 +2585,9 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
-    const ghost = styleArt('soul') ? tinted(`${curStyle()}-soul`, GHOST_HUE, col) : tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
+    const fr = Math.floor(clock * 5) % 4;
+    const ghost = styleArt(`soul-${fr}`) ? tinted(`${curStyle()}-soul-${fr}`, GHOST_HUE, col)
+      : styleArt('soul') ? tinted(`${curStyle()}-soul`, GHOST_HUE, col) : tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
     if (ghost) {
       // мягкое свечение и сам призрак-музыкант; на длинной цепочке душа чуть крупнее
       const grow = 1 + Math.min(0.25, G.chain / 200);
@@ -2960,6 +3001,13 @@ if (typeof window !== 'undefined') (function () {
       ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
     const wob = Math.sin(clock * 5) * 0.25;
+    const dimg = styleArt('drunk');
+    if (dimg) {
+      const h = 54;
+      ctx.save(); ctx.translate(x, y - h / 2 + 4); ctx.rotate(wob * 0.5);
+      ctx.drawImage(dimg, -h * dimg.naturalWidth / dimg.naturalHeight / 2, -h / 2, h * dimg.naturalWidth / dimg.naturalHeight, h);
+      ctx.restore();
+    } else {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(x, y + 1, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save(); ctx.translate(x, y); ctx.rotate(wob);
@@ -2969,10 +3017,11 @@ if (typeof window !== 'undefined') (function () {
     // бутылка
     ctx.fillStyle = '#3f7a4a'; ctx.fillRect(7, -18, 3, 9); ctx.fillRect(7.8, -21, 1.4, 3);
     ctx.restore();
+    }
     if (!inc.leaving) {
-      ring(x, y - 38, 8, inc.progress, PAL.green);
+      ring(x, y - (dimg ? 62 : 38), 8, inc.progress, PAL.green);
       ctx.fillStyle = PAL.pink; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('!', x, y - 37);
+      ctx.fillText('!', x, y - (dimg ? 61 : 37));
     }
   }
 
@@ -3003,6 +3052,14 @@ if (typeof window !== 'undefined') (function () {
       ctx.strokeStyle = A.kind === 'fear' ? 'rgba(255,61,80,0.5)' : 'rgba(180,120,255,0.5)';
       ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
       ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const aimg = styleArt(A.kind);
+    if (aimg) {
+      const h = A.kind === 'fear' ? 84 : 60;
+      ctx.globalAlpha = fade;
+      blit(aimg, A.x, A.y - h / 2 + 6 + Math.sin(clock * 3.3) * 2, h * (1 + Math.sin(clock * 2) * 0.02), A.tx < A.x);
+      ctx.globalAlpha = 1;
+      return;
     }
     ctx.save();
     ctx.globalAlpha = fade;
