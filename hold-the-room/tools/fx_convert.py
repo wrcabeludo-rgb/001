@@ -14,7 +14,7 @@ import numpy as np
 # длительность в игре (с), высота кадра в мире, стоит ли кадр низом на точке, сколько кадров
 DEFAULTS = {
     'pickup': (0.45, 70, False, 12), 'wave': (0.6, 160, False, 14), 'triple': (0.6, 120, False, 14),
-    'chain': (0.8, 150, False, 18), 'climax': (1.6, 420, False, 28), 'evolve': (1.0, 180, False, 20),
+    'chain': (0.8, 150, False, 18), 'climax': (2.0, 340, False, 32), 'evolve': (1.0, 180, False, 20),
     'leave': (0.8, 60, True, 14), 'pyro': (1.1, 160, True, 20), 'smoke': (2.4, 140, False, 24),
     'confetti': (1.8, 300, True, 28), 'string': (0.8, 200, False, 16), 'blackout': (1.2, 180, False, 20),
     'alarm': (1.0, 120, False, 16), 'party': (1.2, 200, False, 18), 'blogger': (1.2, 110, False, 18),

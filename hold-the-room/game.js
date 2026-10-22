@@ -2275,7 +2275,7 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'climax') {
         sfx('climax');
         banners.push({ text: 'КУЛЬМИНАЦИЯ!', t: 0, life: 2.2, color: EVO_COLOR });
-        fxAnim('climax', G.L.W / 2, G.L.stageBottom - 20, { size: 420 });
+        fxAnim('climax', G.L.W / 2, G.L.stageBottom + 70);
         confettiRow(1.4);
         shake = 0.5;
         for (let i = 0; i < 50; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? EVO_COLOR : PAL.pink, 180, 1.2, 3, 140);
@@ -2470,6 +2470,7 @@ if (typeof window !== 'undefined') (function () {
     pickup: { frames: 12, cols: 4, w: 256, h: 182, dur: 0.45, size: 70, bottom: false },
     wave: { frames: 14, cols: 4, w: 256, h: 144, dur: 0.6, size: 160, bottom: false },
     chain: { frames: 18, cols: 5, w: 256, h: 234, dur: 0.8, size: 150, bottom: false },
+    climax: { frames: 32, cols: 6, w: 384, h: 216, dur: 2.0, size: 340, bottom: false },
   };
   const fxImg = {};
   for (const n of Object.keys(FX_ART)) {
