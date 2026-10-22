@@ -1201,10 +1201,25 @@ if (typeof window !== 'undefined') (function () {
     return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
   })();
 
-  // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
-  // Тип ставится и при загрузке, и в каждом касании: в установленном PWA иначе действует бесшумный режим
-  const playbackSession = () => { try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ } };
-  playbackSession();
+  // Тип аудиосессии iOS. Раньше всегда ставился 'playback', но в установленном PWA с ним любой play()
+  // зависал (в Safari — нет). Весь звук теперь идёт через <audio>, а ему бесшумный режим не мешает,
+  // поэтому тип не трогаем. Если play() всё же завис, сторож перебирает типы и запоминает рабочий.
+  const SESSION_TYPES = ['auto', 'ambient', 'playback'];
+  function setSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (_) { /* старые браузеры */ } }
+  if (SAVE.settings.session) setSession(SAVE.settings.session);
+  // Сторож: если play() не завершился за 1,5 с — другой тип сессии и повтор
+  function watchPlay(p, retry) {
+    if (!p || !navigator.audioSession) return;
+    let settled = false;
+    p.then(() => { settled = true; }, () => { settled = true; });
+    setTimeout(() => {
+      if (settled) return;
+      const cur = navigator.audioSession.type, next = SESSION_TYPES[(SESSION_TYPES.indexOf(cur) + 1) % SESSION_TYPES.length];
+      audioErr = `play() завис при сессии ${cur} → ${next}`;
+      setSession(next); SAVE.settings.session = next; persist();
+      if (retry) retry();
+    }, 1500);
+  }
 
   // ---------- звуки игры ----------
   // Синтезируются кодом, но не вживую: живой Web Audio в установленном PWA на iPhone «подвешивал»
@@ -1350,13 +1365,13 @@ if (typeof window !== 'undefined') (function () {
   // в pointerdown, и в установленном PWA на iPhone разрешение так и не наступало.
   let audioErr = '';
   function wakeAudio() {
-    playbackSession();
     blessPool();
     if (!unlocked && (!player.src || player.src === SILENCE)) {
       unlocked = true;
       player.src = SILENCE;
       const p = player.play();
       if (p) p.catch(e => { unlocked = false; if (e.name !== 'AbortError') audioErr = 'музыка: ' + e.name; });
+      watchPlay(p, () => { unlocked = false; });
     }
     // iOS может прервать звук (звонок, сворачивание PWA); возобновляем при касании
     if (playing && player.paused && SAVE.settings.music && state !== 'levelup') resumeMusic();
@@ -1384,10 +1399,14 @@ if (typeof window !== 'undefined') (function () {
       out.textContent = `Прозвучали два сигнала: низкий — путь музыки (${res.a}), затем звук эффекта (${res.w}). ` +
         `Если не слышно ни одного, проверьте переключатель бесшумного режима сбоку iPhone и громкость. ` + audioReport();
     };
-    const a = new Audio(beepWav(440));
-    a.setAttribute('playsinline', '');
-    const p = a.play();
-    if (p) p.then(() => { res.a = 'запустился'; show(); }, e => { res.a = 'ошибка ' + e.name; show(); });
+    const beep = (tries) => {
+      const a = new Audio(beepWav(440));
+      a.setAttribute('playsinline', '');
+      const p = a.play();
+      if (p) p.then(() => { res.a = 'запустился' + (tries ? ` (с ${tries + 1}-й попытки)` : ''); show(); }, e => { res.a = 'ошибка ' + e.name; show(); });
+      watchPlay(p, () => { res.a = 'завис, меняю сессию'; show(); if (tries < 2) beep(tries + 1); });
+    };
+    beep(0);
     setTimeout(() => {
       const url = sfxCache.get('triple:');
       if (!url) res.w = 'ещё не записан';
@@ -1456,6 +1475,7 @@ if (typeof window !== 'undefined') (function () {
     if (G && state !== 'loading' && G.musicTime > 0) try { player.currentTime = G.musicTime % (player.duration || Infinity); } catch (_) { /* ещё нет длительности */ }
     setVolume(0);
     const p = player.play();
+    watchPlay(p, () => { pendingMusic = true; });
     return (p || Promise.resolve()).then(() => {
       if (token !== musicToken) { player.pause(); return false; }
       playing = true;
