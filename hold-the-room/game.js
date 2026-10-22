@@ -39,9 +39,9 @@ const CONFIG = {
   // Базовый спад интереса в секунду по фазам песни
   decayPhases: [
     { until: 20, rate: 0.30, banner: '' },
-    { until: 60, rate: 0.95, banner: 'Куплет: зал привыкает' },
-    { until: 100, rate: 1.35, banner: 'Внимание тает быстрее!' },
-    { until: 120, rate: 1.80, banner: 'Финал! Держи их!' },
+    { until: 60, rate: 1.03, banner: 'Куплет: зал привыкает' },
+    { until: 100, rate: 1.46, banner: 'Внимание тает быстрее!' },
+    { until: 120, rate: 1.94, banner: 'Финал! Держи их!' },
   ],
 
   // Первые секунды зал благожелателен: эмоции идут и от «нейтральных»
@@ -129,8 +129,8 @@ const CONFIG = {
   // Происшествия во время песни. count — сколько их запланировано на уровне,
   // каждое случается с вероятностью chance (её снижает «Знакомый техник»).
   incidents: {
-    count: [1, 1, 2, 2, 3],
-    chance: 0.8,
+    count: [1, 2, 2, 3, 3],
+    chance: 0.9,
     window: [25, 105],   // в какие секунды песни могут начаться
     minGap: 18,
     // струну чинит душа, вернувшись к телу на сцене
@@ -138,7 +138,25 @@ const CONFIG = {
     blackout: { duration: 10, decayMul: 1.7, light: 85 },
     // дебошир гасит интерес вокруг, давит эмоции, а пока его не успокоили — раз в fightEvery с выгоняет соседа
     drunk: { speed: 30, radius: 80, drain: 7, calmRadius: 32, calmTime: 2.5, maxTime: 35, fightEvery: 6 },
+    // пожарная тревога: зрители у выхода теряют интерес, пока душа не подержится у кнопки
+    alarm: { maxTime: 20, radius: 130, drain: 6, holdRadius: 30, holdTime: 2.2 },
+    // за стеной вечеринка: край зала у одной из стен теряет интерес
+    party: { duration: 16, width: 100, drain: 4.5 },
+    // блогер: вокруг него не дают эмоций; если душа его «очарует» — зона даёт двойной драйв
+    blogger: { radius: 80, touch: 30, calmTime: 1.5, maxTime: 25, boostTime: 10 },
+    // последний заказ: часть зрителей тянется к бару и скучает, пока душа их не вернёт
+    lastcall: { count: 6, duration: 18, drain: 4, barX: 26 },
+    // фонит микрофон: раз в every с волна бьёт по всем, кто дальше safe от души
+    feedback: { duration: 12, every: 3, hit: 6, safe: 90 },
   },
+
+  // Цепная реакция: ушёл зритель — соседи теряют интерес («а чего он ушёл?»)
+  contagion: { radius: 70, hit: 8 },
+  // Усталость души: в полёте сил всё меньше и душа медленнее; отдых на месте и у тела на сцене
+  fatigue: { drain: 0.07, rest: 0.3, stageRest: 0.9, minSpeed: 0.55 },
+  // Заявки из зала: продержи душу в круге need секунд из time
+  requests: { first: 30, every: [22, 32], radius: 55, time: 9, need: 4, reward: 25, drive: 6, penalty: 15,
+    names: ['Медляк!', 'Хит!', 'Соло!', 'Что-нибудь своё!', 'Погромче!'] },
 };
 
 // Модификаторы от постоянных улучшений (будущее дерево способностей души).
@@ -158,12 +176,18 @@ const DEFAULT_MODS = {
   tagBonus: null,   // жанр: карты этого тега считаются за одну больше
   boss: null,       // 'critic' | 'rival' | 'fear'
   duration: null,   // длина песни, если не стандартная (концерт босса — 180 с)
+  extraIncidents: 0, // опасный концерт тура: столько форс-мажоров добавляется сверх обычного
 };
 
 const INCIDENT_NAMES = {
   string: 'Порвалась струна!',
   blackout: 'Вырубило свет!',
   drunk: 'Пьяный дебошир!',
+  alarm: 'Пожарная тревога!',
+  party: 'За стеной вечеринка!',
+  blogger: 'Блогер с камерой!',
+  lastcall: '«Последний заказ!»',
+  feedback: 'Фонит микрофон!',
 };
 
 // ---------------------------------------------------------------------
@@ -346,6 +370,8 @@ function newGame(seed, worldH, levelIndex, mods) {
     externalClock: false,
     encore: null, encored: false,
     freeze: 0,          // «Брейк»: сколько ещё секунд зал не теряет интерес
+    stamina: 1,         // силы души: 1 — полные
+    request: null, nextRequest: CONFIG.requests.first, requestsDone: 0, requestsFailed: 0,
     chain: 0, chainT: 0, bestChain: 0, // цепочка эмоций и сколько секунд до её обрыва
     kinds: [],          // виды последних пойманных эмоций (для «три одинаковых»)
     triples: 0,
@@ -564,6 +590,7 @@ function update(dt) {
   }
 
   updatePlayer(dt);
+  updateRequest(dt);
   updateIncidents(dt);
   updateAntagonist(dt);
   updateCards(dt);
@@ -571,13 +598,49 @@ function update(dt) {
   updateEmotions(dt);
 }
 
+// Заявка из зала: круг вокруг одного из зрителей; продержи там душу
+function updateRequest(dt) {
+  const R = CONFIG.requests, p = G.player;
+  if (G.encore) { G.request = null; return; }
+  if (!G.request) {
+    if (G.t < G.nextRequest || G.t > G.duration - 15) return;
+    const pool = G.viewers.filter(v => !v.leaving);
+    if (!pool.length) return;
+    const v = pool[(G.rnd() * pool.length) | 0];
+    G.request = { x: v.x, y: v.y, t: 0, progress: 0, name: R.names[(G.rnd() * R.names.length) | 0] };
+    G.events.push({ type: 'request', text: `Заявка: «${G.request.name.replace(/!$/, '')}»` });
+    return;
+  }
+  const q = G.request;
+  q.t += dt;
+  if (dist(p.x, p.y, q.x, q.y) <= R.radius) q.progress += dt;
+  const near = G.viewers.filter(v => !v.leaving && dist(v.x, v.y, q.x, q.y) <= R.radius * 1.6);
+  if (q.progress >= R.need) {
+    for (const v of near) { gainInterest(v, R.reward); v.flash = 0.7; }
+    addDrive(R.drive, 'request');
+    G.requestsDone++;
+    G.events.push({ type: 'requestDone', x: q.x, y: q.y });
+    G.request = null;
+  } else if (q.t >= R.time) {
+    for (const v of near) v.interest -= R.penalty;
+    G.requestsFailed++;
+    G.events.push({ type: 'requestFail', x: q.x, y: q.y });
+    G.request = null;
+  }
+  if (!G.request) G.nextRequest = G.t + R.every[0] + G.rnd() * (R.every[1] - R.every[0]);
+}
+
 function updatePlayer(dt) {
   const p = G.player, L = G.L;
   p.tx = clamp(p.tx, 14, L.W - 14);
   p.ty = clamp(p.ty, L.wallBottom + 8, L.hallBottom - 6);
   const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-  const step = CONFIG.player.speed * G.mods.speedMul * dt;
+  const F = CONFIG.fatigue;
+  const step = CONFIG.player.speed * G.mods.speedMul * (F.minSpeed + (1 - F.minSpeed) * G.stamina) * dt;
   p.moving = d > 1;
+  const S = CONFIG.incidents.string.spot;
+  if (p.moving) G.stamina = Math.max(0, G.stamina - F.drain * dt);
+  else G.stamina = Math.min(1, G.stamina + (dist(p.x, p.y, S.x, S.y) < 45 ? F.stageRest : F.rest) * dt);
   if (d <= step) { p.x = p.tx; p.y = p.ty; } else { p.x += dx / d * step; p.y += dy / d * step; }
   if (Math.abs(dx) > 2) p.dir = dx > 0 ? 1 : -1;
 }
@@ -650,6 +713,8 @@ function updateViewers(dt, ph) {
   const climax = G.climaxT > 0;
   const emitThr = warm || encore || climax ? CONFIG.warmup.emitThreshold : V.happyThreshold;
   const decayK = (climax ? CONFIG.climax.decayMul : 1) * (setOn('crowd', 2) ? 0.9 : 1);
+  const inc = G.incident;
+  const blog = inc && inc.type === 'blogger' ? inc : null;
 
   for (const v of G.viewers) {
     if (v.gone) continue;
@@ -665,6 +730,16 @@ function updateViewers(dt, ph) {
     if (smokeR && d <= smokeR) rate *= smokeMul;
     v.interest -= rate * dt;
     if (dr && dist(v.x, v.y, dr.x, dr.y) <= CONFIG.incidents.drunk.radius) v.interest -= CONFIG.incidents.drunk.drain * dt;
+    if (inc) {
+      const I = CONFIG.incidents;
+      if (inc.type === 'alarm' && dist(v.x, v.y, L.exit.x, L.exit.y) <= I.alarm.radius) v.interest -= I.alarm.drain * dt;
+      else if (inc.type === 'party' && (inc.side === 'left' ? v.x < I.party.width : v.x > L.W - I.party.width)) v.interest -= I.party.drain * dt;
+    }
+    if (v.bar) {
+      v.interest -= CONFIG.incidents.lastcall.drain * dt;
+      // душа рядом — возвращается на своё место
+      if (d <= auraR) { v.homeX = v.bar.homeX; v.homeY = v.bar.homeY; v.bar = null; v.flash = 0.6; G.events.push({ type: 'returned', x: v.x, y: v.y }); }
+    }
     if (d <= auraR && auraGain) gainInterest(v, auraGain * dt);
     if (bodyGain && dist(v.x, v.y, body.x, body.y) <= CONFIG.player.bodyRadius) gainInterest(v, bodyGain * dt);
     const sl = lvl('second');
@@ -675,7 +750,11 @@ function updateViewers(dt, ph) {
     }
     if (v.interest <= 0) {
       v.interest = 0; v.leaving = true;
+      if (v.bar) { v.bar = null; }
       G.events.push({ type: 'leave', x: v.x, y: v.y });
+      // цепная реакция: соседи сомневаются
+      const C2 = CONFIG.contagion;
+      for (const o of G.viewers) if (o !== v && !o.leaving && dist(o.x, o.y, v.x, v.y) <= C2.radius) o.interest -= C2.hit;
       continue;
     }
 
@@ -702,14 +781,15 @@ function updateViewers(dt, ph) {
         ? CONFIG.encore.emitMin + G.rnd() * (CONFIG.encore.emitMax - CONFIG.encore.emitMin)
         : (E.intervalMin + G.rnd() * (E.intervalMax - E.intervalMin)) /
           (G.mods.emitMul * (climax ? CONFIG.climax.emitMul : 1) * (v.fan && G.duos.fanzone ? 2 : 1));
-      if (v.interest > emitThr && !v.critic) {
+      const inBlog = blog && dist(v.x, v.y, blog.x, blog.y) <= CONFIG.incidents.blogger.radius;
+      if (v.interest > emitThr && !v.critic && !(inBlog && !blog.calmed)) {
         const k = clamp((v.interest - emitThr) / (100 - emitThr), 0, 1);
         G.emotions.push({
           x: v.x, y: v.y - 22,
           kind: (G.rnd() * 3) | 0, // 0 сердце, 1 нота, 2 хлопок
           size: E.sizeMin + (E.sizeMax - E.sizeMin) * k,
           drive: E.baseDrive * (1 + E.maxDriveBonus * k),
-          life: E.life, age: 0, gold: climax,
+          life: E.life, age: 0, gold: climax, double: !!(inBlog && blog.calmed),
           drift: (G.rnd() - 0.5) * 10,
         });
         G.emotionsSpawned++;
@@ -725,7 +805,7 @@ function catchEmotion(i) {
   G.chain = G.chainT > 0 ? G.chain + 1 : 1;
   G.chainT = chainGap();
   G.bestChain = Math.max(G.bestChain, G.chain);
-  const drive = e.drive * emotionDriveMul() * G.mods.driveMul * chainMul() * (e.gold ? CONFIG.climax.driveMul : 1);
+  const drive = e.drive * emotionDriveMul() * G.mods.driveMul * chainMul() * (e.gold ? CONFIG.climax.driveMul : 1) * (e.double ? 2 : 1);
   addDrive(drive, 'emotion');
   G.emotionsCollected++;
   G.events.push({ type: 'pickup', x: e.x, y: e.y, kind: e.kind, chain: G.chain, drive, gold: e.gold });
@@ -791,11 +871,12 @@ function updateEmotions(dt) {
 // ---------------------------------------------------------------------
 function planIncidents(rnd, levelNo, M) {
   const I = CONFIG.incidents;
-  const n = I.count[levelNo] || 0;
-  const types = M.noString ? ['blackout', 'drunk'] : ['string', 'blackout', 'drunk'];
+  const n = (I.count[levelNo] || 0) + (M.extraIncidents || 0);
+  const all = ['string', 'blackout', 'drunk', 'alarm', 'party', 'blogger', 'lastcall', 'feedback'];
+  const types = M.noString ? all.filter(t => t !== 'string') : all;
   const plan = [];
   for (let i = 0; i < n; i++) {
-    if (rnd() >= I.chance * M.incidentMul) continue;
+    if (i < (I.count[levelNo] || 0) && rnd() >= I.chance * M.incidentMul) continue;
     // по возможности без повторов
     const pool = types.filter(t => !plan.some(p => p.type === t));
     const type = (pool.length ? pool : types)[(rnd() * (pool.length || types.length)) | 0];
@@ -818,6 +899,23 @@ function startIncident(type) {
     inc.x = L.exit.x - 10; inc.y = L.exit.y;
     inc.tx = L.W / 2; inc.ty = (L.hallTop + L.hallBottom) / 2;
     inc.leaving = false;
+  } else if (type === 'alarm') {
+    inc.x = L.W - 40; inc.y = L.exit.y - 70; // кнопка отбоя у выхода
+  } else if (type === 'party') {
+    inc.side = G.rnd() < 0.5 ? 'left' : 'right';
+  } else if (type === 'blogger') {
+    const pool = G.viewers.filter(v => !v.leaving);
+    const v = pool[(G.rnd() * pool.length) | 0] || { x: L.W / 2, y: (L.hallTop + L.hallBottom) / 2 };
+    inc.x = clamp(v.x + 20, 30, L.W - 30); inc.y = v.y; inc.calmed = false; inc.boost = 0;
+  } else if (type === 'lastcall') {
+    const pool = G.viewers.filter(v => !v.leaving && !v.critic && v.x > 80);
+    for (let i = 0; i < CONFIG.incidents.lastcall.count && pool.length; i++) {
+      const v = pool.splice((G.rnd() * pool.length) | 0, 1)[0];
+      v.bar = { homeX: v.homeX, homeY: v.homeY };
+      v.homeX = CONFIG.incidents.lastcall.barX; v.tx = v.homeX; v.wanderTimer = 3;
+    }
+  } else if (type === 'feedback') {
+    inc.wave = 0;
   }
   G.incident = inc;
   G.incidentsHappened.push(type);
@@ -835,6 +933,43 @@ function updateIncidents(dt) {
   const inc = G.incident;
   if (!inc) return;
   inc.age += dt;
+  if (inc.type === 'alarm') {
+    const A = I.alarm;
+    if (dist(p.x, p.y, inc.x, inc.y) <= A.holdRadius) inc.progress += dt / A.holdTime;
+    else inc.progress = Math.max(0, inc.progress - dt * 0.5);
+    if (inc.progress >= 1) endIncident('Тревогу отключили!');
+    else if (inc.age >= A.maxTime) endIncident('Тревога стихла');
+    return;
+  }
+  if (inc.type === 'party') { if (inc.age >= I.party.duration) endIncident('Соседи угомонились'); return; }
+  if (inc.type === 'blogger') {
+    const B = I.blogger;
+    if (!inc.calmed) {
+      if (dist(p.x, p.y, inc.x, inc.y) <= B.touch) inc.progress += dt / B.calmTime;
+      else inc.progress = Math.max(0, inc.progress - dt * 0.5);
+      if (inc.progress >= 1) { inc.calmed = true; inc.boost = B.boostTime; G.events.push({ type: 'banner', text: 'Блогер снимает тебя! Двойной драйв' }); }
+      else if (inc.age >= B.maxTime) endIncident('Блогер ушёл');
+    } else if ((inc.boost -= dt) <= 0) endIncident('Эфир окончен');
+    return;
+  }
+  if (inc.type === 'lastcall') {
+    if (inc.age >= I.lastcall.duration) {
+      for (const v of G.viewers) if (v.bar) { v.homeX = v.bar.homeX; v.homeY = v.bar.homeY; v.bar = null; }
+      endIncident('Бар закрылся');
+    }
+    return;
+  }
+  if (inc.type === 'feedback') {
+    const F = I.feedback;
+    inc.wave += dt;
+    if (inc.wave >= F.every) {
+      inc.wave = 0;
+      for (const v of G.viewers) if (!v.leaving && dist(v.x, v.y, p.x, p.y) > F.safe) { v.interest -= F.hit; v.flash = 0.3; }
+      G.events.push({ type: 'feedbackWave' });
+    }
+    if (inc.age >= F.duration) endIncident('Звук наладили');
+    return;
+  }
   if (inc.type === 'string') {
     const S = I.string;
     if (dist(p.x, p.y, S.spot.x, S.spot.y) <= S.radius) inc.progress += dt * G.mods.repairMul / S.repairTime;
@@ -977,6 +1112,7 @@ function results() {
     cards: G.cardOrder.map(id => ({ id, level: G.cards[id], evolved: !!G.evolved[id] })),
     duos: Object.keys(G.duos),
     bestChain: G.bestChain, triples: G.triples, climaxes: G.climaxes,
+    requestsDone: G.requestsDone, requestsFailed: G.requestsFailed,
     levels: G.level,
     levelNo: G.levelNo,
     passed: bonus > 0,
@@ -1035,111 +1171,6 @@ if (typeof window !== 'undefined') (function () {
   function storage() { try { return window.localStorage; } catch (_) { return null; } }
   let SAVE = loadSave(storage());
   const persist = () => writeSave(storage(), SAVE);
-
-  // ---------- картинки ----------
-  // Спрайты из assets/. Пока картинка не загрузилась (или её нет), рисуется старая векторная графика.
-  const ART = {};
-  const LIGHT_ART = lightNames();
-  // Пробные стили (тест перед выбором): зрители, тело и душа из листов стиля, фон рисуется кодом.
-  // 'proto' — графика прототипа.
-  const STYLES = { proto: 'Прототип', light: 'Свет', notebook: 'Тетрадь', theater: 'Театр' };
-  const STYLE_IDS = ['light', 'notebook', 'theater'];
-  const STYLE_PARTS = ['v-bored', 'v-neutral', 'v-interested', 'v-ecstatic', 'body-off', 'body-on', 'soul'];
-  // «Свет» — выбранный стиль игры (решение 41); остальные оставлены для сравнения
-  const curStyle = () => (STYLES[SAVE.settings.style] ? SAVE.settings.style : 'light');
-  const styleArt = n => (curStyle() === 'proto' ? null : ART[`${curStyle()}-${n}`]);
-  // Сейчас в спрайтах только эмоции и эффекты. Сцены, тело, душа и зрители рисуются векторно,
-  // пока не утверждён стиль игры (код для их спрайтов остаётся: bg-N, body-*, ghost-*, vN-K).
-  const ART_NAMES = ['emo-heart', 'emo-note', 'emo-clap', 'gold-heart', 'gold-note', 'gold-clap']
-    .concat(frameNames('spark', 8), frameNames('ring', 8), frameNames('confetti', 10), frameNames('fire', 8))
-    .concat(['notebook', 'theater'].flatMap(st => STYLE_PARTS.map(n => `${st}-${n}`)))
-    .concat(LIGHT_ART);
-  // «Свет»: 6 зрителей × 4 состояния, тело в 3 стадиях, 4 кадра души, антагонисты, фон первого зала
-  function lightNames() {
-    const out = ['light-bg-1', 'light-critic', 'light-rival', 'light-fear', 'light-drunk'];
-    for (let i = 0; i < 6; i++) for (const st of ['bored', 'neutral', 'interested', 'ecstatic']) out.push(`light-v${i}-${st}`);
-    for (let i = 0; i < 3; i++) out.push(`light-body-${i}`);
-    for (let i = 0; i < 4; i++) out.push(`light-soul-${i}`);
-    return out;
-  }
-  function frameNames(base, n) { return Array.from({ length: n }, (_, i) => `${base}-${i}`); }
-  for (const n of ART_NAMES) {
-    const im = new Image();
-    im.onload = () => { ART[n] = im; };
-    im.src = `./assets/${n}.webp`;
-  }
-  const EMO_ART = ['heart', 'note', 'clap'];
-
-  // Перекраска спрайта в другой оттенок (душа — под цвет облика, искры — под вид эмоции).
-  // Считается один раз на пару «картинка + цвет» и кешируется.
-  const tintCache = {};
-  function hexHue(hex) {
-    const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-    if (!d) return { h: 0, s: 0 };
-    const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    return { h: (h * 60 + 360) % 360, s: d / (1 - Math.abs(mx + mn - 1)) };
-  }
-  function tinted(name, baseHue, color) {
-    const key = name + color, img = ART[name];
-    if (!img) return null;
-    if (tintCache[key]) return tintCache[key];
-    const c = document.createElement('canvas');
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const x = c.getContext('2d');
-    x.drawImage(img, 0, 0);
-    const target = hexHue(color);
-    try {
-      const data = x.getImageData(0, 0, c.width, c.height), px = data.data;
-      // перекраска: оттенок каждого пикселя — цвет облика, насыщенность и яркость свои;
-      // для почти белых обликов («Призрак») насыщенность приглушается
-      const th = target.h / 360, sMul = target.s < 0.5 ? 0.25 : 1;
-      const hue2 = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
-      for (let i = 0; i < px.length; i += 4) {
-        const r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
-        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
-        const sat = (d ? d / (1 - Math.abs(2 * l - 1)) : 0) * sMul;
-        const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat, pp = 2 * l - q;
-        px[i] = hue2(pp, q, th + 1 / 3) * 255; px[i + 1] = hue2(pp, q, th) * 255; px[i + 2] = hue2(pp, q, th - 1 / 3) * 255;
-      }
-      x.putImageData(data, 0, 0);
-    } catch (_) { /* без доступа к пикселям — рисуем как есть */ }
-    return (tintCache[key] = c);
-  }
-  const GHOST_HUE = 192, SPARK_HUE = 330, RING_HUE = 195;
-
-  // Обесцвеченная копия спрайта: скучающий зритель тускнеет
-  function grayed(name) {
-    const key = name + '#gray', img = ART[name];
-    if (!img) return null;
-    if (tintCache[key]) return tintCache[key];
-    const c = document.createElement('canvas');
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const x = c.getContext('2d');
-    x.drawImage(img, 0, 0);
-    try {
-      const data = x.getImageData(0, 0, c.width, c.height), px = data.data;
-      for (let i = 0; i < px.length; i += 4) {
-        const l = (0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]) * 0.8;
-        px[i] = l; px[i + 1] = l; px[i + 2] = l * 1.05;
-      }
-      x.putImageData(data, 0, 0);
-    } catch (_) { /* без доступа к пикселям — как есть */ }
-    return (tintCache[key] = c);
-  }
-
-  // Кадр анимации по имени листа; color — перекраска, hue — исходный оттенок листа
-  function animFrame(sheet, n, k, color, hue) {
-    const fr = Math.min(n - 1, Math.floor(k * n));
-    return color ? tinted(`${sheet}-${fr}`, hue, color) : ART[`${sheet}-${fr}`];
-  }
-
-  // Рисует картинку по центру (cx, cy) нужной высоты
-  function blit(img, cx, cy, h, flip) {
-    const w = h * (img.width || img.naturalWidth) / (img.height || img.naturalHeight);
-    if (flip) { ctx.save(); ctx.translate(cx, cy); ctx.scale(-1, 1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore(); }
-    else ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
-  }
 
   // ---------- аудио: музыка, часы ритма, звуки ----------
   // Музыка играет через элемент <audio>: в установленном PWA на iOS Web Audio часто молчит.
@@ -1245,6 +1276,7 @@ if (typeof window !== 'undefined') (function () {
     fight() { const t = sctx.currentTime; noise(t, 0.12, 0.3, 'lowpass', 900); noise(t + 0.15, 0.1, 0.25, 'lowpass', 700); tone(120, t, 0.2, 0.12, 'sine', 60); },
     fear() { const t = sctx.currentTime; tone(90, t, 0.9, 0.22, 'sawtooth', 40); noise(t, 0.9, 0.2, 'lowpass', 2000, 200); },
     sniff() { const t = sctx.currentTime; noise(t, 0.28, 0.16, 'bandpass', 2400, 1400, 3); },
+    feedback() { const t = sctx.currentTime; tone(2600, t, 0.4, 0.04, 'sine', 3300); tone(1300, t, 0.4, 0.02, 'square', 1650); },
     pyro() { const t = sctx.currentTime; noise(t, 0.6, 0.3, 'lowpass', 3000, 300); tone(70, t, 0.4, 0.15, 'sine', 40); },
     solo() { const t = sctx.currentTime; [0, 2, 4].forEach((k, i) => tone(note(k) / 2, t + i * 0.018, 0.4, 0.035, 'triangle')); },
   };
@@ -1432,17 +1464,7 @@ if (typeof window !== 'undefined') (function () {
     show('overlay-story');
   }
 
-  // Переключатель пробного стиля в главном меню
-  function syncStyleButton() { $('btn-style').textContent = `Стиль (тест): ${STYLES[curStyle()]}`; }
-  $('btn-style').addEventListener('click', () => {
-    const ids = Object.keys(STYLES);
-    SAVE.settings.style = ids[(ids.indexOf(curStyle()) + 1) % ids.length];
-    persist();
-    syncStyleButton();
-  });
-
   function openMenu() {
-    syncStyleButton();
     $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
@@ -1513,6 +1535,7 @@ if (typeof window !== 'undefined') (function () {
     if (n.type === 'rest') return ['&#9790;&#xFE0E;', 'Выходной'];
     if (n.type === 'rehearsal') return ['&#9835;&#xFE0E;', 'Репетиция'];
     if (n.type === 'special') return ['&#10022;&#xFE0E;', 'Особый концерт'];
+    if (n.type === 'danger') return ['&#9760;&#xFE0E;', 'Опасный концерт'];
     return ['&#9733;&#xFE0E;', 'Босс: ' + TOUR.acts[SAVE.tour.act].boss.name];
   }
 
@@ -1571,6 +1594,18 @@ if (typeof window !== 'undefined') (function () {
     if (n.type === 'concert') { startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, t, n) }); return; }
     if (n.type === 'boss') { bossIntro(n); return; }
     if (n.type === 'special') { specialIntro(n); return; }
+    if (n.type === 'danger') {
+      story({
+        title: 'Опасный концерт',
+        paras: [`${CONFIG.levels[n.venue].name}. Место с репутацией: здесь всегда что-то идёт не так.`, `В этот вечер случатся ещё ${TOUR.danger.extraIncidents} форс-мажора сверх обычного.`],
+        result: `Касса ×${String(TOUR.danger.moneyMul).replace('.', ',')}, а если удержишь зал — реликвия.`,
+        buttons: [
+          { label: 'Рискнуть', onClick: () => startGame(n.venue, { mode: 'tour', node: n, mods: tourMods(SAVE, SAVE.tour, n) }) },
+          { label: 'Назад к карте', cls: 'ghost', onClick: openMap },
+        ],
+      });
+      return;
+    }
     enterNode(t, n);
     persist();
     if (n.type === 'event') runEvent();
@@ -2011,7 +2046,7 @@ if (typeof window !== 'undefined') (function () {
       const st = settleConcert(t, tourNode, r, Math.random);
       enterNode(t, tourNode);
       tourBox.innerHTML = row('В кассу тура', `+${st.money} ₽`) + row('Деньги тура', `${t.money} ₽`) + row('Связь тела и души', `${t.bond} (+${st.bondGain})`) +
-        (st.relic ? row('Награда особого концерта', esc(RELICS[st.relic].name)) : '') +
+        (st.relic ? row(tourNode.type === 'danger' ? 'Награда опасного концерта' : 'Награда особого концерта', esc(RELICS[st.relic].name)) : '') +
         bondPerks(t.bond).filter(p => t.bond - st.bondGain < p.at).map(p => `<p class="note bond-note">Порог связи ${p.at}: «${esc(p.name)}». ${esc(p.desc)}</p>`).join('') +
         (r.defeated && !r.boss ? `<p class="note bad">Ушло больше ${Math.round(CONFIG.defeatShare * 100)}% зрителей. Тур окончен.</p>`
           : r.passed ? '' : '<p class="note">Зал не удержан — заплатили только половину.</p>') +
@@ -2075,8 +2110,11 @@ if (typeof window !== 'undefined') (function () {
   // ---------- визуальные события ----------
   // Ряд конфетти вдоль края сцены (Кульминация, бис)
   function confettiRow(life) {
-    if (!ART['confetti-0']) return;
-    for (let i = 0; i < 4; i++) fx.push({ type: 'anim', sheet: 'confetti', n: 10, x: 45 + i * (G.L.W - 90) / 3, y: G.L.stageBottom + 30, bottom: true, t: -i * 0.12, life, size: 150 });
+    const cols = [EVO_COLOR, PAL.pink, PAL.cyan, '#ffffff'];
+    for (let i = 0; i < 70; i++) {
+      particles.push({ x: Math.random() * G.L.W, y: G.L.stageBottom + 10, vx: (Math.random() - 0.5) * 90, vy: -160 - Math.random() * 220,
+        life, max: life, color: cols[i % 4], size: 2.5 + Math.random() * 2.5, g: 230 });
+    }
   }
 
   function spawnParticles(x, y, n, color, speed, life, size, gravity) {
@@ -2094,7 +2132,6 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'pyro') {
         sfx('pyro');
         fx.push({ type: 'flash', t: 0, life: 0.5, edge: ev.edge });
-        if (ART['fire-0']) for (let i = 0; i < 5; i++) fx.push({ type: 'anim', sheet: 'fire', n: 8, x: 36 + i * (G.L.W - 72) / 4, y: G.L.stageBottom + 4, bottom: true, t: -i * 0.04, life: 0.8, size: 80 });
         shake = 0.35;
         for (let i = 0; i < 6; i++) {
           const x = 30 + i * (G.L.W - 60) / 5;
@@ -2119,17 +2156,33 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'pickup') {
         sfx('pickup', ev.chain, ev.gold);
         const col = ev.gold ? EVO_COLOR : EMO_COLORS[ev.kind];
-        if (ART['spark-0']) fx.push({ type: 'spark', x: ev.x, y: ev.y, t: 0, life: 0.38, color: col, size: ev.gold ? 64 : 44 });
-        else spawnParticles(ev.x, ev.y, ev.gold ? 12 : 7, col, ev.gold ? 110 : 70, 0.45, 2.2);
+        spawnParticles(ev.x, ev.y, ev.gold ? 14 : 8, col, ev.gold ? 120 : 80, 0.45, 2.4);
+        fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.gold ? 22 : 15, t: 0, life: 0.3, color: col });
         // эмоция влетает в душу
         fx.push({ type: 'fly', x: ev.x, y: ev.y, t: 0, life: 0.18, color: col });
         pops.push({ x: ev.x, y: ev.y - 8, text: '+' + (ev.drive < 10 ? f1(ev.drive) : Math.round(ev.drive)), color: col, t: 0, life: 0.7, size: 10 + Math.min(6, ev.chain / 10) });
       } else if (ev.type === 'chainTier') {
         sfx('tier');
         banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
-        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, size: 130 });
+        fx.push({ type: 'wave', x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, r: 65, color: PAL.cyan });
         shake = Math.max(shake, 0.2);
         spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
+      } else if (ev.type === 'request') {
+        banners.push({ text: ev.text, t: 0, life: 1.8, color: PAL.pink });
+      } else if (ev.type === 'requestDone') {
+        sfx('triple');
+        spawnParticles(ev.x, ev.y - 20, 24, EVO_COLOR, 140, 0.7, 2.6);
+        pops.push({ x: ev.x, y: ev.y - 60, text: 'Заявка выполнена!', color: EVO_COLOR, t: 0, life: 1.2, size: 14 });
+      } else if (ev.type === 'requestFail') {
+        sfx('chainBreak');
+        pops.push({ x: ev.x, y: ev.y - 60, text: 'не дождались…', color: '#9a9aa2', t: 0, life: 1.2, size: 12 });
+      } else if (ev.type === 'returned') {
+        spawnParticles(ev.x, ev.y - 20, 8, PAL.green, 70, 0.4, 2.2);
+      } else if (ev.type === 'feedbackWave') {
+        sfx('feedback');
+        const S = CONFIG.incidents.string.spot;
+        fx.push({ type: 'wave', x: S.x, y: S.y, t: 0, life: 0.8, r: 300, color: PAL.cyan });
+        shake = Math.max(shake, 0.15);
       } else if (ev.type === 'smash') {
         spawnParticles(ev.x, ev.y, 6, '#9a9aa2', 60, 0.4, 2.2);
       } else if (ev.type === 'fight') {
@@ -2141,12 +2194,12 @@ if (typeof window !== 'undefined') (function () {
         fx.push({ type: 'steal', x: ev.x, y: ev.y, tx: ev.tx, ty: ev.ty, t: 0, life: 0.3 });
       } else if (ev.type === 'fearWave') {
         sfx('fear');
-        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 10, t: 0, life: 0.7, size: ev.r * 2.2, color: '#ff3d50', hue: RING_HUE });
+        fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.7, r: ev.r, color: '#ff3d50' });
         banners.push({ text: 'Волна страха!', t: 0, life: 1.4, color: '#ff3d50' });
         shake = 0.4;
       } else if (ev.type === 'sniff') {
         sfx('sniff');
-        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 10, t: 0, life: 0.6, size: ev.r * 2, color: '#b48cff', hue: RING_HUE });
+        fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.6, r: ev.r, color: '#b48cff' });
         pops.push({ x: ev.x, y: ev.y - 48, text: 'Пф-ф…', color: '#b48cff', t: 0, life: 1.2, size: 13 });
       } else if (ev.type === 'chainBreak') {
         sfx('chainBreak');
@@ -2155,7 +2208,7 @@ if (typeof window !== 'undefined') (function () {
         sfx('triple');
         const col = EMO_COLORS[ev.kind];
         fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
-        fx.push({ type: 'anim', sheet: 'ring', n: 8, x: ev.x, y: ev.y - 20, t: 0, life: 0.5, size: ev.r * 1.6, color: col, hue: RING_HUE });
+        fx.push({ type: 'wave', x: ev.x, y: ev.y - 20, t: 0, life: 0.5, r: ev.r * 0.8, color: col });
         pops.push({ x: ev.x, y: ev.y - 74, text: (ev.k > 1 ? `Три ×${ev.k}!` : 'Три подряд!'), color: col, t: 0, life: 1.0, size: 14 });
         spawnParticles(ev.x, ev.y - 20, 14, col, 120, 0.6, 2.6);
       } else if (ev.type === 'climax') {
@@ -2248,111 +2301,413 @@ if (typeof window !== 'undefined') (function () {
     return `rgb(${r | 0},${g | 0},${bl | 0})`;
   }
 
-  // Фон пробного стиля: нарочно простой, чтобы персонажи и эффекты читались
-  function drawStyledBackground(st) {
-    const L = G.L;
-    const bg = st === 'light' && ART['light-bg-' + (G.levelNo + 1)];
-    if (bg) {
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, L.W, L.H);
-      ctx.drawImage(bg, 0, 0, L.W, L.W * bg.naturalHeight / bg.naturalWidth);
-      drawExit();
-      return;
+
+  // ---------- «Свет»: векторные неоновые силуэты ----------
+  // Каждая фигура рисуется одной геометрией в несколько проходов: широкое прозрачное свечение,
+  // контур цвета настроения и тёмная заливка поверх. Только линии и круги — чётко на любом экране.
+  // Координаты поз — от ступней вверх, рост фигуры около 40.
+  const NEON_DARK = '#0b090c';
+  const POSES = {
+    neutral: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: [[[-1.8, -17], [-3, 0]], [[1.8, -17], [3, 0]]],
+      arms: [[[-4, -27], [-6, -18]], [[4, -27], [6, -18]]] },
+    bored: { torso: [[0, -17], [0.5, -28.5]], head: [1.4, -33.2], legs: [[[-1.8, -17], [-3, 0]], [[1.8, -17], [3, 0]]],
+      arms: [[[-4, -26.5], [-4, -21], [0, -22.5]], [[4, -26.5], [4, -21], [1, -22.5]]], phone: [0.6, -23.5] },
+    interested: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: [[[-1.8, -17], [-4, 0]], [[1.8, -17], [3.5, 0]]],
+      arms: [[[-4, -27], [-6.5, -22], [-1, -24.5]], [[4, -27], [6.5, -22], [1, -24.5]]] },
+    ecstatic: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: [[[-1.8, -17], [-5, -8], [-6, -1]], [[1.8, -17], [5, -9], [4, -4]]],
+      arms: [[[-4, -27], [-8, -34], [-10, -42]], [[4, -27], [8, -34], [10, -42]]] },
+    crossed: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: [[[-1.8, -17], [-2.5, 0]], [[1.8, -17], [2.5, 0]]],
+      arms: [[[-4, -27], [-5, -22], [4, -23]], [[4, -27], [5, -21.5], [-4, -22]]] },
+    drunk: { torso: [[0, -17], [-0.5, -29]], head: [-1, -34.5], legs: [[[-2, -17], [-6, 0]], [[2, -17], [5, 0]]],
+      arms: [[[-4, -27], [-9, -33], [-10, -40]], [[4, -27], [9, -22], [11, -18]]] },
+    filming: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: [[[-1.8, -17], [-3.5, 0]], [[1.8, -17], [3.5, 0]]],
+      arms: [[[-4, -27], [-6, -31], [-2, -36]], [[4, -27], [6, -31], [2, -36]]] },
+    sit: { torso: [[0, -14], [1.5, -25]], head: [3.2, -29.5], legs: [[[-1.5, -14], [5, -13], [5, 0]], [[1.5, -14], [7.5, -13], [7.5, 0]]],
+      arms: [[[-1, -23], [2, -17], [5, -16]], [[2.5, -23], [6.5, -18], [10, -17]]], guitar: [3, -15, 5.5, 4, -0.15, 13] },
+    play: { torso: [[0, -17], [0, -29]], head: [0.5, -34], legs: [[[-1.8, -17], [-4, 0]], [[1.8, -17], [4, 0]]],
+      arms: [[[-4, -27], [-3, -20], [1, -18]], [[4, -27], [8, -23], [11, -24]]], guitar: [0, -18.5, 5.5, 4, -0.45, 14] },
+    rock: { torso: [[0, -17], [-1, -29]], head: [-1.5, -34.5], legs: [[[-2, -17], [-7, -8], [-8, 0]], [[2, -17], [7, -8], [8, 0]]],
+      arms: [[[-5, -27], [-3, -20], [1, -18]], [[3, -27], [8, -24], [12, -26]]], guitar: [0, -18.5, 5.5, 4, -0.6, 15] },
+    float: { torso: [[0, -17], [0, -29]], head: [0, -34.5], legs: null,
+      arms: [[[-4, -27], [-3, -20], [1, -18]], [[4, -27], [8, -23], [11, -24]]], guitar: [0, -18.5, 5.5, 4, -0.45, 14] },
+  };
+  // Шесть типажей зрителей: причёска, комплекция, юбка
+  const LOOKS = [
+    { hair: 'spiky' }, { hair: 'long' }, { hair: 'cap', big: true },
+    { hair: 'bun', skirt: true, s: 0.92 }, { hair: 'dreads', s: 1.06 }, { hair: 'bob', s: 0.95 },
+  ];
+
+  function hairShape(type, hx, hy, line, dot) {
+    if (type === 'spiky') { line([[hx - 3, hy - 3], [hx - 5.5, hy - 8]], 2); line([[hx, hy - 4], [hx, hy - 9.5]], 2); line([[hx + 3, hy - 3], [hx + 5.5, hy - 8]], 2); }
+    else if (type === 'long') { dot(hx, hy - 1, 5.2); line([[hx - 4.2, hy], [hx - 5.5, hy + 8]], 3); line([[hx + 4.2, hy], [hx + 5.5, hy + 8]], 3); }
+    else if (type === 'cap') { line([[hx - 5, hy - 3.5], [hx + 7.5, hy - 3.5]], 2); dot(hx, hy + 2.6, 3.4); }
+    else if (type === 'bun') dot(hx, hy - 6.2, 2.6);
+    else if (type === 'dreads') { for (const dx of [-4.5, -2, 2, 4.5]) line([[hx + dx * 0.8, hy - 2], [hx + dx * 1.35, hy + 9]], 1.7); line([[hx - 3, hy - 4], [hx + 3, hy - 4]], 2); }
+    else if (type === 'bob') dot(hx, hy - 0.8, 5.8);
+    else if (type === 'beret') { ctx.beginPath(); ctx.ellipse(hx + 1, hy - 4.2, 6.5 + line.pad / 2, 2.4 + line.pad / 2, -0.15, 0, Math.PI * 2); ctx.fill(); dot(hx + 1, hy - 7, 0.9); }
+  }
+
+  // Геометрия фигуры одним цветом; pad — насколько толще обычного (для свечения и контура)
+  function personShape(P, o, pad) {
+    const line = (pts, w) => {
+      ctx.lineWidth = w + pad; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+    };
+    line.pad = pad;
+    const dot = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r + pad / 2, 0, Math.PI * 2); ctx.fill(); };
+    if (P.legs) for (const l of P.legs) line(l, 3.6);
+    if (o.tail) { // у души и двойника вместо ног — дымный хвост
+      for (const [w, off, len] of [[6, 0, 17], [3.5, -3, 21], [2.4, 3, 19]]) {
+        const sw = Math.sin(clock * 3 + off) * 4;
+        ctx.lineWidth = w + pad; ctx.beginPath(); ctx.moveTo(off * 0.6, -18);
+        ctx.quadraticCurveTo(off + sw, -9, off * 1.6 - sw, -18 + len); ctx.stroke();
+      }
     }
-    const C = {
-      light: { wall: '#050303', stage: '#120c0a', edge: '#2a1a12', floor: '#070405', line: 'rgba(255,176,58,0.18)' },
-      notebook: { wall: '#e9dac2', stage: '#e2d1b5', edge: '#5a4a3a', floor: '#eee0cb', line: 'rgba(60,40,30,0.12)' },
-      theater: { wall: '#140d0a', stage: '#6b4a2e', edge: '#3d2817', floor: '#1d140e', line: 'rgba(255,200,140,0.06)' },
-    }[st];
-    ctx.fillStyle = C.wall; ctx.fillRect(0, 0, L.W, L.wallBottom);
-    ctx.fillStyle = C.stage; ctx.fillRect(0, L.wallBottom, L.W, L.stageBottom - L.wallBottom);
-    ctx.fillStyle = C.edge; ctx.fillRect(0, L.stageBottom, L.W, L.hallTop - L.stageBottom);
-    ctx.fillStyle = C.floor; ctx.fillRect(0, L.hallTop, L.W, L.H - L.hallTop);
-    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
-    if (st === 'notebook') {
-      // нотный стан по всему залу
-      for (let y0 = L.hallTop + 30; y0 < L.H; y0 += 110) for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, y0 + i * 7); ctx.lineTo(L.W, y0 + i * 7); ctx.stroke(); }
-      ctx.strokeStyle = 'rgba(60,40,30,0.5)'; ctx.lineWidth = 1.5; ctx.strokeRect(14, L.wallBottom + 4, L.W - 28, L.stageBottom - L.wallBottom - 6);
-    } else if (st === 'theater') {
-      // картонная сцена: полосы гофры и кулисы
-      for (let x0 = 0; x0 < L.W; x0 += 9) { ctx.beginPath(); ctx.moveTo(x0, L.wallBottom); ctx.lineTo(x0, L.stageBottom); ctx.stroke(); }
-      ctx.fillStyle = '#5a1620';
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(46, 0); ctx.quadraticCurveTo(30, L.wallBottom, 18, L.stageBottom); ctx.lineTo(0, L.stageBottom); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(L.W, 0); ctx.lineTo(L.W - 46, 0); ctx.quadraticCurveTo(L.W - 30, L.wallBottom, L.W - 18, L.stageBottom); ctx.lineTo(L.W, L.stageBottom); ctx.fill();
-    } else {
-      // «Свет»: зал во тьме, только край сцены и пятно прожектора
-      ctx.beginPath(); ctx.moveTo(0, L.stageBottom); ctx.lineTo(L.W, L.stageBottom); ctx.stroke();
-      const g = ctx.createRadialGradient(L.W / 2, L.stageBottom - 30, 10, L.W / 2, L.stageBottom - 30, 160);
-      g.addColorStop(0, 'rgba(255,176,58,0.16)'); g.addColorStop(1, 'rgba(255,176,58,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, L.W, L.hallTop + 60);
+    if (o.skirt) {
+      ctx.beginPath(); ctx.moveTo(-6 - pad / 2, -11.5 + pad / 2); ctx.lineTo(6 + pad / 2, -11.5 + pad / 2); ctx.lineTo(3 + pad / 2, -19); ctx.lineTo(-3 - pad / 2, -19); ctx.closePath(); ctx.fill();
     }
-    // вывеска
-    ctx.save();
-    ctx.font = st === 'notebook' ? 'italic bold 20px Georgia, serif' : 'bold 20px system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (st !== 'notebook') { ctx.shadowColor = PAL.pink; ctx.shadowBlur = 12; }
-    ctx.fillStyle = st === 'notebook' ? '#c2185b' : lerpColor('#a3275d', PAL.pink, 0.55 + 0.45 * pulse);
-    ctx.fillText('ЖИВАЯ МУЗЫКА', L.W / 2, 74);
-    ctx.restore();
+    line(P.torso, o.big ? 11.5 : 9);
+    for (const a of P.arms) line(a, 3);
+    const [hx, hy] = P.head;
+    dot(hx, hy, 4.6);
+    hairShape(o.hair, hx, hy, line, dot);
+    if (P.guitar) {
+      const g = P.guitar;
+      ctx.save(); ctx.translate(g[0], g[1]); ctx.rotate(g[4]);
+      ctx.beginPath(); ctx.ellipse(0, 0, g[2] + pad / 2, g[3] + pad / 2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1.8 + pad; ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(g[5], 0); ctx.stroke();
+      ctx.restore();
+    }
+    if (o.extra) o.extra(line, dot, pad);
+  }
+
+  // Неоновая фигура: glow — прозрачность свечения, fill/fillA — заливка (тёмная или полупрозрачная у духов)
+  function neonPerson(x, y, s, flip, P, o, rim, glow, fill, fillA) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(flip ? -s : s, s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = rim; ctx.fillStyle = rim;
+    if (glow > 0) {
+      ctx.globalAlpha = glow * 0.45; personShape(P, o, 11);
+      ctx.globalAlpha = glow; personShape(P, o, 5);
+    }
+    ctx.globalAlpha = o.rimA == null ? 1 : o.rimA; personShape(P, o, 1.9);
+    ctx.globalAlpha = fillA == null ? 1 : fillA; ctx.strokeStyle = fill; ctx.fillStyle = fill; personShape(P, o, 0);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`;
+  }
+
+  // Неоновая линия или ломаная: свечение, цветной контур и светлая сердцевина
+  function neonPath(draw, col, w) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = col;
+    for (const [lw, a] of [[w * 6, 0.12], [w * 3, 0.3], [w * 1.3, 1]]) { ctx.lineWidth = lw; ctx.globalAlpha = a; ctx.beginPath(); draw(); ctx.stroke(); }
+    ctx.strokeStyle = lerpColor(col, '#ffffff', 0.6); ctx.lineWidth = w * 0.5; ctx.globalAlpha = 0.9; ctx.beginPath(); draw(); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Неоновые вывески залов: гитара, кружка, диско-шар, нота, звезда
+  function neonSign(level, x, y, col) {
+    const flick = Math.sin(clock * 17) > 0.97 ? 0.4 : 1; // изредка мигает, как настоящий неон
+    ctx.save(); ctx.globalAlpha = flick; ctx.translate(x, y);
+    const draw = [
+      () => { ctx.ellipse(-6, 6, 7, 6, 0, 0, Math.PI * 2); ctx.moveTo(4, 0); ctx.ellipse(0, -2, 5, 4.5, 0, 0, Math.PI * 2); ctx.moveTo(2, -5); ctx.lineTo(16, -18); },
+      () => { ctx.rect(-7, -9, 12, 17); ctx.moveTo(5, -5); ctx.quadraticCurveTo(11, -1, 5, 4); ctx.moveTo(-8, -10); ctx.quadraticCurveTo(-1, -15, 6, -10); },
+      () => { ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.moveTo(-7, -6); ctx.lineTo(7, -6); ctx.moveTo(-7, 6); ctx.lineTo(7, 6); ctx.moveTo(0, -10); ctx.lineTo(0, -20); },
+      () => { ctx.ellipse(-4, 8, 5, 3.5, -0.4, 0, Math.PI * 2); ctx.moveTo(1, 7); ctx.lineTo(1, -12); ctx.quadraticCurveTo(7, -9, 9, -3); },
+      () => { for (let i = 0; i <= 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 5 : 12; i ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); } },
+    ][level] || (() => {});
+    neonPath(draw, col, 1.6);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  const LEVEL_NEON = [
+    { spot: '#ffb03a', edge: '#ffb03a', sign: '#ff3d8b' },
+    { spot: '#ffb03a', edge: '#ffd23d', sign: '#ffb03a' },
+    { spot: '#ff3d8b', edge: '#3de0ff', sign: '#ff3d8b' },
+    { spot: '#5d7bff', edge: '#5d7bff', sign: '#3de0ff' },
+    { spot: '#b48cff', edge: '#ff3d8b', sign: '#ffd23d' },
+  ];
+
+  // Зал во тьме: свет только от прожектора, края сцены и вывески
+  function drawBackground() {
+    const L = G.L, N = LEVEL_NEON[G.levelNo] || LEVEL_NEON[0];
+    ctx.fillStyle = '#050304'; ctx.fillRect(0, 0, L.W, L.H);
+    ctx.fillStyle = '#0b0708'; ctx.fillRect(0, L.hudH, L.W, L.stageBottom - L.hudH);
+    const g = ctx.createRadialGradient(L.W / 2, L.stageBottom - 30, 6, L.W / 2, L.stageBottom - 30, 170);
+    g.addColorStop(0, hexA(N.spot, 0.2 + pulse * 0.05)); g.addColorStop(1, hexA(N.spot, 0));
+    ctx.fillStyle = g; ctx.fillRect(0, L.hudH, L.W, L.hallTop + 120 - L.hudH);
+    // пол: еле заметные линии, чтобы чувствовалась глубина
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+    for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(L.W / 2 + i * 22, L.hallTop); ctx.lineTo(L.W / 2 + i * 70, L.H); ctx.stroke(); }
+    neonPath(() => { ctx.moveTo(16, L.stageBottom); ctx.lineTo(L.W - 16, L.stageBottom); }, N.edge, 1.4);
+    // огоньки по краю сцены — в такт
+    for (let x = 30, i = 0; x < L.W - 20; x += 30, i++) {
+      ctx.fillStyle = hexA(N.edge, i % 2 === beatIndex % 2 ? 0.35 + pulse * 0.6 : 0.2);
+      ctx.beginPath(); ctx.arc(x, L.stageBottom + 6, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+    neonSign(G.levelNo, L.W - 70, 82, N.sign);
     drawExit();
   }
 
-  function drawBackground() {
-    const L = G.L;
-    if (curStyle() !== 'proto') { drawStyledBackground(curStyle()); return; }
-    const bg = ART['bg-' + (G.levelNo + 1)];
-    if (bg) {
-      // нарисованный зал: по ширине экрана, лишнее снизу обрезается
-      ctx.drawImage(bg, 0, 0, L.W, L.W * bg.naturalHeight / bg.naturalWidth);
-      ctx.fillStyle = 'rgba(10,6,4,0.38)'; ctx.fillRect(0, L.hallTop, L.W, L.H - L.hallTop); // зал чуть темнее — зрители читаются лучше
-      drawExit();
-      return;
+  function drawViewer(v) {
+    const V = CONFIG.viewers, I = v.interest;
+    const happy = I > V.happyThreshold && !v.leaving;
+    const bored = I < V.boredThreshold || v.leaving;
+    const hk = happy ? clamp((I - V.happyThreshold) / 40, 0, 1) : 0;
+    const bob = happy ? Math.abs(Math.sin(clock * (4 + hk * 3) + v.phase)) * (1.5 + hk * 3) : 0;
+    const sway = happy ? Math.sin(clock * 3 + v.phase) * 0.1 * (0.5 + hk) : 0;
+    const x = v.x, y = v.y;
+    if (v.look == null) v.look = (v.id * 7 + 3) % 12;
+    const L = LOOKS[v.look % 6], flip = v.look >= 6;
+    if (v.critic) { drawCritic(v, bob); return; }
+    // настроение: 0 скучает, 1 нейтрален, 2 увлечён, 3 в восторге; контур плавно меняет цвет с интересом
+    const mood = v.leaving || bored ? 0 : !happy ? 1 : I < 80 ? 2 : 3;
+    const P = POSES[['bored', 'neutral', 'interested', 'ecstatic'][mood]];
+    const rim = mood === 0 ? '#4b505e' : mood === 1 ? '#9fb6d8' : lerpColor(PAL.pink, EVO_COLOR, clamp((I - 70) / 25, 0, 1));
+    const glow = mood === 0 ? 0 : mood === 1 ? 0.08 : mood === 2 ? 0.22 : 0.38;
+    ctx.save(); ctx.translate(x, y - bob * (mood === 3 ? 1.6 : 1)); ctx.rotate(sway);
+    neonPerson(0, 0, 1.05 * (L.s || 1), flip, P, { hair: L.hair, big: L.big, skirt: L.skirt, rimA: v.leaving ? 0.45 : mood === 0 ? 0.7 : 1 }, rim, glow, NEON_DARK, v.leaving ? 0.7 : 1);
+    if (mood === 0 && !v.leaving) { // свет телефона на лице
+      const [px, py] = P.phone, fx = flip ? -px : px;
+      ctx.fillStyle = 'rgba(200,225,255,0.18)'; ctx.beginPath(); ctx.arc(fx * 1.05, py * 1.05 - 6, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#dfefff'; ctx.fillRect(fx * 1.05 - 1.6, py * 1.05 - 1.2, 3.2, 2.2);
     }
-    ctx.fillStyle = PAL.wall; ctx.fillRect(0, 0, L.W, L.wallBottom);
-    ctx.fillStyle = PAL.wallBrick;
-    for (let y = 0, row = 0; y < L.wallBottom; y += 14, row++) {
-      for (let x = (row % 2) * 18 - 18; x < L.W; x += 36) ctx.fillRect(x + 1, y + 1, 34, 12);
+    if (v.flash > 0) {
+      ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.8; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(0, -18, 17, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     }
-    // неоновая вывеска
-    ctx.save();
-    ctx.font = 'bold 20px system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = PAL.pink; ctx.shadowBlur = 12;
-    ctx.fillStyle = lerpColor('#a3275d', PAL.pink, 0.55 + 0.45 * pulse);
-    ctx.fillText('ЖИВАЯ МУЗЫКА', L.W / 2, 74);
     ctx.restore();
-    ctx.strokeStyle = PAL.pink; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
-    ctx.strokeRect(L.W / 2 - 92, 59, 184, 30);
-    ctx.globalAlpha = 1;
+    const top = y - bob - 46;
+    if (v.bar && !v.leaving) { // ушёл к бару — над головой кружка
+      ctx.fillStyle = PAL.amber; ctx.fillRect(x - 3, top - 2, 6, 7); ctx.fillStyle = '#fff3d0'; ctx.fillRect(x - 3, top - 4, 6, 2.5);
+    }
+    if (v.fan && !v.leaving) { ctx.fillStyle = CARD_DEFS.fans.color; drawHeart(x - 10, top + 4, 5); }
+    if (v.leaving) {
+      ctx.fillStyle = '#7d8190'; ctx.font = 'bold 9px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('пока', x, top + 4);
+    }
+  }
 
-    // сцена
-    ctx.fillStyle = PAL.stage; ctx.fillRect(0, L.wallBottom, L.W, L.stageBottom - L.wallBottom);
-    ctx.fillStyle = PAL.stagePlank;
-    for (let y = L.wallBottom + 12; y < L.stageBottom; y += 12) ctx.fillRect(0, y, L.W, 1.5);
-    for (let y = L.wallBottom, i = 0; y < L.stageBottom; y += 12, i++) {
-      for (let x = (i * 47) % 90; x < L.W; x += 90) ctx.fillRect(x, y, 1.5, 12);
+  // Критик: берет, шарф, блокнот, руки скрещены; над ним шкала интереса
+  function drawCritic(v, bob) {
+    const I = v.interest, x = v.x, y = v.y - bob;
+    const extra = (line, dot, pad) => {
+      line([[-3, -28], [-5.5, -15]], 2.2);
+      ctx.fillRect(4.5 - pad / 2, -25 - pad / 2, 5 + pad, 6.5 + pad);
+    };
+    neonPerson(x, y, 1.18, false, POSES.crossed, { hair: 'beret', extra, rimA: v.leaving ? 0.4 : 1 }, '#b48cff', v.leaving ? 0 : 0.25, NEON_DARK, 1);
+    if (!v.leaving) {
+      ctx.fillStyle = '#1a0f09'; ctx.fillRect(x - 12, y - 56, 24, 4);
+      ctx.fillStyle = I > 40 ? PAL.green : I > 20 ? PAL.amber : PAL.pink;
+      ctx.fillRect(x - 12, y - 56, 24 * clamp(I / 100, 0, 1), 4);
     }
-    // прожекторы — плоские полупрозрачные конусы
-    ctx.globalAlpha = 0.07; ctx.fillStyle = '#ffe9b0';
-    for (const sx of [70, 290]) {
-      const sw = Math.sin(clock * 0.6 + sx) * 30;
-      ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx - 50 + sw, L.stageBottom); ctx.lineTo(sx + 50 + sw, L.stageBottom); ctx.fill();
+  }
+
+  // Тело музыканта: сидит погасшим → встаёт и играет → горит и играет в широкой стойке
+  function drawBody() {
+    const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
+    const life = bodyLife;
+    const bob = pulse * (0.6 + life * 2.4);
+    if (G.mods.bodyGain && !stringBroken()) {
+      ctx.fillStyle = 'rgba(255,176,58,0.05)';
+      ctx.beginPath(); ctx.arc(S.spot.x, S.spot.y, CONFIG.player.bodyRadius, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.globalAlpha = 1;
-    // край сцены с лампочками
-    ctx.fillStyle = PAL.stageEdge; ctx.fillRect(0, L.stageBottom, L.W, L.hallTop - L.stageBottom);
-    for (let x = 10, i = 0; x < L.W; x += 20, i++) {
-      ctx.fillStyle = lerpColor('#8a5a20', '#ffe28a', i % 2 === beatIndex % 2 ? pulse : 0.15);
-      ctx.fillRect(x - 2, L.stageBottom + 3, 4, 4);
+    const P = life < 0.34 ? POSES.sit : life < 0.67 ? POSES.play : POSES.rock;
+    const stool = P === POSES.sit ? (line) => { line([[-3, -13], [-4, 0]], 1.4); line([[4, -13], [5, 0]], 1.4); line([[-4, -13], [6, -13]], 2); } : null;
+    const rim = lerpColor('#2c2a31', PAL.amber, clamp(life * 1.3, 0, 1));
+    neonPerson(x, y - (P === POSES.sit ? 0 : bob), 1.75, false, P, { hair: 'long', extra: stool, rimA: 0.55 + 0.45 * life }, rim, life * 0.45, NEON_DARK, 1);
+    if (stringBroken()) {
+      const blink = Math.sin(clock * 8) > 0;
+      ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(x, y - 30, S.radius + 10, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ring(x, y - 78, 9, G.incident.progress, PAL.green);
+      ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, y - 77);
     }
-    // пол зала
-    ctx.fillStyle = PAL.floor; ctx.fillRect(0, L.hallTop, L.W, L.hallBottom - L.hallTop + 6);
-    ctx.fillStyle = PAL.floorTile;
-    const ts = 30;
-    for (let y = L.hallTop, r = 0; y < L.hallBottom + 6; y += ts, r++) {
-      for (let x = (r % 2) * ts; x < L.W; x += ts * 2) ctx.fillRect(x, y, ts, Math.min(ts, L.hallBottom + 6 - y));
+  }
+
+  // Душа: полупрозрачный светящийся музыкант с дымным хвостом — главный источник света в зале
+  function drawSoul() {
+    const p = G.player, x = p.x, y = p.y;
+    const col = soulColor();
+    const broken = stringBroken();
+    ctx.fillStyle = broken ? 'rgba(120,120,130,0.08)' : hexA(col, 0.07);
+    ctx.beginPath(); ctx.arc(x, y - 6, auraRadius(), 0, Math.PI * 2); ctx.fill();
+    ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,210,61,0.45)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
+    const grow = 1 + Math.min(0.25, G.chain / 200);
+    // заливка — цвет души, сильно притушенный: контур читается, а душа остаётся «светящейся изнутри»
+    neonPerson(x, y + 12 - hover, 1.4 * grow, p.dir < 0, POSES.float, { hair: 'long', tail: true }, col, 0.45, lerpColor(col, NEON_DARK, 0.72), 0.92);
+    // силы души: дуга под ней, пока не полные
+    if (G.stamina < 0.98) {
+      ctx.strokeStyle = lerpColor('#ff3d50', PAL.green, G.stamina); ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(x, y + 4, 14, Math.PI * 0.15, Math.PI * (0.15 + 0.7 * G.stamina)); ctx.stroke();
     }
-    drawAmp();
-    drawExit();
+  }
+
+  // Эмоции: неоновые значки со свечением
+  function drawEmotions() {
+    for (const e of G.emotions) {
+      const rest = e.life - e.age;
+      if (rest < 1.2 && Math.floor(rest * 8) % 2 === 0) continue; // мигает перед исчезновением
+      const s = e.size * (1 + Math.sin(clock * 8 + e.x) * 0.06) * Math.min(1, e.age * 6);
+      const col = e.gold ? EVO_COLOR : EMO_COLORS[e.kind];
+      ctx.fillStyle = col;
+      for (const [k, a] of [[1.6, 0.14], [1.25, 0.3], [1, 1]]) { ctx.globalAlpha = a; emoShape(e.kind, e.x, e.y, s * k); }
+      ctx.globalAlpha = 0.85; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(e.x - s * 0.18, e.y - s * 0.18, s * 0.11, 0, Math.PI * 2); ctx.fill();
+      if (e.gold || e.double) {
+        ctx.strokeStyle = e.gold ? EVO_COLOR : '#ffffff'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.5 + Math.sin(clock * 10 + e.x) * 0.3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.95, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function emoShape(kind, x, y, s) {
+    if (kind === 0) drawHeart(x, y + s * 0.05, s * 0.85);
+    else if (kind === 1) drawNote(x, y, s);
+    else drawBurst(x, y, s, 6, 0.3);
+  }
+
+  // Дебошир: здоровяк с поднятой кружкой, оранжевый контур
+  function drawDrunk() {
+    const inc = G.incident;
+    if (!inc || inc.type !== 'drunk') return;
+    const D = CONFIG.incidents.drunk, x = inc.x, y = inc.y;
+    if (!inc.leaving) {
+      ctx.fillStyle = 'rgba(255,122,61,0.07)';
+      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,122,61,0.5)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const mug = (line, dot, pad) => { ctx.fillRect(-13 - pad / 2, -47 - pad / 2, 6 + pad, 7 + pad); line([[-7, -45], [-5, -43], [-7, -41]], 1.4); };
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(clock * 5) * 0.12);
+    neonPerson(0, 0, 1.3, false, POSES.drunk, { hair: 'cap', big: true, extra: mug }, '#ff7a3d', inc.leaving ? 0 : 0.3, NEON_DARK, 1);
+    ctx.fillStyle = '#fff6e0'; ctx.beginPath(); ctx.arc(-13, -62, 3, 0, Math.PI * 2); ctx.arc(-9, -63, 2.6, 0, Math.PI * 2); ctx.fill(); // пена
+    ctx.restore();
+    if (!inc.leaving) {
+      ring(x, y - 70, 8, inc.progress, PAL.green);
+      ctx.fillStyle = PAL.pink; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('!', x, y - 69);
+    }
+  }
+
+  // Бывший друг — фиолетовый дымный двойник; Страх — чёрный дым с когтями и красными глазами
+  function drawAntagonist() {
+    const A = G.antagonist;
+    if (!A || !A.active) return;
+    const B = CONFIG.bosses[A.kind];
+    const fade = A.stun ? 0.35 : 1;
+    const col = A.kind === 'fear' ? '#ff3d50' : '#b48cff';
+    if (!A.stun) {
+      ctx.fillStyle = hexA(col, A.kind === 'fear' ? 0.1 : 0.08);
+      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const y = A.y + Math.sin(clock * 3.3) * 2;
+    ctx.save(); ctx.globalAlpha = fade;
+    if (A.kind === 'rival') {
+      neonPerson(A.x, y + 10, 1.35, A.tx < A.x, POSES.float, { hair: 'long', tail: true, rimA: fade }, col, 0.35 * fade, '#140a1c', 0.85 * fade);
+      ctx.fillStyle = '#f0e0ff';
+      for (const dx of [-1.6, 1.6]) { ctx.beginPath(); ctx.arc(A.x + dx * 1.35, y + 10 - 34.5 * 1.35, 1.2, 0, Math.PI * 2); ctx.fill(); }
+    } else {
+      ctx.translate(A.x, y + 6); ctx.scale(1.55, 1.55);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const shape = pad => {
+        for (const [bx, by, r] of [[0, -30, 12], [-8, -22, 9], [8, -22, 9], [-5, -11, 8], [5, -11, 8], [Math.sin(clock * 4) * 2, -3, 6]]) {
+          ctx.beginPath(); ctx.arc(bx, by, r + pad / 2, 0, Math.PI * 2); ctx.fill();
+        }
+        for (const sx of [-1, 1]) {
+          ctx.lineWidth = 3 + pad; ctx.beginPath(); ctx.moveTo(sx * 10, -24); ctx.lineTo(sx * 18, -20); ctx.lineTo(sx * 22, -12 + Math.sin(clock * 5 + sx) * 2); ctx.stroke();
+          ctx.lineWidth = 1.5 + pad;
+          for (const [fx, fy] of [[25, -6], [22, -4], [19, -6]]) { ctx.beginPath(); ctx.moveTo(sx * 22, -12); ctx.lineTo(sx * fx, fy); ctx.stroke(); }
+        }
+      };
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.globalAlpha = 0.14 * fade; shape(11); ctx.globalAlpha = 0.32 * fade; shape(5); ctx.globalAlpha = fade; shape(2);
+      ctx.strokeStyle = ctx.fillStyle = '#0a0406'; shape(0);
+      ctx.fillStyle = '#ff6070';
+      ctx.beginPath(); ctx.ellipse(-4, -31, 2.4, 1.3, 0.3, 0, Math.PI * 2); ctx.ellipse(4, -31, 2.4, 1.3, -0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ff6070'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-5, -25);
+      for (let i = 1; i <= 6; i++) ctx.lineTo(-5 + i * 10 / 6, i % 2 ? -23 : -25);
+      ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // Зоны форс-мажоров и заявок — под зрителями
+  function drawZones() {
+    const inc = G.incident, L = G.L, I = CONFIG.incidents, blink = 0.5 + Math.sin(clock * 8) * 0.5;
+    if (inc && inc.type === 'alarm') {
+      const g = ctx.createRadialGradient(L.exit.x, L.exit.y, 10, L.exit.x, L.exit.y, I.alarm.radius);
+      g.addColorStop(0, hexA('#ff3d50', 0.12 + blink * 0.12)); g.addColorStop(1, hexA('#ff3d50', 0));
+      ctx.fillStyle = g; ctx.fillRect(L.exit.x - I.alarm.radius, L.exit.y - I.alarm.radius, I.alarm.radius * 2, I.alarm.radius * 2);
+    } else if (inc && inc.type === 'party') {
+      const left = inc.side === 'left', w = I.party.width, x0 = left ? 0 : L.W - w;
+      const g = ctx.createLinearGradient(left ? 0 : L.W, 0, left ? w : L.W - w, 0);
+      const c = Math.floor(clock * 4) % 2 ? '#b48cff' : '#5dff9e';
+      g.addColorStop(0, hexA(c, 0.22)); g.addColorStop(1, hexA(c, 0));
+      ctx.fillStyle = g; ctx.fillRect(x0, L.hallTop, w, L.hallBottom - L.hallTop);
+    } else if (inc && inc.type === 'blogger') {
+      const c = inc.calmed ? EVO_COLOR : '#dfefff';
+      ctx.fillStyle = hexA(c, inc.calmed ? 0.1 : 0.05);
+      ctx.beginPath(); ctx.arc(inc.x, inc.y - 10, I.blogger.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = hexA(c, 0.5); ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]); ctx.lineDashOffset = -clock * 20;
+      ctx.beginPath(); ctx.arc(inc.x, inc.y - 10, I.blogger.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    } else if (inc && inc.type === 'lastcall') {
+      neonPath(() => { ctx.moveTo(8, L.hallTop + 20); ctx.lineTo(8, L.hallBottom - 20); }, PAL.amber, 1.4);
+    } else if (inc && inc.type === 'feedback') {
+      const p = G.player;
+      ctx.strokeStyle = hexA(PAL.cyan, 0.45); ctx.lineWidth = 1.5; ctx.setLineDash([3, 6]);
+      ctx.beginPath(); ctx.arc(p.x, p.y - 10, I.feedback.safe, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const q = G.request;
+    if (q) {
+      const R = CONFIG.requests;
+      ctx.fillStyle = hexA(PAL.pink, 0.08); ctx.beginPath(); ctx.arc(q.x, q.y - 10, R.radius, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = hexA(PAL.pink, 0.75); ctx.lineWidth = 2; ctx.setLineDash([6, 5]); ctx.lineDashOffset = -clock * 25;
+      ctx.beginPath(); ctx.arc(q.x, q.y - 10, R.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      ctx.strokeStyle = EVO_COLOR; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(q.x, q.y - 10, R.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * q.progress / R.need); ctx.stroke();
+    }
+  }
+
+  // Фигуры и кнопки форс-мажоров, подпись заявки — над зрителями
+  function drawIncidentProps() {
+    const inc = G.incident, L = G.L, I = CONFIG.incidents;
+    if (inc && inc.type === 'alarm') {
+      const on = Math.floor(clock * 6) % 2;
+      ctx.fillStyle = on ? '#ff3d50' : '#5a1420';
+      ctx.beginPath(); ctx.arc(inc.x, inc.y, 7, 0, Math.PI * 2); ctx.fill();
+      ring(inc.x, inc.y, 12, inc.progress, PAL.green);
+      if (on) { ctx.fillStyle = 'rgba(255,61,80,0.08)'; ctx.fillRect(0, L.hudH, L.W, L.panelTop - L.hudH); }
+    } else if (inc && inc.type === 'party') {
+      const x = inc.side === 'left' ? 16 : L.W - 16;
+      ctx.fillStyle = Math.floor(clock * 4) % 2 ? '#b48cff' : '#5dff9e';
+      for (let i = 0; i < 3; i++) { const yy = L.hallTop + ((clock * 40 + i * 120) % (L.hallBottom - L.hallTop)); drawNote(x, yy, 11); }
+    } else if (inc && inc.type === 'blogger') {
+      const c = inc.calmed ? EVO_COLOR : '#dfefff';
+      neonPerson(inc.x, inc.y, 1.05, false, POSES.filming, { hair: 'bob' }, c, 0.25, NEON_DARK, 1);
+      if (Math.floor(clock * 3) % 2) { ctx.fillStyle = '#ff3d50'; ctx.beginPath(); ctx.arc(inc.x, inc.y - 40, 1.8, 0, Math.PI * 2); ctx.fill(); }
+      if (!inc.calmed) ring(inc.x, inc.y - 56, 8, inc.progress, PAL.green);
+    }
+    const q = G.request;
+    if (q) {
+      const R = CONFIG.requests, left = Math.max(0, R.time - q.t);
+      ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const text = `${q.name} ${Math.ceil(left)}`;
+      const w = ctx.measureText(text).width + 12, y = q.y - 10 - R.radius - 12;
+      ctx.fillStyle = 'rgba(40,8,24,0.85)'; roundRect(q.x - w / 2, y - 9, w, 18, 6); ctx.fill();
+      ctx.fillStyle = PAL.pink; ctx.fillText(text, q.x, y + 1);
+    }
   }
 
   function drawExit() {
@@ -2366,103 +2721,6 @@ if (typeof window !== 'undefined') (function () {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('ВЫХОД', -4, 1);
     ctx.restore();
-  }
-
-  function drawViewer(v) {
-    const V = CONFIG.viewers;
-    const I = v.interest;
-    const happy = I > V.happyThreshold && !v.leaving;
-    const bored = I < V.boredThreshold || v.leaving;
-    const k = v.leaving ? 0 : clamp((I - 12) / 55, 0, 1);
-    const shirt = lerpColor(PAL.gray, v.shirt, k);
-    const skin = v.leaving || bored ? lerpColor('#7d7670', v.skin, 0.35) : v.skin;
-    const hk = happy ? clamp((I - V.happyThreshold) / 40, 0, 1) : 0;
-    const bob = happy ? Math.abs(Math.sin(clock * (4 + hk * 3) + v.phase)) * (1.5 + hk * 2.5) : 0;
-    const sway = happy ? Math.sin(clock * 3 + v.phase) * 0.12 * (0.5 + hk) : 0;
-    const x = v.x, y = v.y;
-
-    ctx.globalAlpha = v.leaving ? 0.65 : 1;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(x, y + 1, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
-
-    // спрайт зрителя: у каждого свой облик, поза — по настроению
-    if (v.look == null) v.look = (G.viewers.indexOf(v) * 7 + 3) % 12;
-    const pose = v.leaving || bored ? 2 : I > 78 ? 1 : 0;
-    if (v.critic && styleArt('critic')) {
-      const img = styleArt('critic'), h = 50;
-      ctx.globalAlpha = v.leaving ? 0.5 : 1;
-      blit(img, x, y - bob - h / 2 + 4, h);
-      ctx.globalAlpha = 1;
-      if (!v.leaving) {
-        ctx.fillStyle = '#1a0f09'; ctx.fillRect(x - 12, y - 56, 24, 4);
-        ctx.fillStyle = I > 40 ? PAL.green : I > 20 ? PAL.amber : PAL.pink;
-        ctx.fillRect(x - 12, y - 56, 24 * clamp(I / 100, 0, 1), 4);
-      }
-      return;
-    }
-    // пробный стиль: поза по настроению — скучает, нейтрален, увлечён, в восторге
-    const mood = v.leaving || bored ? 'bored' : !happy ? 'neutral' : I < 80 ? 'interested' : 'ecstatic';
-    const styled = styleArt(`v${v.look % 6}-${mood}`) || styleArt(`v-${mood}`);
-    const spr = styled || ART[`v${v.look % 8}-${pose}`];
-    let top = -32;
-    if (spr) {
-      const h = styled ? 44 : 46, cy = y - bob - h / 2 + 4;
-      ctx.save(); ctx.translate(x, cy); ctx.rotate(sway * 0.6);
-      if (styled && Math.floor(v.look / 6) % 2 === 0 && v.look % 3 === 1) ctx.scale(-1, 1); // часть зала зеркально — толпа разнообразнее
-      ctx.drawImage(spr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h);
-      if (!styled && k < 1) { const gr = grayed(`v${v.look % 8}-${pose}`); ctx.globalAlpha *= 1 - k; ctx.drawImage(gr, -h * spr.naturalWidth / spr.naturalHeight / 2, -h / 2, h * spr.naturalWidth / spr.naturalHeight, h); }
-      if (v.flash > 0) {
-        ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.9; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(0, 2, 18, 0, Math.PI * 2); ctx.stroke();
-      }
-      ctx.restore();
-      ctx.globalAlpha = v.leaving ? 0.65 : 1;
-      top = -48;
-    } else {
-    ctx.save();
-    ctx.translate(x, y - bob);
-    ctx.rotate(sway);
-    const slump = bored ? 2 : 0;
-    // руки вверх у очень довольных
-    if (I > 80 && !v.leaving) {
-      ctx.strokeStyle = skin; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-      const w = Math.sin(clock * 6 + v.phase) * 2;
-      ctx.beginPath(); ctx.moveTo(-5, -12); ctx.lineTo(-8 + w, -24); ctx.moveTo(5, -12); ctx.lineTo(8 - w, -24); ctx.stroke();
-    }
-    ctx.fillStyle = shirt;
-    roundRect(-6, -15 + slump, 12, 14 - slump, 4); ctx.fill();
-    ctx.fillStyle = skin;
-    ctx.beginPath(); ctx.arc(0, -19 + slump * 1.5, 5, 0, Math.PI * 2); ctx.fill();
-    if (v.flash > 0) {
-      ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.9; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, -12, 11, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
-    }
-
-    // критик: берет, блокнот и шкала его интереса
-    if (v.critic && !v.leaving) {
-      ctx.fillStyle = '#2a1640';
-      ctx.beginPath(); ctx.ellipse(x + 1, y - 23 - bob, 7, 3, -0.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#f6e7d0'; ctx.fillRect(x + 6, y - 14 - bob, 6, 8);
-      ctx.fillStyle = '#1a0f09'; ctx.fillRect(x - 12, y - 40, 24, 4);
-      ctx.fillStyle = I > 40 ? PAL.green : I > 20 ? PAL.amber : PAL.pink;
-      ctx.fillRect(x - 12, y - 40, 24 * clamp(I / 100, 0, 1), 4);
-      ctx.strokeStyle = 'rgba(180,140,255,0.7)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(x, y - 10, 15, 0, Math.PI * 2); ctx.stroke();
-    }
-    // фанат: маленькое сердечко над головой
-    if (v.fan && !v.leaving) { ctx.fillStyle = CARD_DEFS.fans.color; drawHeart(x - 10, y + top + 6 - bob, 5); }
-    // значки настроения
-    if (!v.leaving && I < V.boredThreshold) {
-      ctx.fillStyle = '#9a9aa2';
-      for (let i = 0; i < 3; i++) ctx.fillRect(x - 5 + i * 4, y + top, 2, 2);
-    } else if (v.leaving) {
-      ctx.fillStyle = '#9a9aa2'; ctx.font = 'bold 9px system-ui, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('пока', x, y + top + 2);
-    }
-    ctx.globalAlpha = 1;
   }
 
   function roundRect(x, y, w, h, r) {
@@ -2487,138 +2745,8 @@ if (typeof window !== 'undefined') (function () {
     return (sk ? sk.colors : SOUL_COLORS)[Math.min(3, Math.floor(bodyLife * 4))];
   }
 
-  // Силуэт музыканта с гитарой. Общий для тела на сцене и души-двойника.
-  // o: цвета частей, headDrop — насколько опущена голова, ghost — без ног, с туманным хвостом
-  function drawMusician(o) {
-    if (o.ghost) {
-      ctx.fillStyle = o.jacket;
-      ctx.beginPath();
-      ctx.moveTo(-8, -10);
-      ctx.quadraticCurveTo(-6, 2, Math.sin(clock * 4) * 3, 10);
-      ctx.quadraticCurveTo(6, 2, 8, -10);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = o.legs;
-      ctx.fillRect(-5, -8, 4, 8); ctx.fillRect(1, -8, 4, 8);
-    }
-    ctx.fillStyle = o.jacket;
-    roundRect(-8, -26, 16, 19, 5); ctx.fill();
-    ctx.fillStyle = o.skin;
-    ctx.beginPath(); ctx.arc(0, -32 + o.headDrop, 6.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = o.hair;
-    ctx.beginPath(); ctx.arc(0, -34 + o.headDrop, 7, Math.PI, Math.PI * 2); ctx.fill();
-    if (o.longHair) { ctx.fillRect(-7, -34 + o.headDrop, 3.5, 12); ctx.fillRect(3.5, -34 + o.headDrop, 3.5, 12); }
-    ctx.save();
-    ctx.translate(1, -15); ctx.rotate(-0.55);
-    ctx.fillStyle = o.neck; ctx.fillRect(4, -2, 20, 3.5);
-    ctx.fillStyle = o.guitar;
-    ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(-6, 0, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = o.skin;
-    ctx.beginPath(); ctx.arc(-2, -15 + o.strum, 2.6, 0, Math.PI * 2); ctx.fill();
-  }
 
-  // Тело музыканта: стоит в центре сцены и играет на автопилоте. Оживает, когда зал доволен.
-  function drawBody() {
-    const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
-    const life = bodyLife; // 0 — серое и неподвижное, 1 — живое
-    const bob = pulse * (0.6 + life * 2.4);
-    // порог связи «Тело подыгрывает»: тёплый круг, где тело само держит зал
-    if (G.mods.bodyGain && !stringBroken()) {
-      ctx.fillStyle = 'rgba(255,176,58,0.05)';
-      ctx.beginPath(); ctx.arc(S.spot.x, S.spot.y, CONFIG.player.bodyRadius, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
-    const b0 = styleArt('body-0'), b1 = styleArt('body-1'), b2 = styleArt('body-2');
-    if (b0 && b1 && b2) {
-      // неживое → просыпается → живое; соседние стадии плавно сменяют друг друга
-      const h = 80, cy = y - bob - h / 2 + 6, k = clamp(life, 0, 1) * 2;
-      const [from, to, t] = k < 1 ? [b0, b1, k] : [b1, b2, k - 1];
-      ctx.globalAlpha = 1 - t; blit(from, x, cy, h);
-      ctx.globalAlpha = t; blit(to, x, cy, h);
-      ctx.globalAlpha = 1;
-    }
-    const gray = styleArt('body-off') || ART['body-gray'], color = styleArt('body-on') || ART['body-color'];
-    if (b0 && b1 && b2) { /* уже нарисовано */ } else if (gray && color) {
-      // серое тело и живое — одно поверх другого, живое проступает с ростом связи
-      const h = styleArt('body-on') ? 78 : 70, cy = y - bob - h / 2 + 6;
-      const k = clamp(life, 0, 1);
-      if (k < 1) { ctx.globalAlpha = 1 - k; blit(gray, x, cy, h); }
-      if (k > 0) { ctx.globalAlpha = k; blit(color, x, cy, h); }
-      ctx.globalAlpha = 1;
-    } else {
-    ctx.save();
-    ctx.translate(x, y - bob);
-    drawMusician({
-      legs: lerpColor('#3a3840', '#2b2b3a', life),
-      jacket: lerpColor('#6b6670', '#c94f2f', life),
-      skin: lerpColor('#8f8680', '#f1c9a5', life),
-      hair: lerpColor('#4a4448', '#3a1d10', life),
-      neck: lerpColor('#4a4245', '#5a2c10', life),
-      guitar: lerpColor('#7d7570', PAL.amber, life),
-      headDrop: (1 - life) * 3, strum: pulse * 2, longHair: heroIsF(),
-    });
-    ctx.restore();
-    }
 
-    if (stringBroken()) {
-      const blink = Math.sin(clock * 8) > 0;
-      ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.arc(x, y - 16, S.radius + 6, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      ring(x, y - 54, 9, G.incident.progress, PAL.green);
-      ctx.fillStyle = PAL.text; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('!', x, y - 53);
-    }
-  }
-
-  // Душа: прозрачный светящийся двойник музыканта, парит над залом.
-  function drawSoul() {
-    const p = G.player, x = p.x, y = p.y;
-    const col = soulColor();
-    const broken = stringBroken();
-    // аура и радиус сбора эмоций
-    ctx.fillStyle = broken ? 'rgba(120,120,130,0.08)' : 'rgba(255,176,58,0.07)';
-    ctx.beginPath(); ctx.arc(x, y - 6, auraRadius(), 0, Math.PI * 2); ctx.fill();
-    ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,210,61,0.45)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(x, y - 10, pickupRadius(), 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-    const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
-    const fr = Math.floor(clock * 5) % 4;
-    const ghost = styleArt(`soul-${fr}`) ? tinted(`${curStyle()}-soul-${fr}`, GHOST_HUE, col)
-      : styleArt('soul') ? tinted(`${curStyle()}-soul`, GHOST_HUE, col) : tinted('ghost-' + (Math.floor(clock * 6) % 4), GHOST_HUE, col);
-    if (ghost) {
-      // мягкое свечение и сам призрак-музыкант; на длинной цепочке душа чуть крупнее
-      const grow = 1 + Math.min(0.25, G.chain / 200);
-      ctx.globalAlpha = 0.2; ctx.fillStyle = col;
-      ctx.beginPath(); ctx.ellipse(x, y - 24 - hover, 22 * grow, 30 * grow, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 0.95;
-      blit(ghost, x, y - 22 - hover, 60 * grow, p.dir < 0);
-      ctx.globalAlpha = 1;
-      return;
-    }
-    ctx.save();
-    ctx.translate(x, y - 6 - hover);
-    ctx.scale(p.dir * 1.25, 1.25); // душа чуть крупнее тела, чтобы её было хорошо видно
-    // мягкое свечение
-    ctx.globalAlpha = 0.18; ctx.fillStyle = col;
-    ctx.beginPath(); ctx.ellipse(0, -14, 18, 24, 0, 0, Math.PI * 2); ctx.fill();
-    // полупрозрачный двойник
-    ctx.globalAlpha = 0.6;
-    const light = lerpColor(col, '#ffffff', 0.55);
-    drawMusician({
-      jacket: col, skin: light, hair: lerpColor(col, '#1a0f09', 0.35),
-      neck: lerpColor(col, '#ffffff', 0.25), guitar: light,
-      headDrop: 0, strum: Math.sin(clock * 9) * 2, ghost: true, longHair: heroIsF(),
-    });
-    // светлый контур
-    ctx.globalAlpha = 0.85; ctx.strokeStyle = light; ctx.lineWidth = 1.2;
-    roundRect(-8, -26, 16, 19, 5); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, -32, 6.5, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
 
   function drawHeart(x, y, s) {
     ctx.beginPath();
@@ -2639,34 +2767,6 @@ if (typeof window !== 'undefined') (function () {
       ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
     }
     ctx.closePath(); ctx.fill();
-  }
-
-  function drawEmotions() {
-    for (const e of G.emotions) {
-      const rest = e.life - e.age;
-      if (rest < 1.2 && Math.floor(rest * 8) % 2 === 0) continue; // мигает перед исчезновением
-      const pulse = 1 + Math.sin(clock * 8 + e.x) * 0.06;
-      const s = e.size * pulse * Math.min(1, e.age * 6);
-      const art = ART[(e.gold ? 'gold-' : 'emo-') + EMO_ART[e.kind]];
-      if (art) {
-        if (e.gold) { // золотые эмоции Кульминации — с пульсирующим ореолом
-          ctx.globalAlpha = 0.35 + Math.sin(clock * 10 + e.x) * 0.15; ctx.fillStyle = EVO_COLOR;
-          ctx.beginPath(); ctx.arc(e.x, e.y, s * 1.15, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-        }
-        blit(art, e.x, e.y, s * (e.gold ? 1.9 : 1.65));
-        continue;
-      }
-      ctx.fillStyle = 'rgba(20,12,8,0.55)';
-      ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.62, 0, Math.PI * 2); ctx.fill();
-      if (e.gold) { // золотые эмоции Кульминации
-        ctx.strokeStyle = EVO_COLOR; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8;
-        ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.8, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
-      }
-      ctx.fillStyle = e.gold ? EVO_COLOR : EMO_COLORS[e.kind];
-      if (e.kind === 0) drawHeart(e.x, e.y + s * 0.05, s * 0.85);
-      else if (e.kind === 1) drawNote(e.x, e.y, s);
-      else drawBurst(e.x, e.y, s, 6, 0.3);
-    }
   }
 
   function drawFxUnder() {
@@ -2721,21 +2821,20 @@ if (typeof window !== 'undefined') (function () {
           drawNote(f.x + (tg.x - f.x) * m, f.y - 20 + (tg.y - f.y) * m - Math.sin(m * Math.PI) * 18, 12);
         }
         ctx.globalAlpha = 1;
-      } else if (f.type === 'anim' && f.t < 0) {
-        // ещё не началась
-      } else if (f.type === 'anim') {
-        // кадровая анимация из листа; bottom — низ кадра на точке (огонь, конфетти)
-        const img = animFrame(f.sheet, f.n, f.t / f.life, f.color, f.hue);
-        if (img) {
-          const h = f.size, w = h * (img.width || img.naturalWidth) / (img.height || img.naturalHeight);
-          ctx.globalAlpha = f.alpha || 1;
-          ctx.drawImage(img, f.x - w / 2, f.bottom ? f.y - h : f.y - h / 2, w, h);
-          ctx.globalAlpha = 1;
+      } else if (f.type === 'wave') {
+        // расходящаяся неоновая волна с лучами
+        const k = f.t / f.life, r = f.r * (0.2 + 0.8 * Math.sqrt(k));
+        ctx.strokeStyle = f.color; ctx.lineCap = 'round';
+        for (const [lw, a] of [[10, 0.12], [4, 0.4], [1.6, 1]]) {
+          ctx.globalAlpha = a * (1 - k); ctx.lineWidth = lw;
+          ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI * 2); ctx.stroke();
         }
-      } else if (f.type === 'spark') {
-        const fr = Math.min(7, Math.floor(f.t / f.life * 8));
-        const img = f.color === PAL.pink ? ART['spark-' + fr] : tinted('spark-' + fr, SPARK_HUE, f.color);
-        if (img) blit(img, f.x, f.y, f.size);
+        ctx.globalAlpha = 1 - k; ctx.lineWidth = 2;
+        for (let i = 0; i < 12; i++) {
+          const a = i * Math.PI / 6 + f.x;
+          ctx.beginPath(); ctx.moveTo(f.x + Math.cos(a) * r * 0.82, f.y + Math.sin(a) * r * 0.82); ctx.lineTo(f.x + Math.cos(a) * r * 1.12, f.y + Math.sin(a) * r * 1.12); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       } else if (f.type === 'steal') {
         // соперник утягивает эмоцию к себе
         const k = f.t / f.life, x = f.x + (f.tx - f.x) * k, y = f.y + (f.ty - 10 - f.y) * k;
@@ -2982,49 +3081,6 @@ if (typeof window !== 'undefined') (function () {
     ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(k, 0, 1)); ctx.stroke();
   }
 
-  function drawAmp() {
-    // усилитель — просто декор слева на сцене, подпрыгивает в такт
-    const x = 34, y = 150, k = pulse * 1.5;
-    ctx.fillStyle = '#121212'; ctx.fillRect(x - 13, y - 30, 26, 30);
-    ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(x, y - 13, 8 + k, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = PAL.amber; ctx.fillRect(x - 11, y - 28, 22, 3);
-  }
-
-  function drawDrunk() {
-    const inc = G.incident;
-    if (!inc || inc.type !== 'drunk') return;
-    const D = CONFIG.incidents.drunk, x = inc.x, y = inc.y;
-    if (!inc.leaving) {
-      ctx.fillStyle = 'rgba(255,61,139,0.08)';
-      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,61,139,0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
-      ctx.beginPath(); ctx.arc(x, y - 8, D.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    }
-    const wob = Math.sin(clock * 5) * 0.25;
-    const dimg = styleArt('drunk');
-    if (dimg) {
-      const h = 54;
-      ctx.save(); ctx.translate(x, y - h / 2 + 4); ctx.rotate(wob * 0.5);
-      ctx.drawImage(dimg, -h * dimg.naturalWidth / dimg.naturalHeight / 2, -h / 2, h * dimg.naturalWidth / dimg.naturalHeight, h);
-      ctx.restore();
-    } else {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(x, y + 1, 9, 3, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.save(); ctx.translate(x, y); ctx.rotate(wob);
-    ctx.fillStyle = '#6b8f3a'; roundRect(-7, -16, 14, 15, 4); ctx.fill();
-    ctx.fillStyle = '#e08a7a'; ctx.beginPath(); ctx.arc(0, -21, 5.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(1.5, -20, 1.8, 0, Math.PI * 2); ctx.fill();
-    // бутылка
-    ctx.fillStyle = '#3f7a4a'; ctx.fillRect(7, -18, 3, 9); ctx.fillRect(7.8, -21, 1.4, 3);
-    ctx.restore();
-    }
-    if (!inc.leaving) {
-      ring(x, y - (dimg ? 62 : 38), 8, inc.progress, PAL.green);
-      ctx.fillStyle = PAL.pink; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('!', x, y - (dimg ? 61 : 37));
-    }
-  }
-
   function drawBlackout() {
     const inc = G.incident;
     if (!inc || inc.type !== 'blackout') return;
@@ -3040,60 +3096,27 @@ if (typeof window !== 'undefined') (function () {
     ctx.restore();
   }
 
-  // Соперник — тёмный двойник музыканта, Страх — чёрная тень с красными глазами
-  function drawAntagonist() {
-    const A = G.antagonist;
-    if (!A || !A.active) return;
-    const B = CONFIG.bosses[A.kind];
-    const fade = A.stun ? 0.35 : 1;
-    if (!A.stun) {
-      ctx.fillStyle = A.kind === 'fear' ? 'rgba(10,0,20,0.22)' : 'rgba(120,60,160,0.12)';
-      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = A.kind === 'fear' ? 'rgba(255,61,80,0.5)' : 'rgba(180,120,255,0.5)';
-      ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
-      ctx.beginPath(); ctx.arc(A.x, A.y - 8, B.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    }
-    const aimg = styleArt(A.kind);
-    if (aimg) {
-      const h = A.kind === 'fear' ? 84 : 60;
-      ctx.globalAlpha = fade;
-      blit(aimg, A.x, A.y - h / 2 + 6 + Math.sin(clock * 3.3) * 2, h * (1 + Math.sin(clock * 2) * 0.02), A.tx < A.x);
-      ctx.globalAlpha = 1;
-      return;
-    }
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.translate(A.x, A.y - 6 + Math.sin(clock * 3.3) * 2);
-    if (A.kind === 'rival') {
-      ctx.globalAlpha = 0.75 * fade;
-      drawMusician({ jacket: '#4b3a66', skin: '#9a8aa8', hair: '#1c1426', neck: '#2c2238', guitar: '#7a5ca0', headDrop: 0, strum: Math.sin(clock * 9) * 2, ghost: true });
-    } else {
-      const s = 1.35;
-      ctx.scale(s, s);
-      ctx.fillStyle = '#0c0610';
-      ctx.beginPath();
-      ctx.moveTo(0, -34);
-      ctx.bezierCurveTo(16, -30, 14, -4, 10, 8);
-      ctx.quadraticCurveTo(0, 2 + Math.sin(clock * 5) * 3, -10, 8);
-      ctx.bezierCurveTo(-14, -4, -16, -30, 0, -34);
-      ctx.fill();
-      ctx.fillStyle = '#ff3d50';
-      ctx.fillRect(-6, -22, 4, 2); ctx.fillRect(2, -22, 4, 2);
-    }
-    ctx.restore();
-  }
 
   function drawIncidentChip() {
     const inc = G.incident, A = G.antagonist;
     let text = null;
     if (inc && !(inc.type === 'drunk' && inc.leaving)) {
-      text = inc.type === 'string' ? 'Струна! Верни душу к телу на сцене' :
-        inc.type === 'drunk' ? 'Дебошир! Подойди и постой рядом' :
-        `Нет света: ещё ${Math.ceil(CONFIG.incidents.blackout.duration - inc.age)} с`;
+      text = {
+        string: () => 'Струна! Верни душу к телу на сцене',
+        drunk: () => 'Дебошир! Подойди и постой рядом',
+        blackout: () => `Нет света: ещё ${Math.ceil(CONFIG.incidents.blackout.duration - inc.age)} с`,
+        alarm: () => 'Тревога! Подержи душу у кнопки у выхода',
+        party: () => `Вечеринка за стеной — держи ${inc.side === 'left' ? 'левый' : 'правый'} край`,
+        blogger: () => inc.calmed ? `Блогер в эфире: двойной драйв ещё ${Math.ceil(inc.boost)} с` : 'Блогер снимает зал — подлети к нему',
+        lastcall: () => 'Зрители ушли к бару — верни их душой',
+        feedback: () => 'Микрофон фонит — держи зал поближе к душе',
+      }[inc.type]();
     } else if (A && A.active && !A.stun && !G.encore) {
       text = A.kind === 'rival' ? 'Соперник уводит зал — коснись его душой' : 'Страх уводит зал — коснись его душой';
     } else if (G.critic && !G.critic.leaving && G.critic.interest < 35) {
       text = 'Критик скучает — лети к нему!';
+    } else if (G.request) {
+      text = `Заявка «${G.request.name.replace(/!$/, '')}» — побудь душой в кругу`;
     }
     if (!text) return;
     ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -3127,11 +3150,13 @@ if (typeof window !== 'undefined') (function () {
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, G.L.W, G.L.H); ctx.clip();
     drawBackground();
+    drawZones();
     drawFxUnder();
     drawBody();
     const list = G.viewers.filter(v => !v.gone).sort((a, b) => a.y - b.y);
     for (const v of list) drawViewer(v);
     drawDrunk();
+    drawIncidentProps();
     drawAntagonist();
     drawEmotions();
     drawSoul();
