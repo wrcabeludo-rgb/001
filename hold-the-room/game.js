@@ -2382,7 +2382,7 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'duo') {
         sfx('evolve');
         banners.push({ text: `Дуэт: ${DUOS[ev.id].name}!`, t: 0, life: 2.2, color: DUO_COLOR });
-        spawnParticles(G.player.x, G.player.y - 20, 26, DUO_COLOR, 150, 0.8, 2.8);
+        if (!fxAnim('evolve', G.player.x, G.player.y - 20)) spawnParticles(G.player.x, G.player.y - 20, 26, DUO_COLOR, 150, 0.8, 2.8);
       } else if (ev.type === 'repel') {
         if (!fxAnim('wave', ev.x, ev.y - 8, { size: 120, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff', life: 0.45 })) fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
         spawnParticles(ev.x, ev.y - 10, 14, ev.kind === 'fear' ? '#ff3d50' : '#b49cff', 130, 0.5, 2.6);
@@ -2565,6 +2565,7 @@ if (typeof window !== 'undefined') (function () {
     wave: { frames: 14, cols: 4, w: 256, h: 144, dur: 0.6, size: 160, bottom: false },
     chain: { frames: 18, cols: 5, w: 256, h: 234, dur: 0.8, size: 150, bottom: false },
     climax: { frames: 32, cols: 6, w: 384, h: 216, dur: 2.0, size: 340, bottom: false },
+    evolve: { frames: 26, cols: 6, w: 256, h: 144, dur: 1.4, size: 200, bottom: false },
   };
   const fxImg = {};
   for (const n of Object.keys(FX_ART)) {
