@@ -1185,6 +1185,8 @@ if (typeof window !== 'undefined') (function () {
   player.preload = 'auto';
   player.setAttribute('playsinline', '');
   let musicToken = 0, playing = false, fadeTimer = null, unlocked = false;
+  // iOS не дал включить трек (касание «протухло», пока трек грузился) — включим в следующем касании
+  let pendingMusic = false, warmed = false;
   const blobs = {}; // url трека → blob-ссылка
 
   // Короткая тишина: «разблокирует» элемент первым касанием, дальше play() можно звать без жеста
@@ -1294,6 +1296,9 @@ if (typeof window !== 'undefined') (function () {
     }
     // iOS может прервать звук (звонок, сворачивание PWA); возобновляем при касании
     if (playing && player.paused && SAVE.settings.music && state !== 'levelup') resumeMusic();
+    if (pendingMusic && SAVE.settings.music && (state === 'play' || state === 'loading' || state === 'ending')) startPlayer(musicToken);
+    // первый трек начинаем грузить уже в меню: при первом запуске его ещё нет в кэше
+    if (!warmed) { warmed = true; loadTrack(CONFIG.levels[0].music).catch(() => {}); }
   }
   document.addEventListener('pointerdown', wakeAudio, true);
 
@@ -1317,6 +1322,7 @@ if (typeof window !== 'undefined') (function () {
 
   function stopMusic() {
     musicToken++;
+    pendingMusic = false;
     clearInterval(fadeTimer);
     playing = false;
     player.pause();
@@ -1332,14 +1338,25 @@ if (typeof window !== 'undefined') (function () {
       if (token !== musicToken) return false;
       if (player.src !== src) player.src = src;
       player.currentTime = 0;
-      setVolume(0);
-      return player.play().then(() => {
-        if (token !== musicToken) { player.pause(); return false; }
-        playing = true;
-        fadeTo(MUSIC_VOLUME, 1.0);
-        return true;
-      });
+      return startPlayer(token);
     }).catch(() => false);
+  }
+
+  // Запуск элемента; если песня уже идёт без музыки, трек догоняет её время
+  function startPlayer(token) {
+    pendingMusic = false;
+    if (G && state !== 'loading' && G.musicTime > 0) try { player.currentTime = G.musicTime % (player.duration || Infinity); } catch (_) { /* ещё нет длительности */ }
+    setVolume(0);
+    const p = player.play();
+    return (p || Promise.resolve()).then(() => {
+      if (token !== musicToken) { player.pause(); return false; }
+      playing = true;
+      fadeTo(MUSIC_VOLUME, 1.0);
+      return true;
+    }, () => {
+      if (token === musicToken) pendingMusic = true;
+      return false;
+    });
   }
 
   function fadeOutMusic(sec) {
@@ -2112,6 +2129,9 @@ if (typeof window !== 'undefined') (function () {
   // ---------- визуальные события ----------
   // Ряд конфетти вдоль края сцены (Кульминация, бис)
   function confettiRow(life) {
+    let any = false;
+    for (let i = 0; i < 3; i++) any = fxAnim('confetti', G.L.W * (0.2 + 0.3 * i), G.L.stageBottom + 120, { bottom: true, life: life * 1.4 }) || any;
+    if (any) return;
     const cols = [EVO_COLOR, PAL.pink, PAL.cyan, '#ffffff'];
     for (let i = 0; i < 70; i++) {
       particles.push({ x: Math.random() * G.L.W, y: G.L.stageBottom + 10, vx: (Math.random() - 0.5) * 90, vy: -160 - Math.random() * 220,
@@ -2126,9 +2146,22 @@ if (typeof window !== 'undefined') (function () {
     }
   }
 
+  // Анимация форс-мажора: разовая вспышка в его точке, тревога и вечеринка повторяются, пока идут
+  function incidentAnim(kind) {
+    const L = G.L, S = CONFIG.incidents.string.spot, inc = G.incident;
+    const live = () => G.incident && G.incident.type === kind;
+    if (kind === 'string') fxAnim('string', S.x, S.y - 30);
+    else if (kind === 'blackout') fxAnim('blackout', L.W / 2, L.hudH + 60);
+    else if (kind === 'alarm' && inc) fxAnim('alarm', inc.x, inc.y, { loop: true, while: live });
+    else if (kind === 'party' && inc) fxAnim('party', inc.side === 'left' ? 30 : L.W - 30, (L.hallTop + L.hallBottom) / 2, { loop: true, while: live, flip: inc.side !== 'left' });
+    else if (kind === 'blogger' && inc) fxAnim('blogger', inc.x, inc.y - 50);
+    else if (kind === 'lastcall') fxAnim('lastcall', CONFIG.incidents.lastcall.barX, (L.hallTop + L.hallBottom) / 2);
+    else if (kind === 'feedback') fxAnim('feedback', S.x, S.y, { size: 260 });
+  }
+
   function handleEvents() {
     for (const ev of G.events) {
-      if (ev.type === 'solo') sfx('solo'), fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.r, t: 0, life: 0.6, color: CARD_DEFS.solo.color });
+      if (ev.type === 'solo') { sfx('solo'); if (!fxAnim('wave', ev.x, ev.y - 6, { size: ev.r * 2.4, color: CARD_DEFS.solo.color, life: 0.6 })) fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.r, t: 0, life: 0.6, color: CARD_DEFS.solo.color }); }
       else if (ev.type === 'chorus') {
         fx.push({ type: 'chorus', x: ev.x, y: ev.y, targets: ev.targets, t: 0, life: 0.8 });
       } else if (ev.type === 'pyro') {
@@ -2137,6 +2170,7 @@ if (typeof window !== 'undefined') (function () {
         shake = 0.35;
         for (let i = 0; i < 6; i++) {
           const x = 30 + i * (G.L.W - 60) / 5;
+          if (fxAnim('pyro', x, G.L.stageBottom + 6, { bottom: true })) continue;
           for (let k = 0; k < 14; k++) {
             particles.push({ x, y: G.L.stageBottom, vx: (Math.random() - 0.5) * 70, vy: -120 - Math.random() * 160, life: 1.1, max: 1.1, color: Math.random() < 0.5 ? '#ffd23d' : '#ff7a3d', size: 2.5, g: 260 });
           }
@@ -2145,7 +2179,7 @@ if (typeof window !== 'undefined') (function () {
         sfx('evolve');
         banners.push({ text: `Эволюция: ${EVOLUTIONS[ev.id].name}!`, t: 0, life: 2.4, color: EVO_COLOR });
         shake = 0.3;
-        spawnParticles(G.player.x, G.player.y - 20, 30, EVO_COLOR, 160, 0.9, 3);
+        if (!fxAnim('evolve', G.player.x, G.player.y - 20)) spawnParticles(G.player.x, G.player.y - 20, 30, EVO_COLOR, 160, 0.9, 3);
       } else if (ev.type === 'ballad') {
         fx.push({ type: 'chorus', x: ev.x, y: ev.y, targets: ev.targets, t: 0, life: 0.9, color: CARD_DEFS.ballad.color });
       } else if (ev.type === 'breakdown') {
@@ -2158,17 +2192,21 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'pickup') {
         sfx('pickup', ev.chain, ev.gold);
         const col = ev.gold ? EVO_COLOR : EMO_COLORS[ev.kind];
-        spawnParticles(ev.x, ev.y, ev.gold ? 14 : 8, col, ev.gold ? 120 : 80, 0.45, 2.4);
-        fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.gold ? 22 : 15, t: 0, life: 0.3, color: col });
+        if (!fxAnim('pickup', ev.x, ev.y, { color: col, size: FX_ART.pickup && FX_ART.pickup.size * (ev.gold ? 1.5 : 1) })) {
+          spawnParticles(ev.x, ev.y, ev.gold ? 14 : 8, col, ev.gold ? 120 : 80, 0.45, 2.4);
+          fx.push({ type: 'ring', x: ev.x, y: ev.y, r: ev.gold ? 22 : 15, t: 0, life: 0.3, color: col });
+        }
         // эмоция влетает в душу
         fx.push({ type: 'fly', x: ev.x, y: ev.y, t: 0, life: 0.18, color: col });
         pops.push({ x: ev.x, y: ev.y - 8, text: '+' + (ev.drive < 10 ? f1(ev.drive) : Math.round(ev.drive)), color: col, t: 0, life: 0.7, size: 10 + Math.min(6, ev.chain / 10) });
       } else if (ev.type === 'chainTier') {
         sfx('tier');
         banners.push({ text: `Цепочка ×${ev.n}!`, t: 0, life: 1.6, color: PAL.cyan });
-        fx.push({ type: 'wave', x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, r: 65, color: PAL.cyan });
         shake = Math.max(shake, 0.2);
-        spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
+        if (!fxAnim('chain', G.player.x, G.player.y - 30, { color: PAL.cyan })) {
+          fx.push({ type: 'wave', x: G.player.x, y: G.player.y - 30, t: 0, life: 0.6, r: 65, color: PAL.cyan });
+          spawnParticles(G.player.x, G.player.y - 30, 16 + ev.n / 2, PAL.cyan, 150, 0.7, 2.6);
+        }
       } else if (ev.type === 'request') {
         banners.push({ text: ev.text, t: 0, life: 1.8, color: PAL.pink });
       } else if (ev.type === 'requestDone') {
@@ -2183,25 +2221,25 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'feedbackWave') {
         sfx('feedback');
         const S = CONFIG.incidents.string.spot;
-        fx.push({ type: 'wave', x: S.x, y: S.y, t: 0, life: 0.8, r: 300, color: PAL.cyan });
+        if (!fxAnim('feedback', S.x, S.y, { size: 260 })) fx.push({ type: 'wave', x: S.x, y: S.y, t: 0, life: 0.8, r: 300, color: PAL.cyan });
         shake = Math.max(shake, 0.15);
       } else if (ev.type === 'smash') {
         spawnParticles(ev.x, ev.y, 6, '#9a9aa2', 60, 0.4, 2.2);
       } else if (ev.type === 'fight') {
         sfx('fight');
         pops.push({ x: ev.x, y: ev.y - 30, text: 'драка!', color: PAL.pink, t: 0, life: 1.0, size: 12 });
-        spawnParticles(ev.x, ev.y - 14, 12, PAL.pink, 110, 0.5, 2.4);
+        if (!fxAnim('fight', ev.x, ev.y - 20)) spawnParticles(ev.x, ev.y - 14, 12, PAL.pink, 110, 0.5, 2.4);
         shake = Math.max(shake, 0.2);
       } else if (ev.type === 'steal') {
         fx.push({ type: 'steal', x: ev.x, y: ev.y, tx: ev.tx, ty: ev.ty, t: 0, life: 0.3 });
       } else if (ev.type === 'fearWave') {
         sfx('fear');
-        fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.7, r: ev.r, color: '#ff3d50' });
+        if (!fxAnim('fear', ev.x, ev.y - 10, { size: ev.r * 2.2 })) fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.7, r: ev.r, color: '#ff3d50' });
         banners.push({ text: 'Волна страха!', t: 0, life: 1.4, color: '#ff3d50' });
         shake = 0.4;
       } else if (ev.type === 'sniff') {
         sfx('sniff');
-        fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.6, r: ev.r, color: '#b48cff' });
+        if (!fxAnim('wave', ev.x, ev.y - 10, { size: ev.r * 2.4, color: '#b48cff', life: 0.6 })) fx.push({ type: 'wave', x: ev.x, y: ev.y - 10, t: 0, life: 0.6, r: ev.r, color: '#b48cff' });
         pops.push({ x: ev.x, y: ev.y - 48, text: 'Пф-ф…', color: '#b48cff', t: 0, life: 1.2, size: 13 });
       } else if (ev.type === 'chainBreak') {
         sfx('chainBreak');
@@ -2209,13 +2247,16 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'triple') {
         sfx('triple');
         const col = EMO_COLORS[ev.kind];
-        fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
-        fx.push({ type: 'wave', x: ev.x, y: ev.y - 20, t: 0, life: 0.5, r: ev.r * 0.8, color: col });
+        if (!fxAnim('triple', ev.x, ev.y - 20, { size: ev.r * 2, color: col })) {
+          fx.push({ type: 'ring', x: ev.x, y: ev.y - 10, r: ev.r, t: 0, life: 0.5, color: col });
+          fx.push({ type: 'wave', x: ev.x, y: ev.y - 20, t: 0, life: 0.5, r: ev.r * 0.8, color: col });
+        }
         pops.push({ x: ev.x, y: ev.y - 74, text: (ev.k > 1 ? `Три ×${ev.k}!` : 'Три подряд!'), color: col, t: 0, life: 1.0, size: 14 });
         spawnParticles(ev.x, ev.y - 20, 14, col, 120, 0.6, 2.6);
       } else if (ev.type === 'climax') {
         sfx('climax');
         banners.push({ text: 'КУЛЬМИНАЦИЯ!', t: 0, life: 2.2, color: EVO_COLOR });
+        fxAnim('climax', G.L.W / 2, G.L.stageBottom - 20, { size: 420 });
         confettiRow(1.4);
         shake = 0.5;
         for (let i = 0; i < 50; i++) spawnParticles(Math.random() * G.L.W, G.L.stageBottom, 1, Math.random() < 0.5 ? EVO_COLOR : PAL.pink, 180, 1.2, 3, 140);
@@ -2230,7 +2271,7 @@ if (typeof window !== 'undefined') (function () {
         banners.push({ text: `Дуэт: ${DUOS[ev.id].name}!`, t: 0, life: 2.2, color: DUO_COLOR });
         spawnParticles(G.player.x, G.player.y - 20, 26, DUO_COLOR, 150, 0.8, 2.8);
       } else if (ev.type === 'repel') {
-        fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
+        if (!fxAnim('wave', ev.x, ev.y - 8, { size: 120, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff', life: 0.45 })) fx.push({ type: 'ring', x: ev.x, y: ev.y - 8, r: 50, t: 0, life: 0.45, color: ev.kind === 'fear' ? '#ff3d50' : '#b49cff' });
         spawnParticles(ev.x, ev.y - 10, 14, ev.kind === 'fear' ? '#ff3d50' : '#b49cff', 130, 0.5, 2.6);
       } else if (ev.type === 'encore') {
         sfx('encore');
@@ -2241,10 +2282,12 @@ if (typeof window !== 'undefined') (function () {
       } else if (ev.type === 'leave') {
         sfx('leave');
         fx.push({ type: 'leaveMark', x: ev.x, y: ev.y, t: 0, life: 1.0 });
+        fxAnim('leave', ev.x, ev.y, { bottom: true });
       } else if (ev.type === 'incident') {
         sfx('incident');
         banners.push({ text: ev.text, t: 0, life: 2.6, color: PAL.pink });
         shake = 0.3;
+        incidentAnim(ev.kind);
       } else if (ev.type === 'incidentEnd') {
         sfx('fixed');
         banners.push({ text: ev.text, t: 0, life: 1.8, color: PAL.green });
@@ -2263,7 +2306,7 @@ if (typeof window !== 'undefined') (function () {
   }
 
   function updateVisuals(dt) {
-    for (const f of fx) f.t += dt;
+    for (const f of fx) { f.t += dt; if (f.while && !f.while()) f.life = 0; }
     fx = fx.filter(f => f.t < f.life);
     for (const p of particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= 0.98; }
     particles = particles.filter(p => p.life > 0);
@@ -2323,7 +2366,8 @@ if (typeof window !== 'undefined') (function () {
   const svgImg = {};
   for (const n of Object.keys(SVG_ART)) {
     const im = new Image();
-    im.onload = () => { svgImg[n] = im; };
+    // decode() — картинка полностью разобрана до первого рисования
+    im.onload = () => { const ok = () => { svgImg[n] = im; }; (im.decode ? im.decode() : Promise.resolve()).then(ok, ok); };
     im.src = `./art/${n}.svg`;
   }
   const svgCache = new Map();
@@ -2336,20 +2380,51 @@ if (typeof window !== 'undefined') (function () {
     im.onload = () => { stageImg[n] = im; };
     im.src = `./art/stage-${n}.webp`;
   }
+  // Мастер-растр фрагмента: SVG рисуется один раз в крупном размере (до 1000 px по высоте).
+  // Safari запоминает растр SVG того размера, в котором его нарисовали впервые; если первый кадр
+  // пришёлся на маленький холст (окно PWA ещё не получило размер), картинка мылилась до перезапуска.
+  // Теперь SVG всегда растрируется крупно, а под экран кадр только уменьшается — это всегда чётко.
+  const svgMasters = new Map();
+  function svgMaster(name, i) {
+    const key = name + ':' + i;
+    let m = svgMasters.get(key);
+    if (!m) {
+      const A = SVG_ART[name], [cx, cy, cw, ch] = A.crops[i];
+      const k = Math.min(1, 1000 / ch);
+      m = document.createElement('canvas');
+      m.width = Math.ceil(cw * k); m.height = Math.ceil(ch * k);
+      m.getContext('2d').drawImage(svgImg[name], -cx * k, -cy * k, A.size[0] * k, A.size[1] * k);
+      svgMasters.set(key, m);
+    }
+    return m;
+  }
+  // Уменьшение половинками: за один шаг больше чем вдвое холст сглаживает плохо
+  function downscale(src, w, h) {
+    let cur = src;
+    while (cur.width / 2 > w && cur.height / 2 > h) {
+      const t = document.createElement('canvas');
+      t.width = Math.ceil(cur.width / 2); t.height = Math.ceil(cur.height / 2);
+      const tx = t.getContext('2d'); tx.imageSmoothingQuality = 'high';
+      tx.drawImage(cur, 0, 0, t.width, t.height);
+      cur = t;
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+    x.drawImage(cur, 0, 0, w, h);
+    return c;
+  }
   // Фрагмент i файла name высотой h (в единицах мира), при необходимости подкрашенный цветом tint
   function svgFrame(name, i, h, tint) {
     const img = svgImg[name];
     if (!img) return null;
-    const A = SVG_ART[name], [cx, cy, cw, ch] = A.crops[i || 0];
+    const A = SVG_ART[name], [, , cw, ch] = A.crops[i || 0];
     const px = Math.max(8, Math.round(h * scale * dpr));
     const key = `${name}:${i || 0}:${px}:${tint || ''}`;
     let c = svgCache.get(key);
     if (!c) {
-      const k = px / ch;
-      c = document.createElement('canvas');
-      c.width = Math.ceil(cw * k); c.height = px;
+      c = downscale(svgMaster(name, i || 0), Math.ceil(cw * px / ch), px);
       const x = c.getContext('2d');
-      x.drawImage(img, -cx * k, -cy * k, A.size[0] * k, A.size[1] * k);
       if (tint) { x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.7; x.fillStyle = tint; x.fillRect(0, 0, c.width, c.height); }
       svgCache.set(key, c);
     }
@@ -2365,6 +2440,60 @@ if (typeof window !== 'undefined') (function () {
     return true;
   }
   window.addEventListener('resize', () => svgCache.clear());
+
+  // ---------- анимации эффектов (видео Veo → спрайт-листы) ----------
+  // Видео снято на чёрном фоне и нарезано в лист кадров WebP (art/fx/<имя>.webp, сетка cols × rows).
+  // Кадры накладываются режимом «осветление»: чёрное становится прозрачным, свет складывается.
+  // Белые эффекты перекрашиваются умножением на цвет. Пока листа нет, работает эффект кодом.
+  // Таблицу заполняет конвертер: frames — кадров, cols — столбцов, w × h — кадр в пикселях,
+  // dur — длительность в секундах, size — высота кадра в мире, bottom — кадр стоит низом на точке.
+  const FX_ART = {
+    pickup: { frames: 12, cols: 4, w: 256, h: 182, dur: 0.45, size: 70, bottom: false },
+    wave: { frames: 14, cols: 4, w: 256, h: 144, dur: 0.6, size: 160, bottom: false },
+    chain: { frames: 18, cols: 5, w: 256, h: 234, dur: 0.8, size: 150, bottom: false },
+  };
+  const fxImg = {};
+  for (const n of Object.keys(FX_ART)) {
+    const im = new Image();
+    im.onload = () => { const ok = () => { fxImg[n] = im; }; (im.decode ? im.decode() : Promise.resolve()).then(ok, ok); };
+    im.src = `./art/fx/${n}.webp`;
+  }
+  const fxTinted = new Map();
+  function fxSheet(name, color) {
+    if (!color) return fxImg[name];
+    const key = name + color;
+    let c = fxTinted.get(key);
+    if (!c) {
+      const im = fxImg[name];
+      c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+      const x = c.getContext('2d');
+      x.drawImage(im, 0, 0);
+      x.globalCompositeOperation = 'multiply'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+      fxTinted.set(key, c);
+    }
+    return c;
+  }
+  // Запускает анимацию; false — листа нет, вызывающий рисует эффект кодом.
+  // o: size (высота в мире), color (перекраска белого), life (секунды), loop (пока while() истинно)
+  function fxAnim(name, x, y, o) {
+    const A = FX_ART[name];
+    if (!A || !fxImg[name]) return false;
+    o = o || {};
+    fx.push({ type: 'anim', name, x, y, t: 0, life: o.loop ? Infinity : (o.life || A.dur), dur: o.life || A.dur,
+      size: o.size || A.size, color: o.color || null, bottom: o.bottom != null ? o.bottom : A.bottom, alpha: o.alpha || 1, flip: !!o.flip, while: o.while || null });
+    return true;
+  }
+  function drawFxAnim(f) {
+    const A = FX_ART[f.name], img = fxSheet(f.name, f.color);
+    if (!img) return;
+    const k = (f.t % f.dur) / f.dur, i = Math.min(A.frames - 1, Math.floor(k * A.frames));
+    const h = f.size, w = h * A.w / A.h;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = f.alpha;
+    const sx = (i % A.cols) * A.w, sy = Math.floor(i / A.cols) * A.h, dy = f.bottom ? f.y - h : f.y - h / 2;
+    if (f.flip) { ctx.save(); ctx.translate(f.x, 0); ctx.scale(-1, 1); ctx.drawImage(img, sx, sy, A.w, A.h, -w / 2, dy, w, h); ctx.restore(); }
+    else ctx.drawImage(img, sx, sy, A.w, A.h, f.x - w / 2, dy, w, h);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
 
   // ---------- «Свет»: векторные неоновые силуэты ----------
   // Каждая фигура рисуется одной геометрией в несколько проходов: широкое прозрачное свечение,
@@ -2927,7 +3056,8 @@ if (typeof window !== 'undefined') (function () {
 
   function drawFxOver() {
     for (const f of fx) {
-      if (f.type === 'chorus') {
+      if (f.type === 'anim') drawFxAnim(f);
+      else if (f.type === 'chorus') {
         const k = f.t / f.life;
         const col = f.color || CARD_DEFS.chorus.color;
         ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 1 - k;
