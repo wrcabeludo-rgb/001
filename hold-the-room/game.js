@@ -1206,7 +1206,7 @@ if (typeof window !== 'undefined') (function () {
   // поэтому тип не трогаем. Если play() всё же завис, сторож перебирает типы и запоминает рабочий.
   const SESSION_TYPES = ['auto', 'ambient', 'playback'];
   function setSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (_) { /* старые браузеры */ } }
-  if (SAVE.settings.session) setSession(SAVE.settings.session);
+  delete SAVE.settings.session; // в 0.37 сторож запоминал тип — больше не запоминаем
   // Сторож: если play() не завершился за 1,5 с — другой тип сессии и повтор
   function watchPlay(p, retry) {
     if (!p || !navigator.audioSession) return;
@@ -1216,7 +1216,7 @@ if (typeof window !== 'undefined') (function () {
       if (settled) return;
       const cur = navigator.audioSession.type, next = SESSION_TYPES[(SESSION_TYPES.indexOf(cur) + 1) % SESSION_TYPES.length];
       audioErr = `play() завис при сессии ${cur} → ${next}`;
-      setSession(next); SAVE.settings.session = next; persist();
+      setSession(next);
       if (retry) retry();
     }, 1500);
   }
@@ -1370,7 +1370,9 @@ if (typeof window !== 'undefined') (function () {
       unlocked = true;
       player.src = SILENCE;
       const p = player.play();
-      if (p) p.catch(e => { unlocked = false; if (e.name !== 'AbortError') audioErr = 'музыка: ' + e.name; });
+      // тишина нужна только как «разрешение»: сразу останавливаем. Раньше она крутилась по кругу
+      // всё время в меню, и закрытое посреди «воспроизведения» PWA подвешивало звук iOS до перезагрузки.
+      if (p) p.then(() => { if (player.src === SILENCE) player.pause(); }, e => { unlocked = false; if (e.name !== 'AbortError') audioErr = 'музыка: ' + e.name; });
       watchPlay(p, () => { unlocked = false; });
     }
     // iOS может прервать звук (звонок, сворачивание PWA); возобновляем при касании
@@ -1496,6 +1498,12 @@ if (typeof window !== 'undefined') (function () {
   }
 
   function pauseMusic() { if (playing) player.pause(); }
+  // В фоне не должно играть ничего: ни музыка, ни тишина, ни звуки из пула
+  function silenceAll() {
+    player.pause();
+    for (const a of sfxPool) a.pause();
+  }
+  window.addEventListener('pagehide', silenceAll);
   function resumeMusic() {
     if (playing && SAVE.settings.music) { const p = player.play(); if (p) p.catch(() => {}); }
   }
@@ -1507,7 +1515,7 @@ if (typeof window !== 'undefined') (function () {
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseMusic(); else if (state === 'play' || state === 'ending') resumeMusic();
+    if (document.hidden) silenceAll(); else if (state === 'play' || state === 'ending') resumeMusic();
   });
 
   const soundBtn = $('btn-sound');
