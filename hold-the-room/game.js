@@ -2309,9 +2309,9 @@ if (typeof window !== 'undefined') (function () {
   // crops — рамки фигур в координатах SVG: пустые поля обрезаны, у зрителя 4 позы в одном файле.
   // Пока файл не загрузился (или его нет), рисуется неоновая графика кодом.
   const SVG_ART = {
-    'hero-sit': { size: [1024, 1024], crops: [[172, 27, 726, 973]] },
-    'hero-play': { size: [1024, 1024], crops: [[255, 3, 570, 1021]] },
-    'hero-rock': { size: [1024, 1024], crops: [[46, 0, 932, 1013]] },
+    'hero-sit': { size: [831, 1200], crops: [[0, 0, 831, 1200]] },
+    'hero-play': { size: [806, 1367], crops: [[0, 0, 806, 1367]] },
+    'hero-rock': { size: [1005, 1341], crops: [[0, 0, 1005, 1341]] },
     'soul': { size: [1024, 1024], crops: [[26, 28, 906, 976]] },
     'viewer-1': { size: [1536, 768], crops: [[71, 86, 242, 633], [419, 63, 260, 657], [777, 93, 248, 632], [1084, 44, 393, 653]] },
     'viewer-2': { size: [1536, 768], crops: [[82, 128, 255, 600], [378, 102, 349, 624], [777, 117, 252, 610], [1102, 21, 378, 570]] },
@@ -2319,7 +2319,6 @@ if (typeof window !== 'undefined') (function () {
     'viewer-4': { size: [1536, 768], crops: [[66, 89, 300, 644], [411, 90, 278, 642], [738, 91, 271, 642], [1073, 13, 390, 555]] },
     'viewer-5': { size: [1536, 768], crops: [[139, 87, 252, 635], [510, 59, 204, 664], [780, 80, 258, 637], [1080, 45, 355, 646]] },
     'viewer-6': { size: [1536, 768], crops: [[167, 133, 205, 583], [454, 117, 215, 609], [747, 121, 226, 604], [1047, 47, 355, 519]] },
-    'stage-1': { size: [768, 1536], crops: [[0, 0, 768, 1536]] },
   };
   const svgImg = {};
   for (const n of Object.keys(SVG_ART)) {
@@ -2328,6 +2327,15 @@ if (typeof window !== 'undefined') (function () {
     im.src = `./art/${n}.svg`;
   }
   const svgCache = new Map();
+  // Залы — растровые картины (WebP): у фона мягкость незаметна, а свет и фактура богаче.
+  // edge — доля высоты картинки, где проходит край сцены: он совпадает с краем сцены в игре.
+  const STAGE_ART = { 1: { edge: 0.2074 }, 2: { edge: 0.2074 }, 3: { edge: 0.2029 } };
+  const stageImg = {};
+  for (const n of Object.keys(STAGE_ART)) {
+    const im = new Image();
+    im.onload = () => { stageImg[n] = im; };
+    im.src = `./art/stage-${n}.webp`;
+  }
   // Фрагмент i файла name высотой h (в единицах мира), при необходимости подкрашенный цветом tint
   function svgFrame(name, i, h, tint) {
     const img = svgImg[name];
@@ -2492,11 +2500,11 @@ if (typeof window !== 'undefined') (function () {
   function drawBackground() {
     const L = G.L, N = LEVEL_NEON[G.levelNo] || LEVEL_NEON[0];
     ctx.fillStyle = '#050304'; ctx.fillRect(0, 0, L.W, L.H);
-    const stage = svgImg['stage-' + (G.levelNo + 1)];
+    const stage = stageImg[G.levelNo + 1];
     if (stage) {
-      // край сцены на картинке (y ≈ 401 из 1536) совпадает с краем сцены в игре
-      const k = L.W / SVG_ART['stage-' + (G.levelNo + 1)].size[0], h = L.W * 2;
-      drawSvg('stage-' + (G.levelNo + 1), 0, L.W / 2, L.stageBottom - 401 * k + h, h);
+      const h = L.W * stage.naturalHeight / stage.naturalWidth;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(stage, 0, L.stageBottom - STAGE_ART[G.levelNo + 1].edge * h, L.W, h);
       drawExit();
       return;
     }
@@ -2597,6 +2605,7 @@ if (typeof window !== 'undefined') (function () {
     }
   }
 
+  const heroPose = { cur: 0, prev: 0, at: -9 };
   // Тело музыканта: сидит погасшим → встаёт и играет → горит и играет в широкой стойке
   function drawBody() {
     const S = CONFIG.incidents.string, x = S.spot.x, y = S.spot.y + 8;
@@ -2607,14 +2616,19 @@ if (typeof window !== 'undefined') (function () {
       ctx.beginPath(); ctx.arc(S.spot.x, S.spot.y, CONFIG.player.bodyRadius, 0, Math.PI * 2); ctx.fill();
     }
     if (svgImg['hero-sit'] && svgImg['hero-play'] && svgImg['hero-rock']) {
-      // сидит погасшим → играет → в ударе; соседние позы плавно сменяют друг друга
-      const poses = [['hero-sit', 92], ['hero-play', 116], ['hero-rock', 112]];
-      const k = clamp(life, 0, 1) * 2, a = Math.min(1, Math.floor(k)), t = k - a;
+      // сидит погасшим → играет → в ударе; поза держится целиком и меняется короткой сменой кадра,
+      // чтобы на светлой сцене не просвечивали две фигуры сразу
+      const poses = [['hero-sit', 102], ['hero-play', 116], ['hero-rock', 114]];
+      // запас у порогов: поза не дёргается, пока «жизнь» колеблется у границы
+      const TH = [0.34, 0.67], c = heroPose.cur;
+      const want = c < 2 && life > TH[c] + 0.05 ? c + 1 : c > 0 && life < TH[c - 1] - 0.05 ? c - 1 : c;
+      if (want !== heroPose.cur) { heroPose.prev = heroPose.cur; heroPose.cur = want; heroPose.at = clock; }
+      const t = clamp((clock - heroPose.at) / 0.3, 0, 1);
       const glow = ctx.createRadialGradient(x, y - 50, 4, x, y - 50, 80);
       glow.addColorStop(0, `rgba(255,176,58,${0.22 * life})`); glow.addColorStop(1, 'rgba(255,176,58,0)');
       ctx.fillStyle = glow; ctx.fillRect(x - 80, y - 130, 160, 134);
-      ctx.globalAlpha = 1 - (a < 2 ? t : 0); drawSvg(poses[a][0], 0, x, y + 2, poses[a][1]);
-      if (a < 2 && t > 0) { ctx.globalAlpha = t; drawSvg(poses[a + 1][0], 0, x, y + 2 - bob, poses[a + 1][1]); }
+      if (t < 1) { ctx.globalAlpha = 1 - t; drawSvg(poses[heroPose.prev][0], 0, x, y + 2, poses[heroPose.prev][1]); }
+      ctx.globalAlpha = t; drawSvg(poses[heroPose.cur][0], 0, x, y + 2 - (heroPose.cur ? bob : 0), poses[heroPose.cur][1]);
       ctx.globalAlpha = 1;
     } else {
     const P = life < 0.34 ? POSES.sit : life < 0.67 ? POSES.play : POSES.rock;
