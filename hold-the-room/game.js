@@ -1219,10 +1219,12 @@ if (typeof window !== 'undefined') (function () {
       noiseBuf = sctx.createBuffer(1, n, n);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-      // короткий беззвучный звук внутри касания разблокирует вывод на iOS
-      const b = sctx.createBufferSource(); b.buffer = sctx.createBuffer(1, 1, 22050); b.connect(sctx.destination); b.start(0);
     }
-    if (sctx.state !== 'running') sctx.resume();
+    if (sctx.state !== 'running') {
+      // короткий беззвучный звук внутри касания разблокирует вывод на iOS
+      try { const b = sctx.createBufferSource(); b.buffer = sctx.createBuffer(1, 1, 22050); b.connect(sctx.destination); b.start(0); } catch (_) { /* не критично */ }
+      const r = sctx.resume(); if (r) r.catch(e => { audioErr = 'эффекты: ' + e.name; });
+    }
   }
   const sfxOn = () => sctx && sctx.state === 'running' && SAVE.settings.music;
   // тон: частота (можно со скольжением к f1), форма, громкость, атака, длина
@@ -1286,13 +1288,17 @@ if (typeof window !== 'undefined') (function () {
   };
   function sfx(name, ...args) { if (sfxOn()) try { SFX[name](...args); } catch (_) { /* звук не обязателен */ } }
 
+  // Касание «разрешает» звук только на отпускании пальца: по стандарту и в iOS звук включают
+  // touchend / pointerup / click, а pointerdown от пальца — нет. Раньше звук будился только
+  // в pointerdown, и в установленном PWA на iPhone разрешение так и не наступало.
+  let audioErr = '';
   function wakeAudio() {
     sfxUnlock();
     if (!unlocked && (!player.src || player.src === SILENCE)) {
       unlocked = true;
       player.src = SILENCE;
       const p = player.play();
-      if (p) p.catch(() => { unlocked = false; });
+      if (p) p.catch(e => { unlocked = false; if (e.name !== 'AbortError') audioErr = 'музыка: ' + e.name; });
     }
     // iOS может прервать звук (звонок, сворачивание PWA); возобновляем при касании
     if (playing && player.paused && SAVE.settings.music && state !== 'levelup') resumeMusic();
@@ -1300,7 +1306,16 @@ if (typeof window !== 'undefined') (function () {
     // первый трек начинаем грузить уже в меню: при первом запуске его ещё нет в кэше
     if (!warmed) { warmed = true; loadTrack(CONFIG.levels[0].music).catch(() => {}); }
   }
-  document.addEventListener('pointerdown', wakeAudio, true);
+  for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(ev, wakeAudio, { capture: true, passive: true });
+
+  // Сводка о звуке — открывается касанием строки версии в меню (на случай, если звука нет)
+  function audioReport() {
+    const st = ['нет данных', 'метаданные', 'кадр', 'буфер', 'готов'][player.readyState] || player.readyState;
+    return `Звук: ${SAVE.settings.music ? 'включён' : 'выключен'} · музыка ${player.paused ? 'на паузе' : 'играет'} (${st}` +
+      `${player.error ? ', ошибка ' + player.error.code : ''}) · эффекты ${sctx ? sctx.state : 'не созданы'}` +
+      `${audioErr ? ' · ' + audioErr : ''}${navigator.audioSession ? ' · сессия ' + navigator.audioSession.type : ''}` +
+      ` · PWA ${window.matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'да' : 'нет'}`;
+  }
 
   function loadTrack(url) {
     if (blobs[url]) return Promise.resolve(blobs[url]);
@@ -1353,8 +1368,9 @@ if (typeof window !== 'undefined') (function () {
       playing = true;
       fadeTo(MUSIC_VOLUME, 1.0);
       return true;
-    }, () => {
+    }, e => {
       if (token === musicToken) pendingMusic = true;
+      audioErr = 'музыка: ' + (e && e.name);
       return false;
     });
   }
@@ -1487,6 +1503,7 @@ if (typeof window !== 'undefined') (function () {
   function openMenu() {
     if (updateReady) { location.reload(); return; }
     $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
+    $('app-version').onclick = () => { $('app-version').textContent = audioReport(); };
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
     const d = dailyChallenge(new Date(), CONFIG.levels.length), best = SAVE.daily[d.key];
