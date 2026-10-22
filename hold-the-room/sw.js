@@ -30,6 +30,7 @@ const FILES = [
   './art/fx/pickup.webp',
   './art/fx/wave.webp',
   './art/fx/chain.webp',
+  './art/fx/climax.webp',
   './music/level1-bossa-antigua.mp3',
   './music/level2-backbay-lounge.mp3',
   './music/level3-funkorama.mp3',
