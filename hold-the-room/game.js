@@ -2312,6 +2312,11 @@ if (typeof window !== 'undefined') (function () {
     'hero-rock': { size: [1024, 1024], crops: [[46, 0, 932, 1013]] },
     'soul': { size: [1024, 1024], crops: [[26, 28, 906, 976]] },
     'viewer-1': { size: [1536, 768], crops: [[71, 86, 242, 633], [419, 63, 260, 657], [777, 93, 248, 632], [1084, 44, 393, 653]] },
+    'viewer-2': { size: [1536, 768], crops: [[82, 128, 255, 600], [378, 102, 349, 624], [777, 117, 252, 610], [1102, 21, 378, 570]] },
+    'viewer-3': { size: [1536, 768], crops: [[96, 97, 312, 648], [457, 96, 278, 649], [791, 98, 294, 647], [1084, 20, 352, 616]] },
+    'viewer-4': { size: [1536, 768], crops: [[66, 89, 300, 644], [411, 90, 278, 642], [738, 91, 271, 642], [1073, 13, 390, 555]] },
+    'viewer-5': { size: [1536, 768], crops: [[139, 87, 252, 635], [510, 59, 204, 664], [780, 80, 258, 637], [1080, 45, 355, 646]] },
+    'viewer-6': { size: [1536, 768], crops: [[167, 133, 205, 583], [454, 117, 215, 609], [747, 121, 226, 604], [1047, 47, 355, 519]] },
     'stage-1': { size: [768, 1536], crops: [[0, 0, 768, 1536]] },
   };
   const svgImg = {};
@@ -2523,7 +2528,9 @@ if (typeof window !== 'undefined') (function () {
     if (v.critic) { drawCritic(v, bob); return; }
     // настроение: 0 скучает, 1 нейтрален, 2 увлечён, 3 в восторге; контур плавно меняет цвет с интересом
     const mood = v.leaving || bored ? 0 : !happy ? 1 : I < 80 ? 2 : 3;
-    if (svgImg['viewer-1']) {
+    // шесть разных зрителей; пока нужный файл не загрузился — первый
+    const vName = svgImg[`viewer-${v.look % 6 + 1}`] ? `viewer-${v.look % 6 + 1}` : 'viewer-1';
+    if (svgImg[vName]) {
       ctx.save(); ctx.globalAlpha = v.leaving ? 0.55 : 1;
       // мягкое свечение цвета настроения: зал «загорается» вместе с интересом
       const halo = ['#9fb6d8', '#9fb6d8', PAL.pink, EVO_COLOR][mood], ha = [0, 0.1, 0.18, 0.28][mood];
@@ -2533,7 +2540,8 @@ if (typeof window !== 'undefined') (function () {
         ctx.fillStyle = g; ctx.fillRect(x - 32, y - 56, 64, 64);
       }
       ctx.translate(x, y - bob * (mood === 3 ? 1.6 : 1)); ctx.rotate(sway);
-      drawSvg('viewer-1', mood, 0, 2, mood === 3 ? 58 : 52, flip);
+      // высота по рамке позы: рост персонажей в листах сохраняется, прыжок чуть крупнее
+      drawSvg(vName, mood, 0, 2, SVG_ART[vName].crops[mood][3] * 0.08 * (mood === 3 ? 1.08 : 1), flip);
       if (v.flash > 0) {
         ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.8; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(0, -20, 18, 0, Math.PI * 2); ctx.stroke();
