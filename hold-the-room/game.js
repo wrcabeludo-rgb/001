@@ -1207,28 +1207,72 @@ if (typeof window !== 'undefined') (function () {
   playbackSession();
 
   // ---------- звуки игры ----------
-  // Синтезируются на лету через Web Audio: ничего не весят и работают офлайн.
-  // Контекст создаётся и «будится» внутри касания — так требует iOS.
-  // Пока играет музыка через <audio>, iOS слышит и эти звуки даже в беззвучном режиме.
-  let sctx = null, sfxOut = null, noiseBuf = null, lastPick = 0, lastLeave = 0;
-  function sfxUnlock() {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!sctx) {
-      sctx = new AC();
-      sfxOut = sctx.createGain(); sfxOut.gain.value = 0.55; sfxOut.connect(sctx.destination);
-      const n = sctx.sampleRate;
-      noiseBuf = sctx.createBuffer(1, n, n);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-    }
-    if (sctx.state !== 'running') {
-      // короткий беззвучный звук внутри касания разблокирует вывод на iOS
-      try { const b = sctx.createBufferSource(); b.buffer = sctx.createBuffer(1, 1, 22050); b.connect(sctx.destination); b.start(0); } catch (_) { /* не критично */ }
-      const r = sctx.resume(); if (r) r.catch(e => { audioErr = 'эффекты: ' + e.name; });
+  // Синтезируются кодом, но не вживую: живой Web Audio в установленном PWA на iPhone «подвешивал»
+  // весь звук (контекст оставался suspended, и даже play() у <audio> не завершался).
+  // Поэтому каждый звук один раз записывается офлайн-движком (OfflineAudioContext — он не трогает
+  // звуковой вывод) в маленький WAV и играет через обычные <audio>, как музыка.
+  let sctx = null, sfxOut = null, noiseBuf = null, lastPick = -1, lastLeave = -1;
+  const sfxCache = new Map();     // ключ звука → blob-ссылка на WAV
+  const SFX_LEN = { climax: 1.8, encore: 2.4, evolve: 0.9, fear: 1.0, tier: 0.7, pyro: 0.7, card: 0.5 };
+  function wavUrl(buf) {
+    const d = buf.getChannelData(0), n = d.length, sr = buf.sampleRate, b = new DataView(new ArrayBuffer(44 + n * 2));
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) b.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt ');
+    b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, sr, true); b.setUint32(28, sr * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
+    str(36, 'data'); b.setUint32(40, n * 2, true);
+    // громкость <audio> на iOS не регулируется, а музыка звучит в полную силу — звуки поднимаются
+    // примерно в 5 раз (не выше 90% шкалы), чтобы не тонуть в музыке
+    let peak = 1e-6; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i]));
+    const k = Math.min(5, 0.9 / peak);
+    for (let i = 0; i < n; i++) b.setInt16(44 + i * 2, Math.max(-1, Math.min(1, d[i] * k)) * 32767, true);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  // Записывает звук name с аргументами args; повторный вызов с тем же ключом ничего не делает
+  function renderSfx(key, name, args) {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC || sfxCache.has(key)) return Promise.resolve();
+    sfxCache.set(key, null);
+    const sr = 22050, ctx = new OAC(1, Math.ceil(sr * (SFX_LEN[name] || 0.6)), sr);
+    sctx = ctx;
+    sfxOut = ctx.createGain(); sfxOut.gain.value = 0.55; sfxOut.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, sr, sr);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < sr; i++) nd[i] = Math.random() * 2 - 1;
+    lastPick = lastLeave = -1;
+    try { SFX[name](...args); } catch (_) { sctx = null; return Promise.resolve(); }
+    sctx = null;
+    const done = ctx.startRendering ? ctx.startRendering() : null;
+    const p = done && done.then ? done : new Promise(res => { ctx.oncomplete = e => res(e.renderedBuffer); });
+    return p.then(buf => { sfxCache.set(key, wavUrl(buf)); }, () => { sfxCache.delete(key); });
+  }
+  const sfxKey = (name, args) => name === 'pickup' ? [(Math.max(1, args[0]) - 1) % 15 + 1, !!args[1]] : [];
+  // Все звуки записываются заранее, по одному за кадр, чтобы не тормозить меню
+  setTimeout(function prerender() {
+    const list = Object.keys(SFX_DEFS()).filter(n => n !== 'pickup').map(n => [n, []]);
+    for (let i = 1; i <= 15; i++) list.push(['pickup', [i, false]], ['pickup', [i, true]]);
+    const next = () => { const it = list.shift(); if (it) renderSfx(it[0] + ':' + it[1].join(','), it[0], it[1]).then(() => setTimeout(next, 16)); };
+    next();
+  }, 300);
+  // Пул элементов <audio> для звуков: каждый «разрешается» первым касанием
+  const sfxPool = [], sfxBlessed = new WeakSet();
+  for (let i = 0; i < 6; i++) { const a = new Audio(); a.setAttribute('playsinline', ''); a.preload = 'auto'; sfxPool.push(a); }
+  let poolNext = 0;
+  function blessPool() {
+    for (const a of sfxPool) {
+      if (sfxBlessed.has(a)) continue;
+      a.src = SILENCE;
+      const p = a.play();
+      if (p) p.then(() => { sfxBlessed.add(a); a.pause(); }, () => {});
     }
   }
-  const sfxOn = () => sctx && sctx.state === 'running' && SAVE.settings.music;
+  function playSfxUrl(url) {
+    let a = sfxPool.find(x => x.paused || x.ended);
+    if (!a) { a = sfxPool[poolNext]; poolNext = (poolNext + 1) % sfxPool.length; }
+    a.src = url;
+    const p = a.play();
+    if (p) p.catch(e => { if (e.name !== 'AbortError') audioErr = 'звуки: ' + e.name; });
+  }
   // тон: частота (можно со скольжением к f1), форма, громкость, атака, длина
   function tone(f, t, dur, vol, type, f1) {
     const o = sctx.createOscillator(), g = sctx.createGain();
@@ -1288,7 +1332,18 @@ if (typeof window !== 'undefined') (function () {
     pyro() { const t = sctx.currentTime; noise(t, 0.6, 0.3, 'lowpass', 3000, 300); tone(70, t, 0.4, 0.15, 'sine', 40); },
     solo() { const t = sctx.currentTime; [0, 2, 4].forEach((k, i) => tone(note(k) / 2, t + i * 0.018, 0.4, 0.035, 'triangle')); },
   };
-  function sfx(name, ...args) { if (sfxOn()) try { SFX[name](...args); } catch (_) { /* звук не обязателен */ } }
+  function SFX_DEFS() { return SFX; }
+  let lastPickT = 0, lastLeaveT = 0;
+  function sfx(name, ...args) {
+    if (!SAVE.settings.music || !SFX[name]) return;
+    const now = performance.now();
+    if (name === 'pickup') { if (now - lastPickT < 35) return; lastPickT = now; }
+    if (name === 'leave') { if (now - lastLeaveT < 400) return; lastLeaveT = now; }
+    const a = sfxKey(name, args), key = name + ':' + a.join(',');
+    const url = sfxCache.get(key);
+    if (url) playSfxUrl(url);
+    else if (!sfxCache.has(key)) renderSfx(key, name, a);
+  }
 
   // Касание «разрешает» звук только на отпускании пальца: по стандарту и в iOS звук включают
   // touchend / pointerup / click, а pointerdown от пальца — нет. Раньше звук будился только
@@ -1296,7 +1351,7 @@ if (typeof window !== 'undefined') (function () {
   let audioErr = '';
   function wakeAudio() {
     playbackSession();
-    sfxUnlock();
+    blessPool();
     if (!unlocked && (!player.src || player.src === SILENCE)) {
       unlocked = true;
       player.src = SILENCE;
@@ -1311,8 +1366,7 @@ if (typeof window !== 'undefined') (function () {
   }
   for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(ev, wakeAudio, { capture: true, passive: true });
 
-  // Проверка звука из меню: низкий сигнал идёт через <audio> (как музыка), высокий — через Web Audio
-  // (как звуки игры). По тому, какой слышно, понятно, какой путь молчит.
+  // Проверка звука из меню: низкий сигнал — отдельный <audio>, следом записанный звук эффекта из пула
   function beepWav(freq) {
     const sr = 22050, n = Math.round(sr * 0.35), b = new DataView(new ArrayBuffer(44 + n * 2));
     const str = (o, t) => { for (let i = 0; i < t.length; i++) b.setUint8(o + i, t.charCodeAt(i)); };
@@ -1327,7 +1381,7 @@ if (typeof window !== 'undefined') (function () {
     const out = $('sound-test'), res = { a: '…', w: '…' };
     const show = () => {
       out.classList.remove('hidden');
-      out.textContent = `Прозвучали два сигнала: низкий — путь музыки (${res.a}), высокий — путь эффектов (${res.w}). ` +
+      out.textContent = `Прозвучали два сигнала: низкий — путь музыки (${res.a}), затем звук эффекта (${res.w}). ` +
         `Если не слышно ни одного, проверьте переключатель бесшумного режима сбоку iPhone и громкость. ` + audioReport();
     };
     const a = new Audio(beepWav(440));
@@ -1335,10 +1389,12 @@ if (typeof window !== 'undefined') (function () {
     const p = a.play();
     if (p) p.then(() => { res.a = 'запустился'; show(); }, e => { res.a = 'ошибка ' + e.name; show(); });
     setTimeout(() => {
-      if (!sctx) res.w = 'не создан';
+      const url = sfxCache.get('triple:');
+      if (!url) res.w = 'ещё не записан';
       else {
-        res.w = sctx.state;
-        try { const t = sctx.currentTime; tone(880, t, 0.35, 0.2, 'sine'); } catch (e) { res.w += ', ошибка ' + e.name; }
+        const b = sfxPool[0]; b.src = url;
+        const q = b.play();
+        if (q) q.then(() => { res.w = 'запустился'; show(); }, e => { res.w = 'ошибка ' + e.name; show(); });
       }
       show();
     }, 700);
@@ -1349,7 +1405,7 @@ if (typeof window !== 'undefined') (function () {
   function audioReport() {
     const st = ['нет данных', 'метаданные', 'кадр', 'буфер', 'готов'][player.readyState] || player.readyState;
     return `Звук: ${SAVE.settings.music ? 'включён' : 'выключен'} · музыка ${player.paused ? 'на паузе' : 'играет'} (${st}` +
-      `${player.error ? ', ошибка ' + player.error.code : ''}) · эффекты ${sctx ? sctx.state : 'не созданы'}` +
+      `${player.error ? ', ошибка ' + player.error.code : ''}) · звуков записано ${[...sfxCache.values()].filter(Boolean).length}` +
       `${audioErr ? ' · ' + audioErr : ''}${navigator.audioSession ? ' · сессия ' + navigator.audioSession.type : ''}` +
       ` · PWA ${window.matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'да' : 'нет'}`;
   }
