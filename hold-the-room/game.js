@@ -153,7 +153,7 @@ const CONFIG = {
   // Цепная реакция: ушёл зритель — соседи теряют интерес («а чего он ушёл?»)
   contagion: { radius: 70, hit: 8 },
   // Усталость души: в полёте сил всё меньше и душа медленнее; отдых на месте и у тела на сцене
-  fatigue: { drain: 0.07, rest: 0.3, stageRest: 0.9, minSpeed: 0.55 },
+  fatigue: { drain: 0.07, rest: 0.3, stageRest: 0.9, minSpeed: 0.55, catchRest: 0.03 }, // catchRest — сил за пойманную эмоцию (золотая — вдвое)
   // Заявки из зала: продержи душу в круге need секунд из time
   requests: { first: 30, every: [22, 32], radius: 55, time: 9, need: 4, reward: 25, drive: 6, penalty: 15,
     names: ['Медляк!', 'Хит!', 'Соло!', 'Что-нибудь своё!', 'Погромче!'] },
@@ -805,6 +805,8 @@ function catchEmotion(i) {
   G.chain = G.chainT > 0 ? G.chain + 1 : 1;
   G.chainT = chainGap();
   G.bestChain = Math.max(G.bestChain, G.chain);
+  // эмоции подпитывают душу: ловишь — летаешь дольше
+  G.stamina = Math.min(1, G.stamina + CONFIG.fatigue.catchRest * (e.gold ? 2 : 1));
   const drive = e.drive * emotionDriveMul() * G.mods.driveMul * chainMul() * (e.gold ? CONFIG.climax.driveMul : 1) * (e.double ? 2 : 1);
   addDrive(drive, 'emotion');
   G.emotionsCollected++;
