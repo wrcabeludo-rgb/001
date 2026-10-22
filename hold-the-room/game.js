@@ -2447,7 +2447,11 @@ if (typeof window !== 'undefined') (function () {
   // Белые эффекты перекрашиваются умножением на цвет. Пока листа нет, работает эффект кодом.
   // Таблицу заполняет конвертер: frames — кадров, cols — столбцов, w × h — кадр в пикселях,
   // dur — длительность в секундах, size — высота кадра в мире, bottom — кадр стоит низом на точке.
-  const FX_ART = {};
+  const FX_ART = {
+    pickup: { frames: 12, cols: 4, w: 256, h: 182, dur: 0.45, size: 70, bottom: false },
+    wave: { frames: 14, cols: 4, w: 256, h: 144, dur: 0.6, size: 160, bottom: false },
+    chain: { frames: 18, cols: 5, w: 256, h: 234, dur: 0.8, size: 150, bottom: false },
+  };
   const fxImg = {};
   for (const n of Object.keys(FX_ART)) {
     const im = new Image();

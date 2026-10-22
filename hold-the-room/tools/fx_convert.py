@@ -21,6 +21,10 @@ DEFAULTS = {
     'lastcall': (1.5, 120, False, 22), 'feedback': (0.9, 260, False, 16), 'fight': (0.9, 110, False, 16),
     'fear': (0.9, 300, False, 18),
 }
+# эти эффекты растут из центра кадра: обрезка симметрична, чтобы центр вспышки совпал с точкой в игре
+CENTERED = {'pickup', 'wave', 'triple', 'climax', 'evolve', 'string', 'alarm', 'blogger', 'feedback', 'fight', 'fear'}
+# эти эффекты игра перекрашивает в цвет эмоции или карты: лист сохраняется в оттенках серого
+TINTED = {'pickup', 'wave', 'triple', 'chain', 'leave'}
 MAX_SIDE = {'climax': 384, 'confetti': 320, 'feedback': 320, 'fear': 320}
 FLOOR = 14   # всё темнее — чистый чёрный
 LIT = 28     # порог «здесь есть свет» для обрезки
@@ -49,24 +53,39 @@ def main():
         lit = [i for i, l in enumerate(lum) if (l > LIT).sum() > 30]
         if not lit: sys.exit('в видео нет света')
         i0, i1 = lit[0], lit[-1]
-        mask = np.zeros(lum[0].shape, bool)
-        for i in range(i0, i1 + 1): mask |= lum[i] > LIT
-        ys, xs = np.nonzero(mask)
+        # длинный тусклый хвост отрезается: конец — последний кадр, где света хотя бы 10% от пика
+        energy = [float(np.clip(l - FLOOR, 0, None).sum()) for l in lum]
+        peak = max(energy)
+        while i1 > i0 and energy[i1] < 0.1 * peak: i1 -= 1
+        # свет, который держится хотя бы в 5% кадров: вспышки-блики и водяной знак не раздувают рамку
+        cnt = np.zeros(lum[0].shape, np.int32)
+        for i in range(i0, i1 + 1): cnt += lum[i] > LIT
+        ys, xs = np.nonzero(cnt >= max(2, 0.05 * (i1 - i0 + 1)))
         pad = 6
-        x0, x1 = max(0, xs.min() - pad), min(mask.shape[1], xs.max() + pad)
-        y0, y1 = max(0, ys.min() - pad), min(mask.shape[0], ys.max() + pad)
+        H, W = cnt.shape
+        x0, x1 = max(0, xs.min() - pad), min(W, xs.max() + pad)
+        y0, y1 = max(0, ys.min() - pad), min(H, ys.max() + pad)
+        if name in CENTERED:
+            rx = max(W / 2 - x0, x1 - W / 2); ry = max(H / 2 - y0, y1 - H / 2)
+            x0, x1 = int(max(0, W / 2 - rx)), int(min(W, W / 2 + rx))
+            y0, y1 = int(max(0, H / 2 - ry)), int(min(H, H / 2 + ry))
         cw, ch = x1 - x0, y1 - y0
         k = min(1, MAX_SIDE.get(name, 256) / max(cw, ch))
         w, h = max(1, round(cw * k)), max(1, round(ch * k))
         pick = [round(i0 + (i1 - i0) * j / max(1, n - 1)) for j in range(n)]
         cols = math.ceil(math.sqrt(n)); rows = math.ceil(n / cols)
         sheet = Image.new('RGB', (cols * w, rows * h))
+        # мягкое затухание к краям кадра: если эффект в видео упирался в край, среза не видно
+        fy = np.minimum(np.arange(ch), np.arange(ch)[::-1]) / (0.12 * ch)
+        fx = np.minimum(np.arange(cw), np.arange(cw)[::-1]) / (0.12 * cw)
+        feather = (np.clip(fy, 0, 1)[:, None] * np.clip(fx, 0, 1)[None, :])[..., None]
         for j, i in enumerate(pick):
             fr = frames[i][y0:y1, x0:x1]
-            fr = np.clip((fr - FLOOR) * 255 / (255 - FLOOR), 0, 255).astype(np.uint8)
+            fr = np.clip((fr - FLOOR) * 255 / (255 - FLOOR) * feather, 0, 255).astype(np.uint8)
             sheet.paste(Image.fromarray(fr).resize((w, h), Image.LANCZOS), ((j % cols) * w, (j // cols) * h))
         os.makedirs(a.out, exist_ok=True)
         dst = os.path.join(a.out, name + '.webp')
+        if name in TINTED: sheet = sheet.convert('L').convert('RGB')
         sheet.save(dst, 'WEBP', quality=88, method=6)
         meta = {'frames': n, 'cols': cols, 'w': w, 'h': h, 'dur': dur, 'size': size, 'bottom': bottom}
         print('    ' + name + ': { ' + ', '.join(f'{k}: {str(v).lower()}' for k, v in meta.items()) + ' },')
