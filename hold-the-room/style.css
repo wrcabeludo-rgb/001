@@ -310,3 +310,5 @@ html, body {
 /* дуэт карт */
 .card.duo { background: #2a1430; box-shadow: 0 0 0 2px rgba(255, 143, 224, 0.35), 0 0 18px rgba(255, 143, 224, 0.3); }
 #res-show:not(:empty) { margin-bottom: 12px; }
+.node.danger .ico { color: #ff3d50; }
+.node.danger { border-color: #6a1420; }

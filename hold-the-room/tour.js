@@ -13,9 +13,10 @@ const TOUR = {
   ],
   rows: [5, 7],            // вечеров в акте до босса
   rowWidth: [2, 3],        // точек в ряду карты
-  nodeWeights: { concert: 0.44, event: 0.2, market: 0.1, rest: 0.09, rehearsal: 0.09, special: 0.08 },
-  nodeCaps: { market: 2, rest: 2, rehearsal: 2, special: 2 }, // не больше стольких за акт и одной в ряду
+  nodeWeights: { concert: 0.4, event: 0.18, market: 0.1, rest: 0.08, rehearsal: 0.08, special: 0.08, danger: 0.08 },
+  nodeCaps: { market: 2, rest: 2, rehearsal: 2, special: 2, danger: 2 }, // не больше стольких за акт и одной в ряду
   special: { moneyMul: 1.5 },  // особый концерт: условие вечера посложнее, касса ×1,5 и реликвия за победу
+  danger: { moneyMul: 1.7, extraIncidents: 2 }, // опасный концерт: два лишних форс-мажора, касса ×1,7 и реликвия за победу
   rest: { sleepInterest: 10, workMoney: [90, 120, 160], callBond: 1.5 },
   rowDifficulty: 0.06,     // +6% к спаду интереса за каждый следующий вечер акта
   actDifficulty: [0, 0.25, 0.5], // и ещё столько за номер акта
@@ -126,6 +127,7 @@ function tourMods(save, tour, node) {
   m.rehearsed = tour.rehearsed || null;
   if (node.type === 'boss') { m.boss = act.boss.kind; m.duration = 180; }
   if (node.type === 'special') { specialTwist(node).apply(m); m.moneyMul *= TOUR.special.moneyMul; }
+  if (node.type === 'danger') { m.extraIncidents = TOUR.danger.extraIncidents; m.moneyMul *= TOUR.danger.moneyMul; }
   return m;
 }
 
@@ -162,6 +164,7 @@ function genAct(rnd, actIdx) {
       const node = { row: r, col: i, x: (i + 0.5) / w, type, venue: null };
       if (type === 'concert') node.venue = rnd() < 0.25 ? act.venues[1 - act.venues.indexOf(venue)] : venue;
       if (type === 'special') { node.venue = act.venues[1]; node.twist = Math.floor(rnd() * 1000); }
+      if (type === 'danger') node.venue = act.venues[1];
       row.push(node);
     }
     rows.push(row);
@@ -229,7 +232,7 @@ function settleConcert(tour, node, res, rnd) {
   const bondGain = Math.round(share * 10) / 10;
   tour.bond = Math.round((tour.bond + bondGain) * 10) / 10;
   // особый концерт: за удержанный зал — реликвия
-  const relic = node.type === 'special' && res.passed ? randomRelic(tour, rnd || Math.random) : null;
+  const relic = (node.type === 'special' || node.type === 'danger') && res.passed ? randomRelic(tour, rnd || Math.random) : null;
   return { money, bondGain, relic };
 }
 
