@@ -2302,6 +2302,55 @@ if (typeof window !== 'undefined') (function () {
   }
 
 
+  // ---------- векторная графика (SVG из art/) ----------
+  // Каждый фрагмент растеризуется под точный размер на экране и кешируется — чётко на любом экране.
+  // crops — рамки фигур в координатах SVG: пустые поля обрезаны, у зрителя 4 позы в одном файле.
+  // Пока файл не загрузился (или его нет), рисуется неоновая графика кодом.
+  const SVG_ART = {
+    'hero-sit': { size: [1024, 1024], crops: [[172, 27, 726, 973]] },
+    'hero-play': { size: [1024, 1024], crops: [[255, 3, 570, 1021]] },
+    'hero-rock': { size: [1024, 1024], crops: [[46, 0, 932, 1013]] },
+    'soul': { size: [1024, 1024], crops: [[26, 28, 906, 976]] },
+    'viewer-1': { size: [1536, 768], crops: [[71, 86, 242, 633], [419, 63, 260, 657], [777, 93, 248, 632], [1084, 44, 393, 653]] },
+    'stage-1': { size: [768, 1536], crops: [[0, 0, 768, 1536]] },
+  };
+  const svgImg = {};
+  for (const n of Object.keys(SVG_ART)) {
+    const im = new Image();
+    im.onload = () => { svgImg[n] = im; };
+    im.src = `./art/${n}.svg`;
+  }
+  const svgCache = new Map();
+  // Фрагмент i файла name высотой h (в единицах мира), при необходимости подкрашенный цветом tint
+  function svgFrame(name, i, h, tint) {
+    const img = svgImg[name];
+    if (!img) return null;
+    const A = SVG_ART[name], [cx, cy, cw, ch] = A.crops[i || 0];
+    const px = Math.max(8, Math.round(h * scale * dpr));
+    const key = `${name}:${i || 0}:${px}:${tint || ''}`;
+    let c = svgCache.get(key);
+    if (!c) {
+      const k = px / ch;
+      c = document.createElement('canvas');
+      c.width = Math.ceil(cw * k); c.height = px;
+      const x = c.getContext('2d');
+      x.drawImage(img, -cx * k, -cy * k, A.size[0] * k, A.size[1] * k);
+      if (tint) { x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.7; x.fillStyle = tint; x.fillRect(0, 0, c.width, c.height); }
+      svgCache.set(key, c);
+    }
+    return c;
+  }
+  // Рисует фрагмент низом в точку (x, yBottom) — так ставят фигуры на пол
+  function drawSvg(name, i, x, yBottom, h, flip, tint) {
+    const c = svgFrame(name, i, h, tint);
+    if (!c) return false;
+    const w = h * c.width / c.height;
+    if (flip) { ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1); ctx.drawImage(c, -w / 2, yBottom - h, w, h); ctx.restore(); }
+    else ctx.drawImage(c, x - w / 2, yBottom - h, w, h);
+    return true;
+  }
+  window.addEventListener('resize', () => svgCache.clear());
+
   // ---------- «Свет»: векторные неоновые силуэты ----------
   // Каждая фигура рисуется одной геометрией в несколько проходов: широкое прозрачное свечение,
   // контур цвета настроения и тёмная заливка поверх. Только линии и круги — чётко на любом экране.
@@ -2436,6 +2485,14 @@ if (typeof window !== 'undefined') (function () {
   function drawBackground() {
     const L = G.L, N = LEVEL_NEON[G.levelNo] || LEVEL_NEON[0];
     ctx.fillStyle = '#050304'; ctx.fillRect(0, 0, L.W, L.H);
+    const stage = svgImg['stage-' + (G.levelNo + 1)];
+    if (stage) {
+      // край сцены на картинке (y ≈ 401 из 1536) совпадает с краем сцены в игре
+      const k = L.W / SVG_ART['stage-' + (G.levelNo + 1)].size[0], h = L.W * 2;
+      drawSvg('stage-' + (G.levelNo + 1), 0, L.W / 2, L.stageBottom - 401 * k + h, h);
+      drawExit();
+      return;
+    }
     ctx.fillStyle = '#0b0708'; ctx.fillRect(0, L.hudH, L.W, L.stageBottom - L.hudH);
     const g = ctx.createRadialGradient(L.W / 2, L.stageBottom - 30, 6, L.W / 2, L.stageBottom - 30, 170);
     g.addColorStop(0, hexA(N.spot, 0.2 + pulse * 0.05)); g.addColorStop(1, hexA(N.spot, 0));
@@ -2466,6 +2523,25 @@ if (typeof window !== 'undefined') (function () {
     if (v.critic) { drawCritic(v, bob); return; }
     // настроение: 0 скучает, 1 нейтрален, 2 увлечён, 3 в восторге; контур плавно меняет цвет с интересом
     const mood = v.leaving || bored ? 0 : !happy ? 1 : I < 80 ? 2 : 3;
+    if (svgImg['viewer-1']) {
+      ctx.save(); ctx.globalAlpha = v.leaving ? 0.55 : 1;
+      // мягкое свечение цвета настроения: зал «загорается» вместе с интересом
+      const halo = ['#9fb6d8', '#9fb6d8', PAL.pink, EVO_COLOR][mood], ha = [0, 0.1, 0.18, 0.28][mood];
+      if (ha) {
+        const g = ctx.createRadialGradient(x, y - 24, 2, x, y - 24, 32);
+        g.addColorStop(0, hexA(halo, ha)); g.addColorStop(1, hexA(halo, 0));
+        ctx.fillStyle = g; ctx.fillRect(x - 32, y - 56, 64, 64);
+      }
+      ctx.translate(x, y - bob * (mood === 3 ? 1.6 : 1)); ctx.rotate(sway);
+      drawSvg('viewer-1', mood, 0, 2, mood === 3 ? 58 : 52, flip);
+      if (v.flash > 0) {
+        ctx.strokeStyle = '#fff'; ctx.globalAlpha = Math.min(1, v.flash * 2) * 0.8; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, -20, 18, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+      drawViewerMarks(v, x, y - bob - 56);
+      return;
+    }
     const P = POSES[['bored', 'neutral', 'interested', 'ecstatic'][mood]];
     const rim = mood === 0 ? '#4b505e' : mood === 1 ? '#9fb6d8' : lerpColor(PAL.pink, EVO_COLOR, clamp((I - 70) / 25, 0, 1));
     const glow = mood === 0 ? 0 : mood === 1 ? 0.08 : mood === 2 ? 0.22 : 0.38;
@@ -2481,7 +2557,11 @@ if (typeof window !== 'undefined') (function () {
       ctx.beginPath(); ctx.arc(0, -18, 17, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     }
     ctx.restore();
-    const top = y - bob - 46;
+    drawViewerMarks(v, x, y - bob - 46);
+  }
+
+  // Значки над головой: ушёл к бару, фанат, уходит
+  function drawViewerMarks(v, x, top) {
     if (v.bar && !v.leaving) { // ушёл к бару — над головой кружка
       ctx.fillStyle = PAL.amber; ctx.fillRect(x - 3, top - 2, 6, 7); ctx.fillStyle = '#fff3d0'; ctx.fillRect(x - 3, top - 4, 6, 2.5);
     }
@@ -2516,10 +2596,22 @@ if (typeof window !== 'undefined') (function () {
       ctx.fillStyle = 'rgba(255,176,58,0.05)';
       ctx.beginPath(); ctx.arc(S.spot.x, S.spot.y, CONFIG.player.bodyRadius, 0, Math.PI * 2); ctx.fill();
     }
+    if (svgImg['hero-sit'] && svgImg['hero-play'] && svgImg['hero-rock']) {
+      // сидит погасшим → играет → в ударе; соседние позы плавно сменяют друг друга
+      const poses = [['hero-sit', 92], ['hero-play', 116], ['hero-rock', 112]];
+      const k = clamp(life, 0, 1) * 2, a = Math.min(1, Math.floor(k)), t = k - a;
+      const glow = ctx.createRadialGradient(x, y - 50, 4, x, y - 50, 80);
+      glow.addColorStop(0, `rgba(255,176,58,${0.22 * life})`); glow.addColorStop(1, 'rgba(255,176,58,0)');
+      ctx.fillStyle = glow; ctx.fillRect(x - 80, y - 130, 160, 134);
+      ctx.globalAlpha = 1 - (a < 2 ? t : 0); drawSvg(poses[a][0], 0, x, y + 2, poses[a][1]);
+      if (a < 2 && t > 0) { ctx.globalAlpha = t; drawSvg(poses[a + 1][0], 0, x, y + 2 - bob, poses[a + 1][1]); }
+      ctx.globalAlpha = 1;
+    } else {
     const P = life < 0.34 ? POSES.sit : life < 0.67 ? POSES.play : POSES.rock;
     const stool = P === POSES.sit ? (line) => { line([[-3, -13], [-4, 0]], 1.4); line([[4, -13], [5, 0]], 1.4); line([[-4, -13], [6, -13]], 2); } : null;
     const rim = lerpColor('#2c2a31', PAL.amber, clamp(life * 1.3, 0, 1));
     neonPerson(x, y - (P === POSES.sit ? 0 : bob), 1.75, false, P, { hair: 'long', extra: stool, rimA: 0.55 + 0.45 * life }, rim, life * 0.45, NEON_DARK, 1);
+    }
     if (stringBroken()) {
       const blink = Math.sin(clock * 8) > 0;
       ctx.strokeStyle = blink ? PAL.pink : 'rgba(255,61,139,0.4)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
@@ -2542,6 +2634,11 @@ if (typeof window !== 'undefined') (function () {
     ctx.setLineDash([]);
     const hover = Math.sin(clock * 3) * 2 + pulse * 1.5;
     const grow = 1 + Math.min(0.25, G.chain / 200);
+    if (svgImg.soul) {
+      // облик души перекрашивает её, исходный цвет — голубой
+      ctx.fillStyle = hexA(col, 0.14); ctx.beginPath(); ctx.ellipse(x, y - 26 - hover, 26 * grow, 34 * grow, 0, 0, Math.PI * 2); ctx.fill();
+      drawSvg('soul', 0, x, y + 14 - hover, 66 * grow, p.dir < 0, col === '#3de0ff' ? null : col);
+    } else
     // заливка — цвет души, сильно притушенный: контур читается, а душа остаётся «светящейся изнутри»
     neonPerson(x, y + 12 - hover, 1.4 * grow, p.dir < 0, POSES.float, { hair: 'long', tail: true }, col, 0.45, lerpColor(col, NEON_DARK, 0.72), 0.92);
     // силы души: дуга под ней, пока не полные
