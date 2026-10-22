@@ -38,7 +38,8 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' — мимо HTTP-кэша браузера, иначе в кэш новой версии попадали старые файлы
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 // Удаляем только старые кэши этой игры: на том же домене живут другие приложения.
@@ -50,7 +51,9 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Сначала кэш, в фоне обновляем из сети (и восстанавливаем кэш, если его кто-то удалил).
+// Сначала кэш своей версии. Чего в нём нет — берём из сети и докладываем в кэш.
+// Фоном файлы не обновляются: иначе в кэш старой версии подмешивались файлы новой.
+// Новая версия приходит целиком — новым service worker'ом со своим кэшем.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
@@ -58,11 +61,10 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches.open(CACHE).then(cache =>
       cache.match(e.request, { ignoreSearch: true }).then(hit => {
-        const net = fetch(e.request)
+        if (hit) return hit;
+        return fetch(e.request)
           .then(res => { if (res.ok) cache.put(e.request, res.clone()); return res; })
-          .catch(() => hit || (e.request.mode === 'navigate' ? cache.match('./index.html') : Response.error()));
-        if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
-        return net;
+          .catch(() => (e.request.mode === 'navigate' ? cache.match('./index.html') : Response.error()));
       })
     )
   );
