@@ -1483,7 +1483,9 @@ if (typeof window !== 'undefined') (function () {
     show('overlay-story');
   }
 
+  let updateReady = false; // новая версия скачана, перезагрузимся при выходе в меню
   function openMenu() {
+    if (updateReady) { location.reload(); return; }
     $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
@@ -3457,7 +3459,16 @@ if (typeof window !== 'undefined') (function () {
   resize();
   requestAnimationFrame(frame);
 
+  // Обновление: при возврате в приложение проверяем, нет ли новой версии. Когда новый service worker
+  // взял управление, страница перезагружается — сразу, если песня не идёт, иначе при выходе в меню.
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) { hadController = true; return; } // первая установка — страница и так свежая
+      if (['loading', 'play', 'levelup', 'ending'].includes(state)) updateReady = true; else location.reload();
+    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+    }).catch(() => {}));
   }
 })();
