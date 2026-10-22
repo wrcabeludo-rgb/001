@@ -1202,7 +1202,9 @@ if (typeof window !== 'undefined') (function () {
   })();
 
   // iOS: категория «воспроизведение» — музыку слышно и при включённом бесшумном режиме
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ }
+  // Тип ставится и при загрузке, и в каждом касании: в установленном PWA иначе действует бесшумный режим
+  const playbackSession = () => { try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (_) { /* старые браузеры */ } };
+  playbackSession();
 
   // ---------- звуки игры ----------
   // Синтезируются на лету через Web Audio: ничего не весят и работают офлайн.
@@ -1293,6 +1295,7 @@ if (typeof window !== 'undefined') (function () {
   // в pointerdown, и в установленном PWA на iPhone разрешение так и не наступало.
   let audioErr = '';
   function wakeAudio() {
+    playbackSession();
     sfxUnlock();
     if (!unlocked && (!player.src || player.src === SILENCE)) {
       unlocked = true;
@@ -1307,6 +1310,40 @@ if (typeof window !== 'undefined') (function () {
     if (!warmed) { warmed = true; loadTrack(CONFIG.levels[0].music).catch(() => {}); }
   }
   for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(ev, wakeAudio, { capture: true, passive: true });
+
+  // Проверка звука из меню: низкий сигнал идёт через <audio> (как музыка), высокий — через Web Audio
+  // (как звуки игры). По тому, какой слышно, понятно, какой путь молчит.
+  function beepWav(freq) {
+    const sr = 22050, n = Math.round(sr * 0.35), b = new DataView(new ArrayBuffer(44 + n * 2));
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) b.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt ');
+    b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, sr, true); b.setUint32(28, sr * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
+    str(36, 'data'); b.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) b.setInt16(44 + i * 2, Math.sin(i / sr * freq * 2 * Math.PI) * 12000 * Math.min(1, (n - i) / 800), true);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  function soundTest() {
+    const out = $('sound-test'), res = { a: '…', w: '…' };
+    const show = () => {
+      out.classList.remove('hidden');
+      out.textContent = `Прозвучали два сигнала: низкий — путь музыки (${res.a}), высокий — путь эффектов (${res.w}). ` +
+        `Если не слышно ни одного, проверьте переключатель бесшумного режима сбоку iPhone и громкость. ` + audioReport();
+    };
+    const a = new Audio(beepWav(440));
+    a.setAttribute('playsinline', '');
+    const p = a.play();
+    if (p) p.then(() => { res.a = 'запустился'; show(); }, e => { res.a = 'ошибка ' + e.name; show(); });
+    setTimeout(() => {
+      if (!sctx) res.w = 'не создан';
+      else {
+        res.w = sctx.state;
+        try { const t = sctx.currentTime; tone(880, t, 0.35, 0.2, 'sine'); } catch (e) { res.w += ', ошибка ' + e.name; }
+      }
+      show();
+    }, 700);
+    show();
+  }
 
   // Сводка о звуке — открывается касанием строки версии в меню (на случай, если звука нет)
   function audioReport() {
@@ -1504,6 +1541,7 @@ if (typeof window !== 'undefined') (function () {
     if (updateReady) { location.reload(); return; }
     $('app-version').textContent = `Версия ${APP_VERSION} · ${APP_DATE}`;
     $('app-version').onclick = () => { $('app-version').textContent = audioReport(); };
+    $('btn-sound-test').onclick = soundTest;
     const t = SAVE.tour;
     $('tour-sub').textContent = t ? `акт ${t.act + 1} «${TOUR.acts[t.act].name}» · ${t.money} ₽` : (SAVE.records.tours ? 'новый тур' : 'начать путь');
     const d = dailyChallenge(new Date(), CONFIG.levels.length), best = SAVE.daily[d.key];
