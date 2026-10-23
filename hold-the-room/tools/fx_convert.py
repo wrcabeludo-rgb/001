@@ -14,7 +14,7 @@ import numpy as np
 # длительность в игре (с), высота кадра в мире, стоит ли кадр низом на точке, сколько кадров
 DEFAULTS = {
     'pickup': (0.45, 70, False, 12), 'wave': (0.6, 160, False, 14), 'triple': (0.6, 120, False, 14),
-    'chain': (0.8, 150, False, 18), 'climax': (2.0, 340, False, 32), 'evolve': (1.4, 200, False, 26),
+    'chain': (0.8, 150, False, 18), 'climax': (2.0, 340, False, 24), 'evolve': (1.4, 200, False, 26),
     'leave': (0.8, 60, True, 14), 'pyro': (1.1, 160, True, 20), 'smoke': (2.4, 140, False, 24),
     'confetti': (1.8, 300, True, 28), 'string': (0.8, 200, False, 16), 'blackout': (1.2, 180, False, 20),
     'alarm': (1.0, 120, False, 16), 'party': (1.2, 200, False, 18), 'blogger': (1.2, 110, False, 18),
@@ -25,7 +25,7 @@ DEFAULTS = {
 CENTERED = {'pickup', 'wave', 'triple', 'climax', 'evolve', 'string', 'alarm', 'blogger', 'feedback', 'fight', 'fear'}
 # эти эффекты игра перекрашивает в цвет эмоции или карты: лист сохраняется в оттенках серого
 TINTED = {'pickup', 'wave', 'triple', 'chain', 'leave'}
-MAX_SIDE = {'climax': 384, 'confetti': 320, 'feedback': 320, 'fear': 320}
+MAX_SIDE = {'climax': 320, 'confetti': 320, 'feedback': 320, 'fear': 320}
 FLOOR = 14   # всё темнее — чистый чёрный
 LIT = 28     # порог «здесь есть свет» для обрезки
 
@@ -86,7 +86,14 @@ def main():
         os.makedirs(a.out, exist_ok=True)
         dst = os.path.join(a.out, name + '.webp')
         if name in TINTED: sheet = sheet.convert('L').convert('RGB')
-        sheet.save(dst, 'WEBP', quality=88, method=6)
+        # прозрачность из яркости: непрозрачность = самый яркий канал, цвет — без примеси чёрного.
+        # Так кадр ложится и на прозрачный слой, а не только на тёмную картинку
+        rgb = np.asarray(sheet).astype(np.float32)
+        a = rgb.max(2)
+        a[a < 8] = 0  # почти невидимое — чистый ноль: файл меньше, на экране не видно
+        col = np.where(a[..., None] > 0, rgb * 255 / np.maximum(a, 1)[..., None], 0)
+        sheet = Image.fromarray(np.dstack([np.clip(col, 0, 255), a]).astype(np.uint8), 'RGBA')
+        sheet.save(dst, 'WEBP', quality=82, method=6, alpha_quality=85)
         meta = {'frames': n, 'cols': cols, 'w': w, 'h': h, 'dur': dur, 'size': size, 'bottom': bottom}
         print('    ' + name + ': { ' + ', '.join(f'{k}: {str(v).lower()}' for k, v in meta.items()) + ' },')
         print(f'  {dst}: {os.path.getsize(dst) // 1024} КБ, свет в кадрах {i0}–{i1} из {len(frames)}', file=sys.stderr)

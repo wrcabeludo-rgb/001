@@ -1147,6 +1147,10 @@ if (typeof window !== 'undefined') (function () {
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  // Фон зала (картина сцены) лежит отдельным слоем под игрой и перерисовывается только при смене
+  // зала или размера окна. Раньше каждый кадр дважды закрашивал весь экран (~3 млн пикселей на iPhone).
+  const bgCanvas = document.getElementById('bg'), bctx = bgCanvas.getContext('2d');
+  let bgKey = '';
   const $ = id => document.getElementById(id);
   let dpr = 1, scale = 1, offX = 0, offY = 0, cssW = 0, cssH = 0;
   let state = 'start'; // start | loading | play | levelup | ending | results
@@ -1162,6 +1166,11 @@ if (typeof window !== 'undefined') (function () {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
     canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
+    // фон неподвижен и мягкий сам по себе — ему хватает плотности 2
+    const bd = Math.min(dpr, 2);
+    bgCanvas.width = Math.round(cssW * bd); bgCanvas.height = Math.round(cssH * bd);
+    bgCanvas.style.width = cssW + 'px'; bgCanvas.style.height = cssH + 'px';
+    bgKey = '';
     const H = G ? G.L.H : worldHeightFor(cssW, cssH);
     scale = Math.min(cssW / CONFIG.worldWidth, cssH / H);
     offX = (cssW - CONFIG.worldWidth * scale) / 2;
@@ -2606,8 +2615,8 @@ if (typeof window !== 'undefined') (function () {
   window.addEventListener('resize', () => svgCache.clear());
 
   // ---------- анимации эффектов (видео Veo → спрайт-листы) ----------
-  // Видео снято на чёрном фоне и нарезано в лист кадров WebP (art/fx/<имя>.webp, сетка cols × rows).
-  // Кадры накладываются режимом «осветление»: чёрное становится прозрачным, свет складывается.
+  // Видео снято на чёрном фоне и нарезано в лист кадров WebP с прозрачностью из яркости
+  // (art/fx/<имя>.webp, сетка cols × rows). Кадры накладываются режимом «осветление» — свет складывается.
   // Белые эффекты перекрашиваются умножением на цвет. Пока листа нет, работает эффект кодом.
   // Таблицу заполняет конвертер: frames — кадров, cols — столбцов, w × h — кадр в пикселях,
   // dur — длительность в секундах, size — высота кадра в мире, bottom — кадр стоит низом на точке.
@@ -2615,7 +2624,7 @@ if (typeof window !== 'undefined') (function () {
     pickup: { frames: 12, cols: 4, w: 256, h: 182, dur: 0.45, size: 70, bottom: false },
     wave: { frames: 14, cols: 4, w: 256, h: 144, dur: 0.6, size: 160, bottom: false },
     chain: { frames: 18, cols: 5, w: 256, h: 234, dur: 0.8, size: 150, bottom: false },
-    climax: { frames: 32, cols: 6, w: 384, h: 216, dur: 2.0, size: 340, bottom: false },
+    climax: { frames: 24, cols: 5, w: 320, h: 180, dur: 2.0, size: 340, bottom: false },
     evolve: { frames: 26, cols: 6, w: 256, h: 144, dur: 1.4, size: 200, bottom: false },
   };
   const fxImg = {};
@@ -2635,6 +2644,8 @@ if (typeof window !== 'undefined') (function () {
       const x = c.getContext('2d');
       x.drawImage(im, 0, 0);
       x.globalCompositeOperation = 'multiply'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+      // multiply закрашивает и прозрачное — возвращаем исходную прозрачность кадров
+      x.globalCompositeOperation = 'destination-in'; x.drawImage(im, 0, 0);
       fxTinted.set(key, c);
     }
     return c;
@@ -3594,15 +3605,37 @@ if (typeof window !== 'undefined') (function () {
     ctx.globalAlpha = 1;
   }
 
+  // Слой фона: картина зала или просто цвет. true — картина есть, игровому холсту фон рисовать не нужно
+  let bgShift = 0;
+  function renderBg() {
+    const img = G && stageImg[G.levelNo + 1];
+    const key = (img ? 'stage' + G.levelNo : 'plain') + ':' + bgCanvas.width + 'x' + bgCanvas.height;
+    if (key !== bgKey) {
+      bgKey = key;
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.fillStyle = PAL.bg; bctx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      if (img) {
+        const k = bgCanvas.width / cssW, L = G.L, h = L.W * img.naturalHeight / img.naturalWidth;
+        bctx.setTransform(k * scale, 0, 0, k * scale, offX * k, offY * k);
+        bctx.beginPath(); bctx.rect(0, 0, L.W, L.H); bctx.clip();
+        bctx.imageSmoothingQuality = 'high';
+        bctx.drawImage(img, 0, L.stageBottom - STAGE_ART[G.levelNo + 1].edge * h, L.W, h);
+      }
+    }
+    return !!img;
+  }
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = PAL.bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const layered = renderBg();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!G) return;
     const sh = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
+    // тряска двигает и слой фона — через CSS, это почти бесплатно
+    if (layered && (sh || bgShift)) { bgShift = sh; bgCanvas.style.transform = sh ? `translateX(${sh.toFixed(1)}px)` : ''; }
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, (offX + sh) * dpr, offY * dpr);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, G.L.W, G.L.H); ctx.clip();
-    drawBackground();
+    if (layered) drawExit(); else drawBackground();
     drawZones();
     drawFxUnder();
     drawBody();
