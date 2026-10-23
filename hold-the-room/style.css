@@ -15,6 +15,13 @@ html, body {
   overscroll-behavior: none;
 }
 
+/* неподвижный фон зала — отдельный слой под игрой, рисуется один раз */
+#bg {
+  position: fixed;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
 #game {
   position: fixed;
   inset: 0;
