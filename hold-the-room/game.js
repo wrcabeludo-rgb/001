@@ -1269,24 +1269,35 @@ if (typeof window !== 'undefined') (function () {
     const next = () => { const it = list.shift(); if (it) renderSfx(it[0] + ':' + it[1].join(','), it[0], it[1]).then(() => setTimeout(next, 16)); };
     next();
   }, 300);
-  // Пул элементов <audio> для звуков: каждый «разрешается» первым касанием
-  const sfxPool = [], sfxBlessed = new WeakSet();
-  for (let i = 0; i < 6; i++) { const a = new Audio(); a.setAttribute('playsinline', ''); a.preload = 'auto'; sfxPool.push(a); }
-  let poolNext = 0;
+  // У каждого звука свой элемент <audio> с постоянным файлом: при повторе он только перематывается.
+  // Раньше общий пул на каждую эмоцию менял src, и iPhone каждый раз заново грузил файл — это тормозило.
+  const sfxEls = new Map(), sfxBlessed = new WeakSet();
+  function sfxEl(key) {
+    let a = sfxEls.get(key);
+    if (!a && sfxCache.get(key)) {
+      a = new Audio(sfxCache.get(key)); a.setAttribute('playsinline', ''); a.preload = 'auto';
+      sfxEls.set(key, a);
+    }
+    return a;
+  }
+  // В касании каждый элемент один раз запускается беззвучно — так iOS разрешает ему играть
   function blessPool() {
-    for (const a of sfxPool) {
-      if (sfxBlessed.has(a)) continue;
-      a.src = SILENCE;
+    for (const k of sfxCache.keys()) {
+      const a = sfxEl(k);
+      if (!a || sfxBlessed.has(a)) continue;
+      sfxBlessed.add(a);
+      a.muted = true;
       const p = a.play();
-      if (p) p.then(() => { sfxBlessed.add(a); a.pause(); }, () => {});
+      if (p) p.then(() => { a.pause(); a.muted = false; }, () => { a.muted = false; sfxBlessed.delete(a); });
+      else { a.pause(); a.muted = false; }
     }
   }
-  function playSfxUrl(url) {
-    let a = sfxPool.find(x => x.paused || x.ended);
-    if (!a) { a = sfxPool[poolNext]; poolNext = (poolNext + 1) % sfxPool.length; }
-    a.src = url;
-    const p = a.play();
-    if (p) p.catch(e => { if (e.name !== 'AbortError') audioErr = 'звуки: ' + e.name; });
+  function playSfx(key) {
+    const a = sfxEl(key);
+    if (!a) return;
+    a.muted = false;
+    try { a.currentTime = 0; } catch (_) { /* ещё не загружен */ }
+    if (a.paused) { const p = a.play(); if (p) p.catch(e => { if (e.name !== 'AbortError') audioErr = 'звуки: ' + e.name; }); }
   }
   // тон: частота (можно со скольжением к f1), форма, громкость, атака, длина
   function tone(f, t, dur, vol, type, f1) {
@@ -1352,11 +1363,11 @@ if (typeof window !== 'undefined') (function () {
   function sfx(name, ...args) {
     if (!SAVE.settings.music || !SFX[name]) return;
     const now = performance.now();
-    if (name === 'pickup') { if (now - lastPickT < 35) return; lastPickT = now; }
+    if (name === 'pickup') { if (now - lastPickT < 60) return; lastPickT = now; }
     if (name === 'leave') { if (now - lastLeaveT < 400) return; lastLeaveT = now; }
     const a = sfxKey(name, args), key = name + ':' + a.join(',');
     const url = sfxCache.get(key);
-    if (url) playSfxUrl(url);
+    if (url) playSfx(key);
     else if (!sfxCache.has(key)) renderSfx(key, name, a);
   }
 
@@ -1413,7 +1424,7 @@ if (typeof window !== 'undefined') (function () {
       const url = sfxCache.get('triple:');
       if (!url) res.w = 'ещё не записан';
       else {
-        const b = sfxPool[0]; b.src = url;
+        const b = sfxEl('triple:'); b.muted = false; b.currentTime = 0;
         const q = b.play();
         if (q) q.then(() => { res.w = 'запустился'; show(); }, e => { res.w = 'ошибка ' + e.name; show(); });
       }
@@ -1501,7 +1512,7 @@ if (typeof window !== 'undefined') (function () {
   // В фоне не должно играть ничего: ни музыка, ни тишина, ни звуки из пула
   function silenceAll() {
     player.pause();
-    for (const a of sfxPool) a.pause();
+    for (const a of sfxEls.values()) a.pause();
   }
   window.addEventListener('pagehide', silenceAll);
   function resumeMusic() {
@@ -1568,6 +1579,15 @@ if (typeof window !== 'undefined') (function () {
     };
     playMusic(levelNo).then(go);
     setTimeout(go, 4000); // если трек не грузится, играем без музыки
+    // перекрашенные листы анимаций собираются заранее, а не в момент первой поимки посреди песни
+    setTimeout(() => {
+      for (const c of EMO_COLORS.concat(EVO_COLOR)) if (fxImg.pickup) fxSheet('pickup', c);
+      if (fxImg.chain) fxSheet('chain', PAL.cyan);
+      for (const c of [CARD_DEFS.solo.color, '#b48cff', '#ff3d50']) if (fxImg.wave) fxSheet('wave', c);
+      // позы героя и душа всех цветов и размеров (она растёт с цепочкой) — тоже заранее
+      for (const [n, h] of [['hero-sit', 102], ['hero-play', 116], ['hero-rock', 114]]) svgFrame(n, 0, h);
+      for (const col of soulColors()) for (let g = 1; g <= 1.25; g += 0.05) svgFrame('soul', 0, 66 * g, col === '#3de0ff' ? null : col);
+    }, 200);
   }
 
   const LEVEL_COLORS = ['#5dff9e', '#3de0ff', '#ffd23d', '#ff7a3d', '#ff3d8b'];
@@ -2560,13 +2580,16 @@ if (typeof window !== 'undefined') (function () {
     const img = svgImg[name];
     if (!img) return null;
     const A = SVG_ART[name], [, , cw, ch] = A.crops[i || 0];
-    const px = Math.max(8, Math.round(h * scale * dpr));
+    // размер квантуется ступенями по ~6% вверх: душа растёт с цепочкой плавно, и без ступеней
+    // каждый новый размер означал новый растр (новый холст и загрузку в видеокарту посреди песни)
+    const want = Math.max(8, h * scale * dpr), px = Math.ceil(Math.pow(1.06, Math.ceil(Math.log(want) / Math.log(1.06))));
     const key = `${name}:${i || 0}:${px}:${tint || ''}`;
     let c = svgCache.get(key);
     if (!c) {
       c = downscale(svgMaster(name, i || 0), Math.ceil(cw * px / ch), px);
       const x = c.getContext('2d');
       if (tint) { x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.7; x.fillStyle = tint; x.fillRect(0, 0, c.width, c.height); }
+      if (svgCache.size > 150) svgCache.clear();
       svgCache.set(key, c);
     }
     return c;
@@ -2817,9 +2840,7 @@ if (typeof window !== 'undefined') (function () {
       // мягкое свечение цвета настроения: зал «загорается» вместе с интересом
       const halo = ['#9fb6d8', '#9fb6d8', PAL.pink, EVO_COLOR][mood], ha = [0, 0.1, 0.18, 0.28][mood];
       if (ha) {
-        const g = ctx.createRadialGradient(x, y - 24, 2, x, y - 24, 32);
-        g.addColorStop(0, hexA(halo, ha)); g.addColorStop(1, hexA(halo, 0));
-        ctx.fillStyle = g; ctx.fillRect(x - 32, y - 56, 64, 64);
+        ctx.drawImage(haloSprite(halo, ha), x - 32, y - 56, 64, 64);
       }
       ctx.translate(x, y - bob * (mood === 3 ? 1.6 : 1)); ctx.rotate(sway);
       // высота по рамке позы: рост персонажей в листах сохраняется, прыжок чуть крупнее
@@ -2945,16 +2966,51 @@ if (typeof window !== 'undefined') (function () {
   }
 
   // Эмоции: неоновые значки со свечением
+  // Спрайты: то, что раньше каждый кадр рисовалось десятками заливок и градиентов, собирается
+  // один раз в холст под текущий масштаб экрана и дальше рисуется одной картинкой.
+  const spriteCache = new Map();
+  function sprite(key, w, h, draw) {
+    const k = scale * dpr, ck = key + ':' + k.toFixed(3);
+    let c = spriteCache.get(ck);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
+      const x = c.getContext('2d'); x.scale(k, k);
+      draw(x);
+      spriteCache.set(ck, c);
+    }
+    return c;
+  }
+  window.addEventListener('resize', () => spriteCache.clear());
+  // Эмоция в эталонном размере EMO_REF: три слоя свечения и блик
+  const EMO_REF = 18, EMO_BOX = EMO_REF * 4;
+  function emoSprite(kind, col) {
+    return sprite('emo' + kind + col, EMO_BOX, EMO_BOX, x => {
+      const c = EMO_BOX / 2;
+      dc = x; x.fillStyle = col;
+      for (const [k, a] of [[1.6, 0.14], [1.25, 0.3], [1, 1]]) { x.globalAlpha = a; emoShape(kind, c, c, EMO_REF * k); }
+      x.globalAlpha = 0.85; x.fillStyle = '#ffffff';
+      x.beginPath(); x.arc(c - EMO_REF * 0.18, c - EMO_REF * 0.18, EMO_REF * 0.11, 0, Math.PI * 2); x.fill();
+      dc = ctx;
+    });
+  }
+  // Свечение настроения под зрителем
+  function haloSprite(col, a) {
+    return sprite('halo' + col + a, 64, 64, x => {
+      const g = x.createRadialGradient(32, 32, 2, 32, 32, 32);
+      g.addColorStop(0, hexA(col, a)); g.addColorStop(1, hexA(col, 0));
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    });
+  }
+
   function drawEmotions() {
     for (const e of G.emotions) {
       const rest = e.life - e.age;
       if (rest < 1.2 && Math.floor(rest * 8) % 2 === 0) continue; // мигает перед исчезновением
       const s = e.size * (1 + Math.sin(clock * 8 + e.x) * 0.06) * Math.min(1, e.age * 6);
       const col = e.gold ? EVO_COLOR : EMO_COLORS[e.kind];
-      ctx.fillStyle = col;
-      for (const [k, a] of [[1.6, 0.14], [1.25, 0.3], [1, 1]]) { ctx.globalAlpha = a; emoShape(e.kind, e.x, e.y, s * k); }
-      ctx.globalAlpha = 0.85; ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(e.x - s * 0.18, e.y - s * 0.18, s * 0.11, 0, Math.PI * 2); ctx.fill();
+      const box = EMO_BOX * s / EMO_REF;
+      ctx.drawImage(emoSprite(e.kind, col), e.x - box / 2, e.y - box / 2, box, box);
       if (e.gold || e.double) {
         ctx.strokeStyle = e.gold ? EVO_COLOR : '#ffffff'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.5 + Math.sin(clock * 10 + e.x) * 0.3;
         ctx.beginPath(); ctx.arc(e.x, e.y, s * 0.95, 0, Math.PI * 2); ctx.stroke();
@@ -3133,33 +3189,36 @@ if (typeof window !== 'undefined') (function () {
   }
   // душа разгорается, когда зал доволен: голубая → зелёная → розовая → золотая
   const SOUL_COLORS = ['#3de0ff', '#5dff9e', '#ff3d8b', '#ffd23d'];
-  function soulColor() {
+  function soulColors() {
     const sk = SOUL_SKINS.find(x => x.id === SAVE.skins.selected);
-    return (sk ? sk.colors : SOUL_COLORS)[Math.min(3, Math.floor(bodyLife * 4))];
+    return sk ? sk.colors : SOUL_COLORS;
   }
+  function soulColor() { return soulColors()[Math.min(3, Math.floor(bodyLife * 4))]; }
 
 
 
 
+  // Фигуры рисуют в dc: обычно это экран, при сборке спрайта — его холст
+  let dc = ctx;
   function drawHeart(x, y, s) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + s * 0.35);
-    ctx.bezierCurveTo(x - s * 0.9, y - s * 0.2, x - s * 0.35, y - s * 0.8, x, y - s * 0.3);
-    ctx.bezierCurveTo(x + s * 0.35, y - s * 0.8, x + s * 0.9, y - s * 0.2, x, y + s * 0.35);
-    ctx.fill();
+    dc.beginPath();
+    dc.moveTo(x, y + s * 0.35);
+    dc.bezierCurveTo(x - s * 0.9, y - s * 0.2, x - s * 0.35, y - s * 0.8, x, y - s * 0.3);
+    dc.bezierCurveTo(x + s * 0.35, y - s * 0.8, x + s * 0.9, y - s * 0.2, x, y + s * 0.35);
+    dc.fill();
   }
   function drawNote(x, y, s) {
-    ctx.beginPath(); ctx.ellipse(x - s * 0.15, y + s * 0.3, s * 0.28, s * 0.2, -0.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillRect(x + s * 0.06, y - s * 0.45, s * 0.12, s * 0.78);
-    ctx.beginPath(); ctx.moveTo(x + s * 0.18, y - s * 0.45); ctx.quadraticCurveTo(x + s * 0.55, y - s * 0.25, x + s * 0.4, y); ctx.lineTo(x + s * 0.18, y - s * 0.2); ctx.fill();
+    dc.beginPath(); dc.ellipse(x - s * 0.15, y + s * 0.3, s * 0.28, s * 0.2, -0.4, 0, Math.PI * 2); dc.fill();
+    dc.fillRect(x + s * 0.06, y - s * 0.45, s * 0.12, s * 0.78);
+    dc.beginPath(); dc.moveTo(x + s * 0.18, y - s * 0.45); dc.quadraticCurveTo(x + s * 0.55, y - s * 0.25, x + s * 0.4, y); dc.lineTo(x + s * 0.18, y - s * 0.2); dc.fill();
   }
   function drawBurst(x, y, s, n, inner) {
-    ctx.beginPath();
+    dc.beginPath();
     for (let i = 0; i < n * 2; i++) {
       const a = i * Math.PI / n - Math.PI / 2, r = i % 2 ? s * inner : s * 0.55;
-      ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+      dc.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
     }
-    ctx.closePath(); ctx.fill();
+    dc.closePath(); dc.fill();
   }
 
   function drawFxUnder() {
