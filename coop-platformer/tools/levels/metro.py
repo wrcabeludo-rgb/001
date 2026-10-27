@@ -52,7 +52,7 @@ for i, row in enumerate(range(24, 9, -2)):
 put(12, 264, "f"); put(16, 263, "w")
 fill(14, 14, 252, 261); fill(14, 17, 252, 252); fill(17, 17, 252, 261)
 fill(15, 16, 253, 261, "s")
-put(16, 254, "$"); put(16, 256, "U")
+put(16, 254, "$"); put(16, 256, "U"); put(16, 259, "!")
 # G. Upper service tunnel: falling debris, a spike pit, gas flamethrowers, the last checkpoint
 fill(8, 29, 271, 380)
 fill(0, 3, 301, 380)

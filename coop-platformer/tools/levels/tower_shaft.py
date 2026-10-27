@@ -59,7 +59,7 @@ for r, side in ((78, 1), (72, 0), (66, 1)):
         fill(r, r, 1, 6); put(r - 1, 3, "J"); put(r + 1, 4, "t")
 # D. Ladders and platforms, a hidden office behind the wall, an exo-trooper landing
 zigzag(41, 59, {4: [(3, "y")], 8: [(3, "N")]}, start=3)
-fill(46, 50, W - 9, W - 2, "s"); put(50, W - 6, "$"); put(50, W - 4, "U")
+fill(46, 50, W - 9, W - 2, "s"); put(50, W - 6, "$"); put(50, W - 4, "U"); put(50, W - 8, "!")
 fill(45, 45, W - 10, W - 2); fill(51, 51, W - 10, W - 2); fill(46, 50, W - 10, W - 10)
 fill(46, 50, W - 10, W - 10, "s")
 landing(39, [(12, "C"), (14, "+"), (30, "l")])

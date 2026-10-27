@@ -24,6 +24,7 @@ extends Node2D
 ##   'v' falling debris (under a ceiling)   'F' flamethrower on a wall
 ##   'b' explosive barrel   'k' cover   'd' door (down to the floor) + '/' lever
 ##   '[' ... ']' arena gates; the waves come from get_arena_waves()
+##   '!' extra life (each is found once; back again after a continue)
 ##   '+' health kit, 'p' ammo lying on the floor   'E' level exit
 ##   'U' power-up (rage / shield / haste by column)   '$' cache of 10 scrap
 ##   's' false wall: looks solid, hides a secret room (fill the whole room with
@@ -115,6 +116,10 @@ var _enemy_spots: Array = []
 ## Seconds left before a fallen hero returns, by slot.
 var _respawn_timers := {}
 var _team_respawn_timer := -1.0
+## Slots whose hero has no lives left: they sit out until an extra life or the next zone.
+var _out := {}
+var _extra_lives := 0
+var _game_over: GameOver
 var _huds: Array[HeroHud] = []
 var _toast: Label
 ## [ParallaxLayer, drift] of the layers that move by themselves.
@@ -188,7 +193,26 @@ func spawn_player(slot: int, input: PlayerInput, hero: Heroes.Id) -> Player:
 	add_child(player)
 	player.died.connect(_on_player_died)
 	players[slot] = player
+	# A hero who ran out of lives in the last zone comes back with one.
+	if uses_lives() and SaveGame.lives(hero) <= 0:
+		SaveGame.set_lives(hero, 1)
 	return player
+
+
+## Lives count only in the zones of the game (test rooms respawn forever).
+func uses_lives() -> bool:
+	return zone_id != ""
+
+
+## Lives left of the hero in `slot` (-1 where lives do not count).
+func lives_of(slot: int) -> int:
+	if not uses_lives() or not players.has(slot):
+		return -1
+	return SaveGame.lives(players[slot].hero)
+
+
+func is_out(slot: int) -> bool:
+	return _out.has(slot)
 
 
 func remove_player(slot: int) -> void:
@@ -196,9 +220,10 @@ func remove_player(slot: int) -> void:
 		players[slot].queue_free()
 		players.erase(slot)
 	_respawn_timers.erase(slot)
+	_out.erase(slot)
 	# If the one who left was the last hero standing, the rest restart at the checkpoint.
 	if not players.is_empty() and alive_players().is_empty() and _team_respawn_timer < 0.0:
-		_team_respawn_timer = TEAM_RESPAWN_DELAY
+		_team_down()
 
 
 func alive_players() -> Array[Player]:
@@ -232,7 +257,7 @@ func _process(delta: float) -> void:
 	if not completed:
 		elapsed += delta
 	for slot in PlayerManager.MAX_PLAYERS:
-		_huds[slot].show_player(players.get(slot), respawn_time_left(slot))
+		_huds[slot].show_player(players.get(slot), respawn_time_left(slot), lives_of(slot), is_out(slot))
 	_boss_bar.refresh()
 	_toast_time -= delta
 	_toast.modulate.a = clampf(_toast_time, 0.0, 1.0)
@@ -300,9 +325,59 @@ func _on_player_died(player: Player) -> void:
 	player.leave_body()
 	player.set_active(false)
 	deaths[player.slot] = deaths.get(player.slot, 0) + 1
-	_respawn_timers[player.slot] = RESPAWN_DELAY
+	if uses_lives():
+		SaveGame.set_lives(player.hero, SaveGame.lives(player.hero) - 1)
+		SaveGame.save()
+		if SaveGame.lives(player.hero) <= 0:
+			_out[player.slot] = true
+			show_toast("P%d: жизни кончились" % (player.slot + 1), 3.0)
+	if _out.has(player.slot):
+		_respawn_timers.erase(player.slot)
+	else:
+		_respawn_timers[player.slot] = RESPAWN_DELAY
 	if alive_players().is_empty():
-		_team_respawn_timer = TEAM_RESPAWN_DELAY
+		_team_down()
+
+
+## Every hero is down: the ones with lives left start again at the checkpoint;
+## if nobody has any, the game is over.
+func _team_down() -> void:
+	if _out.size() >= players.size():
+		_respawn_timers.clear()
+		_show_game_over()
+		return
+	_team_respawn_timer = TEAM_RESPAWN_DELAY
+
+
+func _show_game_over() -> void:
+	if _game_over != null:
+		return
+	Sound.stop_music()
+	_game_over = GameOver.new()
+	_game_over.setup(self)
+	add_child(_game_over)
+
+
+## An extra life was picked up by `hero`: it brings back a partner who ran out
+## of lives, else the hero gets one more. False when there is no room for it.
+func give_life(hero: Player) -> bool:
+	for slot in _out.keys():
+		if players.has(slot):
+			_out.erase(slot)
+			var partner: Player = players[slot]
+			SaveGame.set_lives(partner.hero, 1)
+			SaveGame.save()
+			partner.revive(hero.last_safe_position)
+			show_toast("P%d вернулся в игру!" % (slot + 1), 3.0)
+			return true
+	if not uses_lives():
+		return true
+	if SaveGame.lives(hero.hero) >= SaveGame.MAX_LIVES:
+		return false
+	SaveGame.set_lives(hero.hero, SaveGame.lives(hero.hero) + 1)
+	SaveGame.save()
+	show_toast("P%d: +1 жизнь" % (hero.slot + 1), 3.0)
+	return true
 
 
 func _update_respawns(delta: float) -> void:
@@ -313,6 +388,8 @@ func _update_respawns(delta: float) -> void:
 			reset_enemies()
 			reset_mechanics()
 			for slot in players:
+				if _out.has(slot):
+					continue
 				var start := _entry_point_without_partner(slot)
 				players[slot].revive(start)
 			snap_camera()
@@ -565,6 +642,15 @@ func _build_level() -> void:
 					item.power = ["rage", "shield", "haste"][col % 3]
 					item.permanent = true
 					add_child(item)
+				"!":
+					var life_id := "%s#%d" % [zone_id if zone_id != "" else name, _extra_lives]
+					_extra_lives += 1
+					if not SaveGame.life_found(life_id):
+						var item := Pickup.new()
+						item.setup(Pickup.Kind.LIFE, 1, floor_point - Vector2(0, Pickup.SIZE.y / 2.0 + 2.0), Vector2.ZERO)
+						item.life_id = life_id
+						item.permanent = true
+						add_child(item)
 				"E":
 					var exit := LevelExit.new()
 					exit.position = floor_point
@@ -824,7 +910,7 @@ func _build_secrets(map: Array) -> void:
 				for step in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 					var next: Vector2i = cell + step
 					# Loot inside the hidden room is part of it (covered too).
-					if _at(map, next.x, next.y) in ["s", "$", "U", "+", "p"] and not seen.has(next):
+					if _at(map, next.x, next.y) in ["s", "$", "U", "+", "p", "!"] and not seen.has(next):
 						seen[next] = true
 						queue.append(next)
 			var secret := SecretArea.new()

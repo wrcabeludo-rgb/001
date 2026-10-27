@@ -79,7 +79,7 @@ fill(24, 25, 442, 444); put(23, 443, "g")
 put(25, 448, "w"); put(25, 452, "c")
 # Secret 2: a false patch of ground drops into a small cellar
 fill(26, 27, 456, 464, "s")
-put(27, 460, "$"); put(27, 462, "+")
+put(27, 460, "$"); put(27, 462, "+"); put(27, 457, "!")
 put(25, 468, "w"); put(17, 470, "f"); put(25, 474, "h")
 # L. Final climb: a lift up to the rooftops and the exit
 ground(481, 539, 26)

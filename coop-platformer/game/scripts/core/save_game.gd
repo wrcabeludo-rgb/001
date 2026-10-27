@@ -4,6 +4,11 @@ extends Node
 ## choice: whoever plays the Gunner uses the Gunner's wallet and upgrades.
 
 const VERSION := 1
+## Lives each hero starts a world (and a continue) with, the most they can
+## hold, and continues for the whole game.
+const START_LIVES := 3
+const MAX_LIVES := 5
+const START_CONTINUES := 3
 
 ## Zones in order: scene, title; "ending" — the comic shown after the last
 ## zone of a world (instead of the trader).
@@ -43,9 +48,13 @@ func defaults() -> Dictionary:
 		"best_times": {},
 		## Secret id -> true.
 		"secrets": {},
+		## Continues left: after a game over the world is played again from its first zone.
+		"continues": START_CONTINUES,
+		## Extra-life pickup id -> true (taken; back again after a continue).
+		"lives_found": {},
 		"heroes": {
-			str(Heroes.Id.SHOOTER): {"scrap": 0, "items": [], "weapon": "rifle"},
-			str(Heroes.Id.SWORDSMAN): {"scrap": 0, "items": [], "weapon": "blade"},
+			str(Heroes.Id.SHOOTER): {"scrap": 0, "items": [], "weapon": "rifle", "lives": START_LIVES},
+			str(Heroes.Id.SWORDSMAN): {"scrap": 0, "items": [], "weapon": "blade", "lives": START_LIVES},
 		},
 		"settings": {"master": 1.0, "music": 0.7, "sfx": 0.9, "fullscreen": false, "shake": true},
 	}
@@ -146,6 +155,52 @@ func complete_zone(zone_id: String, seconds: float) -> void:
 	var best: float = data["best_times"].get(zone_id, INF)
 	data["best_times"][zone_id] = minf(best, seconds)
 	save()
+
+
+func lives(id: Heroes.Id) -> int:
+	return int(hero(id)["lives"])
+
+
+func set_lives(id: Heroes.Id, value: int) -> void:
+	hero(id)["lives"] = clampi(value, 0, MAX_LIVES)
+
+
+func continues() -> int:
+	return int(data["continues"])
+
+
+func life_found(life_id: String) -> bool:
+	return data["lives_found"].has(life_id)
+
+
+func find_life(life_id: String) -> void:
+	data["lives_found"][life_id] = true
+
+
+## Index of the first zone of the world `zone_id` belongs to ("2-3" -> "2-1").
+func world_start(zone_id: String) -> int:
+	var world := zone_id.get_slice("-", 0)
+	for i in ZONES.size():
+		if ZONES[i]["id"].get_slice("-", 0) == world:
+			return i
+	return 0
+
+
+## Spends a continue after a game over in `zone_id`: lives are full again, the
+## world's extra lives can be found again, and the world starts over from its
+## first zone. Returns that zone's scene.
+func use_continue(zone_id: String) -> String:
+	data["continues"] = maxi(continues() - 1, 0)
+	for id in data["heroes"]:
+		data["heroes"][id]["lives"] = START_LIVES
+	var world := zone_id.get_slice("-", 0) + "-"
+	for life_id in data["lives_found"].keys():
+		if life_id.begins_with(world):
+			data["lives_found"].erase(life_id)
+	var start := world_start(zone_id)
+	data["next_zone"] = start
+	save()
+	return ZONES[start]["scene"]
 
 
 func find_secret(secret_id: String) -> void:

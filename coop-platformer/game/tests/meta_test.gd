@@ -1,6 +1,6 @@
 extends "res://tests/test_harness.gd"
 ## Headless checks of the meta game: saving, shop goods and what they change,
-## the shotgun, power-ups, secret rooms, the pause menu and the hero select. Run by CI:
+## the shotgun, power-ups, secret rooms, the pause menu, the hero select, lives and continues. Run by CI:
 ##   godot --headless --path game res://tests/meta_test.tscn
 
 
@@ -18,6 +18,7 @@ func _run_all() -> void:
 	await _test_shop_showcase()
 	await _test_hero_select_alone()
 	await _test_hero_select_two_players()
+	await _test_lives_and_continues()
 
 
 func _test_save_round_trip() -> void:
@@ -318,3 +319,67 @@ func _clear_projectiles() -> void:
 	for child in _room.get_children():
 		if child is Projectile:
 			child.queue_free()
+
+
+func _test_lives_and_continues() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	var level := _room as Level
+	level.zone_id = "2-2"
+	var gunner := level.spawn_player(0, PlayerInput.scripted(), Heroes.Id.SHOOTER)
+	gunner.global_position = Vector2(OPEN_X - 200.0, FLOOR_Y)
+	var sword := level.spawn_player(1, PlayerInput.scripted(), Heroes.Id.SWORDSMAN)
+	sword.global_position = Vector2(OPEN_X + 200.0, FLOOR_Y)
+	await _frames(3)
+	_check(level.lives_of(0) == 3 and level.lives_of(1) == 3, "у каждого героя 3 жизни")
+	sword.kill()
+	await _frames(2)
+	_check(SaveGame.lives(Heroes.Id.SWORDSMAN) == 2 and not level.is_out(1) and level.respawn_time_left(1) > 0.0,
+		"смерть отнимает жизнь, герой вернётся")
+	sword.revive(Vector2(OPEN_X + 200.0, FLOOR_Y))
+	SaveGame.set_lives(Heroes.Id.SWORDSMAN, 1)
+	sword.kill()
+	await _frames(2)
+	_check(level.is_out(1) and level.respawn_time_left(1) < 0.0, "последняя жизнь потрачена — герой выбывает")
+	var life := Pickup.new()
+	life.setup(Pickup.Kind.LIFE, 1, gunner.global_position, Vector2.ZERO)
+	life.life_id = "2-2#0"
+	life.permanent = true
+	level.add_child(life)
+	await _frames(5)
+	_check(not level.is_out(1) and sword.is_alive() and SaveGame.lives(Heroes.Id.SWORDSMAN) == 1
+		and SaveGame.life_found("2-2#0"), "найденная жизнь возвращает выбывшего напарника")
+	var second := Pickup.new()
+	second.setup(Pickup.Kind.LIFE, 1, gunner.global_position, Vector2.ZERO)
+	level.add_child(second)
+	await _frames(5)
+	_check(SaveGame.lives(Heroes.Id.SHOOTER) == 4, "жизнь без выбывших — +1 жизнь тому, кто взял")
+	SaveGame.set_lives(Heroes.Id.SHOOTER, 1)
+	SaveGame.set_lives(Heroes.Id.SWORDSMAN, 1)
+	sword.kill()
+	gunner.kill()
+	await _frames(3)
+	var over: GameOver = null
+	for child in level.get_children():
+		if child is GameOver:
+			over = child
+	_check(over != null and get_tree().paused, "жизни кончились у всех — «Игра окончена»")
+	if over != null:
+		over.free()
+	get_tree().paused = false
+	var scene := SaveGame.use_continue("2-2")
+	_check(scene == SaveGame.ZONES[3]["scene"] and SaveGame.continues() == 2 and int(SaveGame.data["next_zone"]) == 3
+		and SaveGame.lives(Heroes.Id.SHOOTER) == 3 and not SaveGame.life_found("2-2#0"),
+		"continue: мир заново с первой зоны, жизни полные, жизни мира снова можно найти")
+	SaveGame.complete_zone("2-1", 100.0)
+	SaveGame.data["continues"] = 0
+	var last := GameOver.new()
+	last.setup(level)
+	level.add_child(last)
+	await _frames(1)
+	_check(int(SaveGame.data["unlocked"]) == 1 and SaveGame.continues() == 3, "без continue игра начинается сначала")
+	last.free()
+	get_tree().paused = false
+	level.remove_player(0)
+	level.remove_player(1)
+	level.zone_id = ""
+	await _frames(2)

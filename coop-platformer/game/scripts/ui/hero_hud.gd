@@ -1,6 +1,6 @@
 class_name HeroHud
 extends Control
-## One player's panel in a screen corner: hero name, health bar, ammo for the Gunner.
+## One player's panel in a screen corner: hero name, lives, health bar, ammo for the Gunner.
 
 const BAR_SIZE := Vector2(300, 18)
 
@@ -38,19 +38,25 @@ func _ready() -> void:
 
 
 ## Shows `player`, or hides the panel when the slot is empty. While the hero is
-## down, `respawn_left` is the number of seconds until they return.
-func show_player(player: Player, respawn_left := -1.0) -> void:
+## down, `respawn_left` is the number of seconds until they return. `lives` is
+## -1 where lives do not count; `out` — the hero has none left.
+func show_player(player: Player, respawn_left := -1.0, lives := -1, out := false) -> void:
 	visible = player != null and player.health != null
 	if not visible:
 		return
 	var color: Color = Heroes.COLORS[player.hero]
 	_name.text = "P%d  %s" % [player.slot + 1, Heroes.NAMES[player.hero]]
+	if lives >= 0:
+		_name.text += "   Жизни: %d" % lives
 	_name.add_theme_color_override("font_color", color)
 	_bar_fill.color = color
 	_bar_fill.size.x = BAR_SIZE.x * player.health.ratio()
 	_health_text.text = "%d / %d" % [player.health.current, player.health.maximum]
 	if not player.is_alive():
 		_ammo.visible = true
+		if out:
+			_ammo.text = "Жизни кончились — найдите «+1 жизнь», чтобы вернуть"
+			return
 		_ammo.text = "Вернётся через %.1f с" % respawn_left if respawn_left >= 0.0 else "Ждёт напарника"
 		return
 	var shooter := player.combat as ShooterCombat

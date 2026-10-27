@@ -602,6 +602,7 @@ PROPS = {
     "props/pickup_health.png": ("props/pickup_health_original.png", (0, 100, 1254, 1100), 80),
     "props/pickup_ammo.png": ("props/pickup_ammo_original.png", (60, 120, 1200, 1060), 80),
     "props/pickup_scrap.png": ("props/pickup_scrap_original.png", (40, 180, 1220, 1060), 80),
+    "props/pickup_life.png": ("props/pickup_life_original.png", (0, 0, 1254, 1254), 80),
     # The white gap between the awning and the counter has to go too.
     "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 120),
     # World 2. The belt strip repeats sideways; the end drum sits at the belt's ends.

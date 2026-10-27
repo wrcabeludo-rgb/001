@@ -4,7 +4,7 @@ extends Area2D
 ## the floor and is taken by the first hero who can use it (ammo only by the
 ## Gunner, a health kit only by a hurt hero). It blinks and vanishes after a while.
 
-enum Kind { HEALTH, AMMO, SCRAP, POWER }
+enum Kind { HEALTH, AMMO, SCRAP, POWER, LIFE }
 
 const SIZE := Vector2(26, 26)
 const LIFETIME := 15.0
@@ -14,6 +14,7 @@ const LOOKS := {
 	Kind.AMMO: [Color(0.3, 0.9, 1.0), "П"],
 	Kind.SCRAP: [Color(0.7, 0.7, 0.75), "Л"],
 	Kind.POWER: [Color.WHITE, "?"],
+	Kind.LIFE: [Color(1.0, 0.3, 0.55), "+1"],
 }
 
 ## Pictures for the kinds that have one; a power-up's is POWER_ART with its
@@ -22,6 +23,7 @@ const ART := {
 	Kind.HEALTH: "res://assets/art/props/pickup_health.png",
 	Kind.AMMO: "res://assets/art/props/pickup_ammo.png",
 	Kind.SCRAP: "res://assets/art/props/pickup_scrap.png",
+	Kind.LIFE: "res://assets/art/props/pickup_life.png",
 }
 
 const POWER_ART := "res://assets/art/props/power_%s.png"
@@ -29,6 +31,8 @@ const POWER_ART := "res://assets/art/props/power_%s.png"
 var kind: Kind = Kind.SCRAP
 ## For a power-up: "rage", "shield" or "haste" (see Player.POWER_TIME).
 var power := ""
+## For an extra life: its id in SaveGame ("2-1#0"), so it is taken only once.
+var life_id := ""
 
 const POWER_GLYPHS := {"rage": "Я", "shield": "Щ", "haste": "С"}
 var amount := 1
@@ -74,13 +78,16 @@ func _ready() -> void:
 		add_child(picture)
 		box.visible = false
 		return
-	if kind == Kind.POWER:
+	if kind == Kind.POWER or kind == Kind.LIFE:
 		box.visible = false
 		var orb := PowerOrb.new()
-		orb.color = Player.POWER_COLORS.get(power, Color.WHITE)
+		orb.color = LOOKS[kind][0] if kind == Kind.LIFE else Player.POWER_COLORS.get(power, Color.WHITE)
+		orb.heart = kind == Kind.LIFE
 		add_child(orb)
 	var sign_label := Label.new()
 	sign_label.text = LOOKS[kind][1] if kind != Kind.POWER else POWER_GLYPHS.get(power, "?")
+	if kind == Kind.LIFE:
+		sign_label.add_theme_color_override("font_color", Color.WHITE)
 	sign_label.size = SIZE
 	sign_label.position = -SIZE / 2 + Vector2(0, -4)
 	sign_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -101,7 +108,7 @@ func _physics_process(delta: float) -> void:
 	for body in get_overlapping_bodies():
 		var hero := body as Player
 		if hero != null and hero.is_alive() and _give_to(hero):
-			Sound.play(["pickup_health", "pickup_ammo", "pickup_scrap", "charge_ready"][kind], 0.0)
+			Sound.play(["pickup_health", "pickup_ammo", "pickup_scrap", "charge_ready", "level_complete"][kind], 0.0)
 			queue_free()
 			return
 
@@ -148,6 +155,12 @@ func _give_to(hero: Player) -> bool:
 			var level := get_parent() as Level
 			if level != null:
 				level.show_toast("P%d: %s" % [hero.slot + 1, Player.POWER_NAMES.get(power, power)])
+		Kind.LIFE:
+			var level := get_parent() as Level
+			if level == null or not level.give_life(hero):
+				return false
+			if life_id != "":
+				SaveGame.find_life(life_id)
 	return true
 
 
@@ -156,6 +169,8 @@ class PowerOrb:
 	extends Node2D
 
 	var color := Color.WHITE
+	## An extra life: a heart inside the glow.
+	var heart := false
 	var _time := 0.0
 
 	func _ready() -> void:
@@ -169,4 +184,11 @@ class PowerOrb:
 		var pulse := 1.0 + 0.12 * sin(_time * 6.0)
 		for i in 4:
 			draw_circle(Vector2.ZERO, 26.0 * pulse * (1.0 - i * 0.2), Color(color, 0.18))
-		draw_circle(Vector2.ZERO, 12.0, Color(color.lightened(0.5), 0.9))
+		if not heart:
+			draw_circle(Vector2.ZERO, 12.0, Color(color.lightened(0.5), 0.9))
+			return
+		var points := PackedVector2Array()
+		for i in 32:
+			var t := TAU * i / 32.0
+			points.append(Vector2(16.0 * pow(sin(t), 3), -(13.0 * cos(t) - 5.0 * cos(2 * t) - 2.0 * cos(3 * t) - cos(4 * t))) * 1.1 * pulse)
+		draw_colored_polygon(points, Color(color.lightened(0.3), 0.95))

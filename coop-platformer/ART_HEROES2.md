@@ -257,3 +257,26 @@ The object is centred, fills about 80% of the picture, nothing cropped by the im
 Flat even lighting, pure white background, no shadow, no glow halo spreading onto the background,
 no frame, no text, no letters. Square 1:1.
 ```
+
+## Дополнительная жизнь (спрятана в тайниках, по 2 на мир)
+
+**11. `pickup_life`** — «+1 жизнь». Файл назвать `pickup_life_original.png`.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+A small precious game pickup: a glowing magenta-pink neon heart made of bent glass tube, held inside a scratched
+round steel locket-frame with four rivets, a soft warm inner light pulsing in the heart, a few tiny pink sparks.
+It must read instantly as "an extra life" even at a very small size.
+
+A single game pickup icon: only this one object, no hands, no character, no background scenery.
+The object is centred, fills about 80% of the picture, nothing cropped by the image edge.
+Flat even lighting, pure white background, no shadow, no glow halo spreading onto the background,
+no frame, no text, no letters, no numbers. Square 1:1.
+```
+
+Проверка: ровно одно сердце, без надписей «+1» (цифру игра рисует сама, если нужно), белый фон.
