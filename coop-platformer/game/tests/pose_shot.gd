@@ -92,6 +92,12 @@ func _run_all() -> void:
 	await _save("climb2")
 	sword.set_virtual("up", false)
 	var _keep := partner
+	# Knocked back by a hit.
+	_player.global_position = Vector2(OPEN_X - 90, FLOOR_Y)
+	await _frames(40)
+	_player.receive_hit(Hit.make(1, Vector2(-500, -400), _player.global_position + Vector2(60, 0)))
+	await _frames(4)
+	await _save("hurt")
 
 
 func _save(tag: String) -> void:

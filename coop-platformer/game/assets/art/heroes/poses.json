@@ -6,6 +6,7 @@
  "gunner_fall_1": 0.422,
  "gunner_climb_1": 0.498,
  "gunner_climb_2": 0.505,
+ "gunner_hurt_1": 0.482,
  "gunner_run_1": 0.399,
  "gunner_run_2": 0.443,
  "gunner_run_3": 0.407,

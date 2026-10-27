@@ -19,7 +19,7 @@ const ART := "res://assets/art/heroes/"
 const ART_SCALE := 0.5
 const RIG_FILE := "res://assets/art/heroes/rig.json"
 const POSE_FILE := "res://assets/art/heroes/poses.json"
-const POSES := ["run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick",
+const POSES := ["run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick", "hurt",
 	"slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 const SLASH_POSES := ["slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 ## Until a pose has its own drawing it borrows a run frame: [pose, frame, tilt].
@@ -169,6 +169,9 @@ func _acting() -> bool:
 
 
 func _state(player: Player) -> String:
+	# Knocked back by a hit (only once the pose is drawn; until then the hero just blinks).
+	if player.is_stunned() and _pose_art.has("hurt"):
+		return "hurt"
 	if player.is_climbing():
 		return "climb"
 	if player.is_dashing():

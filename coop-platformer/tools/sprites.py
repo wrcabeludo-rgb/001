@@ -274,6 +274,8 @@ POSE_SOURCES = {
     "gunner_jump": [("gunner_jump", None)],
     "gunner_fall": [("gunner_fall", None)],
     "gunner_climb": [("gunner_climb", (0, 0, 724, 1086), 1.12), ("gunner_climb", (724, 0, 1448, 1086), 1.12)],
+    # Knocked back by a hit: the body lies diagonally, so it is scaled by its own height.
+    "gunner_hurt": [("gunner_hurt", None, 0.95)],
     "swordsman_crouch": [("swordsman_crouch", (0, 880, 1024, 1536), (0, 0, 1024, 875))],
     "swordsman_block": [("swordsman_block", None)],
     "swordsman_slash_down": [("swordsman_slash_down", None)],
@@ -393,7 +395,7 @@ def build_poses():
                     # Steady between frames: the middle of the body, not a foot.
                     torso = alpha[int(alpha.shape[0] * 0.35):int(alpha.shape[0] * 0.6)]
                     anchor = np.nonzero(torso > 128)[1].mean() / width
-                elif pose == "climb":
+                elif pose in ("climb", "hurt"):
                     # Centred on the ladder: the middle of the figure's mass.
                     anchor = np.nonzero(alpha > 128)[1].mean() / width
                 else:
