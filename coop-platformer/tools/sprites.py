@@ -13,9 +13,10 @@ import os
 import subprocess
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageEnhance, ImageDraw, ImageFilter
 
 from bgtools import make_seamless, white_to_alpha
+from sheets import cut_sheets
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "art_source")
@@ -125,6 +126,12 @@ ENEMIES = {
     "enemies/loader_brute.png": ("enemies/enemy_loader_brute_original.png", 340),
     "enemies/boss_loader.png": ("enemies/boss_loader_original.png", 840),
     "enemies/boss_loader_core.png": ("enemies/boss_loader_core_original.png", 300),
+    # World 3: the Lumen security, cut from one sheet (tools/sheets.py).
+    "enemies/rifleman.png": ("enemies/enemy_rifleman_original.png", 260),
+    "enemies/sniper.png": ("enemies/enemy_sniper_original.png", 220),
+    "enemies/grenadier.png": ("enemies/enemy_grenadier_original.png", 264),
+    "enemies/trooper.png": ("enemies/enemy_trooper_original.png", 248),
+    "enemies/exo_heavy.png": ("enemies/enemy_exo_heavy_original.png", 360),
 }
 
 
@@ -249,8 +256,27 @@ def build_tiles():
     for file in sorted(os.listdir(folder)):
         if not file.endswith("_original.png"):
             continue
-        img = Image.open(os.path.join(folder, file)).convert("RGB").resize((TILE_SIZE, TILE_SIZE), Image.LANCZOS)
+        img = Image.open(os.path.join(folder, file)).convert("RGB")
+        if file.startswith(SEAMLESS_TILES):
+            img = _seamless_both_ways(img)
+        for prefix, brightness in TILE_BRIGHTNESS.items():
+            if file.startswith(prefix):
+                img = ImageEnhance.Brightness(img).enhance(brightness)
+        img = img.resize((TILE_SIZE, TILE_SIZE), Image.LANCZOS)
         save(img, "tiles/" + file.replace("_original", "").replace("tile_", ""))
+
+
+# Tiles cut from a sheet are not drawn to repeat: their edges are blended here.
+SEAMLESS_TILES = ("tile_3-",)
+# Tiles drawn too light to keep the heroes readable on them.
+TILE_BRIGHTNESS = {"tile_3-3_": 0.5}
+
+
+def _seamless_both_ways(img, share=0.15):
+    overlap = round(img.width * share)
+    img, _ = make_seamless(img, overlap)
+    img, _ = make_seamless(img.transpose(Image.TRANSPOSE), round(img.height * share))
+    return img.transpose(Image.TRANSPOSE).convert("RGB")
 
 
 # ---------------------------------------------------------------- hero poses
@@ -602,7 +628,7 @@ PROPS = {
     "props/pickup_health.png": ("props/pickup_health_original.png", (0, 100, 1254, 1100), 80),
     "props/pickup_ammo.png": ("props/pickup_ammo_original.png", (60, 120, 1200, 1060), 80),
     "props/pickup_scrap.png": ("props/pickup_scrap_original.png", (40, 180, 1220, 1060), 80),
-    "props/pickup_life.png": ("props/pickup_life_original.png", (0, 0, 1254, 1254), 80),
+    "props/pickup_life.png": ("props/pickup_life_original.png", None, 80),
     # The white gap between the awning and the counter has to go too.
     "props/trader.png": ("props/npc_trader_original.png", (0, 0, 1536, 1024), 620, 120),
     # World 2. The belt strip repeats sideways; the end drum sits at the belt's ends.
@@ -623,6 +649,28 @@ PROPS = {
     "props/checkpoint_factory.png": ("props/prop_checkpoint_factory_original.png", (270, 15, 800, 1515), 340),
     "props/exit_factory.png": ("props/prop_exit_factory_original.png", (0, 20, 1024, 1465), 420),
     "props/gate_factory.png": ("props/prop_gate_factory_original.png", (205, 280, 690, 1700), 600),
+    # World 3, cut from sheets (tools/sheets.py); None = the whole cut-out.
+    "props/searchlight.png": ("props/prop_searchlight_original.png", None, 160),
+    "props/alarm_hatch.png": ("props/prop_alarm_hatch_original.png", None, 320),
+    "props/choice_lever.png": ("props/prop_choice_lever_original.png", None, 360),
+    "props/checkpoint_tower.png": ("props/prop_checkpoint_tower_original.png", None, 340),
+    "props/exit_tower.png": ("props/prop_exit_tower_original.png", None, 420),
+    "props/grenade.png": ("props/prop_grenade_original.png", None, 48),
+}
+
+# Pieces cut out of a prop by fractions of its height: (source, top, bottom, height x2, upside down).
+# The barrier's emitter post gives its lens heads: the base stands on the floor,
+# the top head hangs from the ceiling.
+PROP_PIECES = {
+    "props/barrier_bottom.png": ("props/prop_barrier_emitter_original.png", 0.70, 1.0, 100, False),
+    "props/barrier_top.png": ("props/prop_barrier_emitter_original.png", 0.0, 0.2, 70, True),
+}
+
+# Repeating strips cut from the middle of a long drawing, one block wide:
+# (source, left and right as fractions of the width, height x2).
+STRIPS = {
+    # One glass pane with its frame post on the left: every glass cell starts with a post.
+    "props/glass_floor.png": ("props/prop_glass_floor_original.png", 0.205, 0.395, 120),
 }
 
 
@@ -634,9 +682,25 @@ def build_props():
         path = os.path.join(SRC, source)
         if not os.path.exists(path):
             continue
-        img, _ = crop(remove_background(Image.open(path).crop(box), holes=holes))
+        img = Image.open(path)
+        img, _ = crop(remove_background(img.crop(box) if box else img, holes=holes))
         img, _ = scaled(img, height)
         save(img, name)
+    for name, (source, top, bottom, height, flip) in PROP_PIECES.items():
+        path = os.path.join(SRC, source)
+        if not os.path.exists(path):
+            continue
+        img, _ = crop(remove_background(Image.open(path)))
+        img = img.crop((0, round(img.height * top), img.width, round(img.height * bottom)))
+        img, _ = scaled(crop(img)[0], height)
+        save(img.transpose(Image.FLIP_TOP_BOTTOM) if flip else img, name)
+    for name, (source, left, right, height) in STRIPS.items():
+        path = os.path.join(SRC, source)
+        if not os.path.exists(path):
+            continue
+        img, _ = crop(remove_background(Image.open(path)))
+        img = img.crop((round(img.width * left), 0, round(img.width * right), img.height))
+        save(img.resize((round(img.width * height / img.height), height), Image.LANCZOS), name)
 
 
 PLATFORM_HEIGHT = 30
@@ -658,6 +722,16 @@ def build_platform():
         band = img.crop((0, rows[0], img.width, rows[-1] + 1))
         factor = PLATFORM_HEIGHT / band.height
         save(band.resize((round(band.width * factor), PLATFORM_HEIGHT), Image.LANCZOS), "tiles/platform_2.png")
+    # World 3: a catwalk beam cut from a sheet, without its end brackets; made to repeat.
+    path = os.path.join(SRC, "tiles", "tile_3_platform_source.png")
+    if os.path.exists(path):
+        img = Image.open(path).convert("RGB")
+        middle = img.width // 2
+        rows = [y for y in range(img.height) if min(img.getpixel((middle, y))) < 200]
+        band = img.crop((round(img.width * 0.1), rows[0], round(img.width * 0.9), rows[-1] + 1))
+        factor = PLATFORM_HEIGHT / band.height
+        band = band.resize((round(band.width * factor), PLATFORM_HEIGHT), Image.LANCZOS)
+        save(make_seamless(band, 24)[0].convert("RGB"), "tiles/platform_3.png")
 
 
 # ---------------------------------------------------------------- backgrounds
@@ -753,6 +827,7 @@ def build_sky_1_1():
 
 
 if __name__ == "__main__":
+    cut_sheets()
     build_sky_1_1()
     build_platform()
     build_backgrounds()

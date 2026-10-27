@@ -77,6 +77,7 @@ class Grenade:
 	const DAMAGE := 3
 
 	var _age := 0.0
+	var _art: Sprite2D
 
 	func _ready() -> void:
 		collision_layer = 0
@@ -86,9 +87,18 @@ class Grenade:
 		var collision := CollisionShape2D.new()
 		collision.shape = shape
 		add_child(collision)
+		var path := "res://assets/art/props/grenade.png"
+		if ResourceLoader.exists(path):
+			_art = Sprite2D.new()
+			_art.texture = load(path)
+			_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			_art.scale = Vector2(0.5, 0.5)
+			add_child(_art)
 
 	func _physics_process(delta: float) -> void:
 		_age += delta
+		if _art != null:
+			_art.rotation += velocity.x * delta * 0.02
 		velocity.y = minf(velocity.y + GRAVITY * delta, 1200.0)
 		if is_on_floor():
 			velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
@@ -108,6 +118,10 @@ class Grenade:
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_circle(Vector2.ZERO, 9.0, Color(0.2, 0.2, 0.25))
 		var blink := _age > FUSE * 0.4 and int(_age * (6.0 if _age < FUSE * 0.75 else 14.0)) % 2 == 0
+		if _art != null:
+			# The drawing flashes white as the fuse runs down.
+			_art.modulate = Color(2.2, 1.6, 2.0) if blink else Color.WHITE
+			return
+		draw_circle(Vector2.ZERO, 9.0, Color(0.2, 0.2, 0.25))
 		draw_circle(Vector2(0, -3), 4.0, Color(1.0, 0.18, 0.53) if blink else Color(0.5, 0.1, 0.3))

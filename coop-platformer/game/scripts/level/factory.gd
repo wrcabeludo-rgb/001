@@ -22,6 +22,8 @@ static func texture(path: String) -> Texture2D:
 
 ## The factory catwalk for one-way platforms, cranes and shuttles.
 const PLATFORM := "res://assets/art/tiles/platform_2.png"
+## The tower's catwalk (world 3).
+const PLATFORM_TOWER := "res://assets/art/tiles/platform_3.png"
 
 
 ## A zone tile ("2-1_wall"...): the painted one, or the stand-in steel plates.

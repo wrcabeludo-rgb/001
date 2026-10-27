@@ -20,12 +20,20 @@ func _build_look() -> void:
 	add_child(_look)
 	_frame = Harm.box(Vector2.ZERO, Vector2.ZERO, Color.TRANSPARENT)
 	add_child(_frame)
-	for end in [-1.0, 1.0]:
-		# The emitters at the top and the bottom stay when the field is off.
-		var emitter := Harm.box(Vector2(-size.x / 2.0 - 4.0, end * size.y / 2.0 - (14.0 if end > 0 else 0.0)),
-			Vector2(size.x + 8.0, 14.0), Color(0.15, 0.15, 0.2))
-		add_child(emitter)
-		emitter.add_child(Harm.box(Vector2(6, 5), Vector2(size.x - 4.0, 4), FIELD))
+	# The emitters at the top and the bottom stay when the field is off: the
+	# drawn lens heads (the base on the floor, the head under the ceiling), or bars.
+	var bottom_art := Harm.prop_sprite("barrier_bottom", size)
+	var top_art := Harm.prop_sprite("barrier_top", size)
+	if bottom_art != null and top_art != null:
+		top_art.position = Vector2(0, -size.y / 2.0 + top_art.texture.get_height() * 0.25)
+		add_child(bottom_art)
+		add_child(top_art)
+	else:
+		for end in [-1.0, 1.0]:
+			var emitter := Harm.box(Vector2(-size.x / 2.0 - 4.0, end * size.y / 2.0 - (14.0 if end > 0 else 0.0)),
+				Vector2(size.x + 8.0, 14.0), Color(0.15, 0.15, 0.2))
+			add_child(emitter)
+			emitter.add_child(Harm.box(Vector2(6, 5), Vector2(size.x - 4.0, 4), FIELD))
 	_field = Field.new()
 	_field.size = size
 	add_child(_field)
