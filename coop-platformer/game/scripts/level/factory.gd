@@ -4,15 +4,20 @@ class_name Factory
 
 
 ## Parallax layers for `Level.backgrounds`: far and mid, tinted darker than the
-## playing field so heroes and robots stand out. `zone` is 1..3.
-static func backgrounds(far_path: String, mid_path: String, zone: int) -> Array:
+## playing field so heroes and robots stand out. `zone` is 1..3; `dim` darkens
+## a zone whose pictures came out bright.
+static func backgrounds(far_path: String, mid_path: String, zone: int, dim := 1.0) -> Array:
 	var far := texture(far_path)
 	var mid := texture(mid_path)
 	if far == null:
 		far = load("res://assets/art/placeholders/factory_far_%d.png" % zone)
 	if mid == null:
 		mid = load("res://assets/art/placeholders/factory_mid_%d.png" % zone)
-	return [[far, 0.1, Color(0.42, 0.42, 0.48)], [mid, 0.3, Color(0.6, 0.6, 0.65)]]
+	var far_tint := Color(0.42, 0.42, 0.48) * dim
+	var mid_tint := Color(0.6, 0.6, 0.65) * dim
+	far_tint.a = 1.0
+	mid_tint.a = 1.0
+	return [[far, 0.1, far_tint], [mid, 0.3, mid_tint]]
 
 
 ## The texture at `path`, or null while it is not drawn yet.

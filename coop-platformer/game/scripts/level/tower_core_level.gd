@@ -72,7 +72,7 @@ func _init() -> void:
 	level_title = "Мир 3-3 · Ядро «Сердца»"
 	music_track = "zone_3_3"
 	wall_color = Color(0.32, 0.3, 0.36)
-	backgrounds = Factory.backgrounds(BG_FAR, BG_MID, 6)
+	backgrounds = Factory.backgrounds(BG_FAR, BG_MID, 6, 0.55)
 	wall_texture = Factory.tile("3-3_wall")
 	ground_texture = Factory.tile("3-3_ground")
 	prop_skin = "tower"
