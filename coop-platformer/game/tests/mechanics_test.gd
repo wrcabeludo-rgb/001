@@ -36,6 +36,11 @@ func _run_all() -> void:
 	await _test_electro_floor()
 	await _test_molten()
 	await _test_crane()
+	await _test_energy_barrier()
+	await _test_glass_floor()
+	await _test_grav_lift()
+	await _test_heart_pulse()
+	await _test_rising_plasma()
 
 
 func _test_one_way_platform() -> void:
@@ -434,6 +439,89 @@ func _test_crane() -> void:
 	await _spawn(Heroes.Id.SHOOTER, Vector2(1320, 940 - Player.SIZE.y / 2.0 - 1.0))
 	await _frames(120)
 	_check(_player.is_on_floor() and _player.global_position.x > 1500.0, "кран везёт героя (x %.0f)" % _player.global_position.x)
+
+
+func _test_energy_barrier() -> void:
+	_clear()
+	var barrier := EnergyBarrier.new()
+	barrier.setup(Rect2(1620, 780, 60, 240))
+	_add(barrier)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(1500, FLOOR_Y))
+	_input.set_virtual("right", true)
+	await _frames(60)
+	var stopped := _player.global_position.x < 1620.0
+	barrier.open()
+	await _frames(40)
+	_input.set_virtual("right", false)
+	_check(stopped and _player.global_position.x > 1650.0, "энергобарьер держит, а рычаг его выключает")
+	var timed := EnergyBarrier.new()
+	timed.setup(Rect2(1320, 780, 60, 240))
+	timed.cycle = 1.0
+	timed.on_time = 0.5
+	_add(timed)
+	var states := {}
+	for i in 70:
+		await _frames(1)
+		states[timed.is_open] = true
+	_check(states.size() == 2, "мигающий энергобарьер сам включается и выключается")
+
+
+func _test_glass_floor() -> void:
+	_clear()
+	var glass := GlassFloor.new()
+	glass.setup(Rect2(1560, 900, 60, 60))
+	_add(glass)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(COL_X, 900 - Player.SIZE.y / 2.0 - 1.0))
+	await _frames(10)
+	var held := _player.is_on_floor() and glass.state == CrumblingBlock.State.SHAKING
+	await _frames(40)
+	_check(held and glass.state == CrumblingBlock.State.GONE and _feet() > 1000.0, "стеклянный пол трескается и осыпается")
+
+
+func _test_grav_lift() -> void:
+	_clear()
+	var lift := GravLift.new()
+	lift.setup(Rect2(1560, 600, 60, 420))
+	_add(lift)
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(COL_X, FLOOR_Y))
+	var highest := FLOOR_TOP
+	for i in 90:
+		await _frames(1)
+		highest = minf(highest, _feet())
+	_check(highest < 700.0 and _player.health.current == _player.health.maximum, "гравилифт поднимает героя (до %.0f)" % highest)
+
+
+func _test_heart_pulse() -> void:
+	_clear()
+	var pulse := HeartPulse.new()
+	pulse.interval = 10.0
+	pulse.setup(Vector2(1400, FLOOR_TOP), 9.9)
+	_add(pulse)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(1650, FLOOR_Y))
+	await _frames(80)
+	_check(_player.health.current < _player.health.maximum, "импульс «Сердца» бежит по полу и ранит")
+	for child in _room.get_children():
+		if child is HeartPulse.Wave:
+			child.queue_free()
+
+
+func _test_rising_plasma() -> void:
+	_clear()
+	var plasma := RisingPlasma.new()
+	plasma.speed = 300.0
+	plasma.setup(1200.0, 1900.0, 1200.0)
+	_add(plasma)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(COL_X, FLOOR_Y))
+	await _frames(10)
+	var waiting := not plasma.running
+	_player.global_position.y = 700.0
+	await _frames(5)
+	_check(waiting and plasma.running, "плазма начинает подниматься, когда герои полезли вверх")
+	_player.global_position.y = FLOOR_Y
+	await _frames(60)
+	_check(plasma.surface < 1020.0 and _player.health.current < _player.health.maximum, "поднявшаяся плазма ранит героя")
+	plasma.reset()
+	_check(not plasma.running and plasma.surface == 1200.0, "после гибели команды плазма опускается")
 
 
 func _feet() -> float:

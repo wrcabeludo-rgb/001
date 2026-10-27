@@ -10,11 +10,11 @@ import re
 import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "game")
-SOLID = set("#x<>e")
-STANDABLE_TOP = set("#x=<>e")
+SOLID = set("#x<>eo")
+STANDABLE_TOP = set("#x=<>eo")
 # Molten metal, acid and spikes: never stood on.
 DEADLY = set("^~%")
-ENEMIES = set("wfghcaBWGRtKnO")
+ENEMIES = set("wfghcaBWGRtKnONJjyl&")
 
 
 class Grid:
@@ -61,7 +61,7 @@ class Grid:
                     continue
                 if self.at(r, c) in DEADLY or below in DEADLY:
                     continue
-                if below in STANDABLE_TOP or self.at(r, c) in "HrMLY*":
+                if below in STANDABLE_TOP or self.at(r, c) in "HrMLY*u":
                     spots.add((r, c))
         # Moving platforms and lifts: every cell along their path can be stood on.
         for r in range(self.h):
@@ -106,6 +106,15 @@ class Grid:
                     yield (r + dr, c)
         if self.at(r, c) == "H" and self.at(r - 1, c) not in "H":
             yield (r - 1, c)
+        # A gravity lift floats a hero up its whole column.
+        if self.at(r, c) == "u" or self.at(r + 1, c) == "u":
+            rr = r
+            while self.at(rr - 1, c) == "u":
+                rr -= 1
+            for dr in range(rr - 2, r + 1):
+                for dc in range(-3, 4):
+                    if (dr, c + dc) in spots:
+                        yield (dr, c + dc)
         # A steam vent throws a hero about seven cells up.
         if self.at(r, c) == "V":
             for dr in range(-7, 0):
@@ -154,6 +163,8 @@ class Grid:
                   "b": (230, 60, 30), "k": (100, 140, 110), "F": (255, 140, 30), "v": (180, 160, 140),
                   "M": (130, 160, 220), "*": (130, 160, 220), "L": (230, 200, 60), "z": (255, 50, 120),
                   ">": (60, 60, 70), "<": (60, 60, 70), "e": (90, 160, 255), "%": (255, 120, 20),
+                  "I": (255, 60, 150), "i": (200, 60, 120), "S": (255, 250, 200), "A": (120, 40, 40),
+                  "o": (120, 140, 190), "u": (255, 120, 200), "q": (255, 40, 140), "m": (255, 90, 180),
                   "P": (200, 200, 210), "Q": (170, 110, 60), "V": (230, 230, 230), "Y": (230, 180, 40),
                   "1": (80, 230, 255), "2": (255, 160, 60), "s": (60, 60, 120), "$": (255, 215, 0), "U": (255, 255, 255)}
         img = Image.new("RGB", (self.w * scale, self.h * scale))

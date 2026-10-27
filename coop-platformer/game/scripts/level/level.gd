@@ -33,6 +33,15 @@ extends Node2D
 ##   'P' press under the ceiling (a run of 'P' = a wider plate), slams to the floor
 ##   'Q' crate hatch in the ceiling   'V' steam vent on the floor (throws heroes up)
 ##   'Y' crane: a platform hanging from a rail, shuttles to the '*' in the same row
+## Tower (world 3):
+##   'I' energy barrier down to the floor (a lever opens it, like 'd')
+##   'i' energy barrier that flickers on and off by itself
+##   'S' searchlight under the ceiling: a hero in its beam calls guards out of
+##       the nearest 'A' alarm hatch   'o' glass floor (cracks and shatters)
+##   'u' gravity lift: a vertical run of 'u' is a column that floats heroes up
+##   'q' vent of the Heart: sends energy waves along the floor
+##   'm' the Heart's plasma: a row of 'm' at the bottom of a shaft rises once
+##       heroes climb
 ##   'X' the chase: when a hero passes this column, the giant loader rolls in
 ##       behind the team and chases it up to the next arena gate '['
 ## Bosses only appear in arena waves: 'B' the Sludge Master, 'Z' the Lumen loader.
@@ -550,6 +559,8 @@ func _build_mechanics(map: Array) -> void:
 	var flamers := 0
 	var presses := 0
 	var timed := 0
+	var searchlights: Array[Searchlight] = []
+	var hatches: Array[AlarmHatch] = []
 
 	for row in map.size():
 		var line: String = map[row]
@@ -603,6 +614,50 @@ func _build_mechanics(map: Array) -> void:
 						add_child(climbable)
 						if cell == "H" and _at(map, col, row - 1) == ".":
 							add_one_way(one_way, Level.cell_rect(col, row - 1))
+				"o":
+					var glass := GlassFloor.new()
+					glass.setup(rect)
+					add_child(glass)
+				"S":
+					var light := Searchlight.new()
+					light.setup(rect.position + Vector2(TILE / 2.0, 0), _wall_below(map, col, row) * TILE)
+					add_child(light)
+					searchlights.append(light)
+				"A":
+					var hatch := AlarmHatch.new()
+					hatch.position = bottom
+					add_child(hatch)
+					hatches.append(hatch)
+				"u":
+					if _at(map, col, row - 1) != "u":
+						var end_row := row
+						while _at(map, col, end_row + 1) == "u":
+							end_row += 1
+						var lift := GravLift.new()
+						lift.setup(Rect2(rect.position, Vector2(TILE, (end_row - row + 1) * TILE)))
+						add_child(lift)
+				"q":
+					var pulse := HeartPulse.new()
+					pulse.setup(bottom, (timed % 2) * 1.7)
+					timed += 1
+					add_child(pulse)
+				"m":
+					if _at(map, col - 1, row) != "m":
+						var end_col := col
+						while _at(map, end_col + 1, row) == "m":
+							end_col += 1
+						var plasma := RisingPlasma.new()
+						plasma.setup(col * TILE, (end_col + 1) * TILE, (row + 1) * TILE)
+						add_child(plasma)
+				"I", "i":
+					var barrier := EnergyBarrier.new()
+					barrier.setup(Rect2(rect.position, Vector2(TILE, (_wall_below(map, col, row) - row) * TILE)))
+					if cell == "i":
+						barrier.cycle = 4.0
+						barrier.on_time = 2.4
+					else:
+						doors.append(barrier)
+					add_child(barrier)
 				"x":
 					var block := CrumblingBlock.new()
 					block.setup(rect)
@@ -676,6 +731,13 @@ func _build_mechanics(map: Array) -> void:
 					levers.append(lever)
 			col += 1
 
+	for light in searchlights:
+		var best_hatch := INF
+		for hatch in hatches:
+			var distance := light.position.distance_to(hatch.position)
+			if distance < best_hatch:
+				best_hatch = distance
+				light.hatch = hatch
 	for lever in levers:
 		var best_distance := INF
 		for door in doors:
@@ -752,7 +814,7 @@ static func _at(map: Array, col: int, row: int) -> String:
 
 
 ## Cells that are solid ground: walls, conveyors and electrified floor.
-const SOLID_CELLS := ["#", ">", "<", "e"]
+const SOLID_CELLS := ["#", ">", "<", "e", "o"]
 
 
 ## The row of the first wall below a cell (or the bottom of the map).

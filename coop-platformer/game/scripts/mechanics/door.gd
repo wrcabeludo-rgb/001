@@ -32,6 +32,11 @@ func _ready() -> void:
 	_collision.shape = shape
 	_collision.disabled = is_open
 	add_child(_collision)
+	_build_look()
+
+
+## The door's picture (an energy barrier draws its own field instead).
+func _build_look() -> void:
 	var color := GATE_COLOR if gate else COLOR
 	# A faint frame stays visible while the door is open.
 	_frame = Harm.box(-size / 2.0 - Vector2(6, 0), Vector2(size.x + 12, 6), color.darkened(0.3))
