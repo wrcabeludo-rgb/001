@@ -280,3 +280,83 @@ no frame, no text, no letters, no numbers. Square 1:1.
 ```
 
 Проверка: ровно одно сердце, без надписей «+1» (цифру игра рисует сама, если нужно), белый фон.
+
+
+## Листы по 5 штук (быстрый способ)
+
+Вместо отдельных картинок выше — два листа, я сам их нарежу. Разных героев на один лист не ставим: нейросеть их путает.
+
+**`sheet_gunner_aim`** — Стрелок: 5 поз стрельбы. Приложить `gunner_side_original.png`.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Five poses of ONE and the same character, the Gunner from the attached image — copy his design exactly:
+a long tattered sand-beige hooded coat with torn hem and holes, a long ragged dark-red scarf wrapped
+around the neck and hanging behind, a respirator mask with glowing cyan lenses inside the hood,
+riveted steel shoulder and forearm plates, dark quilted trousers with steel knee plates, tall brown
+buckled boots, a belt with pouches and two glowing cyan energy cells. In every pose he holds ONLY ONE weapon:
+the same long rusty scavenged rifle — skeletal stock, scope on top, two glowing cyan energy cells along
+the body, dark-red cloth wrapped around the barrel, a perforated muzzle, a brown leather sling.
+Every pose: full body, side view, facing RIGHT, all five figures at exactly the same scale, both hands on the rifle,
+the stock at his shoulder, the masked face looking along the barrel.
+
+Top row, left to right:
+1. Standing, feet apart, aiming the rifle straight UP at the sky, the rifle vertical, the head tilted back.
+2. Standing, feet apart, aiming the rifle diagonally UP and forward at 45 degrees.
+3. Standing, feet apart, aiming the rifle diagonally DOWN and forward at 45 degrees, leaning slightly forward.
+
+Bottom row, left to right:
+4. In mid-air jumping, knees pulled up, aiming diagonally DOWN and forward at 45 degrees, coat and scarf flying up behind.
+5. In mid-air jumping, legs apart, aiming straight DOWN under his feet, the rifle vertical with the muzzle at the bottom,
+   coat and scarf flying up.
+
+A game sprite sheet of exactly 5 separate items, laid out in two rows: three figures in the top row and two figures in the bottom row.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. Flat even lighting, pure white background, no shadows on the ground,
+no glow halo spreading onto the background, no motion lines, no grid lines, no frames, no labels,
+no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 5 фигур, везде один и тот же Стрелок, у каждого одна винтовка, все смотрят вправо, направления ствола: вверх, вверх-вперёд, вниз-вперёд, в прыжке вниз-вперёд, в прыжке строго вниз.
+
+**`sheet_swordsman_powers`** — Мечник ранен и гибель + 3 усилителя. Приложить `swordsman_side_original.png`.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, ruined neon megacity after a catastrophe. Moody low-key lighting,
+deep navy and charcoal shadows, rusted metal and cracked concrete, thin fog, rain-wet surfaces,
+selective neon accents (cyan, magenta, orange) as the main light sources. Strong readable silhouettes,
+clean edges, no photorealism, no pixel art, no 3D render look, no text, no watermark.
+
+Two poses of the Swordsman from the attached image, and three small pickup capsules. Copy the Swordsman exactly:
+short messy brown hair, short beard, thick black knitted scarf, dark riveted plate armour with glowing
+orange seams, a mechanical right arm with an orange glowing joint, armoured boots with straps, a belt
+with leather pouches. He has ONLY ONE sword: a long curved serrated blade glowing orange with dash-shaped
+vents. There is NO sheath, NO scabbard and NO second sword on his belt, back or hip. Both poses: full body,
+side view facing RIGHT, the same scale. Not gory, no blood.
+
+Top row, left to right:
+1. Swordsman knocked back by a hit from the front: body bent backwards, teeth clenched, both feet just leaving
+   the ground, the free left arm flung out, the glowing sword still in his right hand swung back, the scarf flying forward.
+2. Swordsman collapsed on the ground: lying on his side along the ground line, knees slightly bent, knocked out,
+   the glowing sword dropped on the ground just in front of his open right hand, its glow fading.
+
+Bottom row, left to right, three power-up capsules of the same design: a small riveted steel capsule with a glass
+window and an emblem on the front plate (emblems are pictures, no letters):
+3. Rage: furious swirling red-orange energy like a tiny fire storm inside, a red glowing claw-mark emblem, small sparks.
+4. Shield: calm pale-blue energy inside, a light-blue hexagonal force-field grid around it, a shield-shaped emblem.
+5. Haste: bright yellow crackling energy inside, a lightning-bolt emblem, little yellow sparks streaming back.
+
+A game sprite sheet of exactly 5 separate items, laid out in two rows: the two Swordsman poses in the top row and the three capsules in the bottom row.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. Flat even lighting, pure white background, no shadows on the ground,
+no glow halo spreading onto the background, no motion lines, no grid lines, no frames, no labels,
+no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 5 элементов, у Мечника один меч и нет ножен, на капсулах нет букв, цвета: красная, голубая, жёлтая.

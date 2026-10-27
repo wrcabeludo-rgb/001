@@ -32,6 +32,16 @@ SHEETS = {
         "props/prop_barrier_emitter_original.png", None, "props/pickup_life_original.png",
         "props/prop_grenade_original.png",
     ],
+    "sheet_gunner_aim": [
+        "heroes/poses/originals/gunner_aim_up_original.png", "heroes/poses/originals/gunner_aim_diag_up_original.png",
+        "heroes/poses/originals/gunner_aim_diag_down_original.png",
+        "heroes/poses/originals/gunner_air_aim_diag_down_original.png",
+        "heroes/poses/originals/gunner_air_aim_down_original.png",
+    ],
+    "sheet_swordsman_powers": [
+        "heroes/poses/originals/swordsman_hurt_original.png", "heroes/poses/originals/swordsman_death_original.png",
+        "props/power_rage_original.png", "props/power_shield_original.png", "props/power_haste_original.png",
+    ],
     "sheet_tiles_3": [
         "tiles/tile_3-1_ground_original.png", "tiles/tile_3-2_ground_original.png",
         "tiles/tile_3-3_ground_original.png",
