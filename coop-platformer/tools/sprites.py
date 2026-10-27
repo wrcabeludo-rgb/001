@@ -8,7 +8,9 @@ the picture is cropped and scaled. Heroes are also cut into a cutout rig:
 body, back leg and front leg (polygons below, in the original's pixels).
 """
 import json
+import io
 import os
+import subprocess
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -276,6 +278,8 @@ POSE_SOURCES = {
     "gunner_climb": [("gunner_climb", (0, 0, 724, 1086), 1.12), ("gunner_climb", (724, 0, 1448, 1086), 1.12)],
     # Knocked back by a hit: the body lies diagonally, so it is scaled by its own height.
     "gunner_hurt": [("gunner_hurt", None, 0.95)],
+    # Lying on the ground: about as tall as a third of the standing hero.
+    "gunner_death": [("gunner_death", None, 0.36)],
     "swordsman_crouch": [("swordsman_crouch", (0, 880, 1024, 1536), (0, 0, 1024, 875))],
     "swordsman_block": [("swordsman_block", None)],
     "swordsman_slash_down": [("swordsman_slash_down", None)],
@@ -403,8 +407,60 @@ def build_poses():
                     anchor = (soles.min() + soles.max()) / 2.0 / width if len(soles) else 0.5
                 anchors["%s_%d" % (key, n)] = round(float(anchor), 3)
                 save(img, "heroes/%s_pose_%s_%d.png" % (hero, pose, n))
+    _video_poses(anchors)
     with open(os.path.join(OUT, "heroes/poses.json"), "w") as f:
         json.dump(anchors, f, indent=1)
+
+
+# Poses cut from short videos on a green background (one hero, a fixed side camera):
+# variant: (video in art_source/heroes/video, seconds of the standing frame,
+#           {pose: [seconds of each frame]}). A variant is a weapon in the hand: the
+# game shows "<hero>_pose_<weapon>_<pose>" while that weapon is held.
+VIDEO_POSES = {
+    "swordsman_shock": ("swordsman_shock_combo.mp4", 0.0, {
+        "idle": [0.0],
+        "slash_down": [9 / 6, 10 / 6],
+        "slash_rising": [21 / 6, 23 / 6],
+        "slash_finisher": [33 / 6, 36 / 6],
+        "slash_overhead": [50 / 6, 52 / 6],
+    }),
+}
+
+
+def _video_frame(video, seconds):
+    """One frame of a green-screen video with the green made transparent."""
+    data = subprocess.run(["ffmpeg", "-v", "error", "-ss", "%.3f" % seconds, "-i", video, "-frames:v", "1",
+                           "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True, check=True).stdout
+    rgb = np.asarray(Image.open(io.BytesIO(data)).convert("RGB")).astype(np.int16)
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    # How much greener than the other channels: the screen is about 100+; soft edges in between.
+    excess = g - np.maximum(r, b)
+    alpha = np.clip((90 - excess) * 255 / 60, 0, 255).astype(np.uint8)
+    out = rgb.copy()
+    # Despill: no green fringe on the edges.
+    out[:, :, 1] = np.minimum(g, np.maximum(r, b) + 12)
+    img = Image.fromarray(np.dstack([out.clip(0, 255).astype(np.uint8), alpha]), "RGBA")
+    # Only the largest piece (the hero), no stray specks.
+    return crop(img)[0]
+
+
+def _video_poses(anchors):
+    for key, (video, stand_at, poses) in VIDEO_POSES.items():
+        path = os.path.join(SRC, "heroes", "video", video)
+        if not os.path.exists(path):
+            continue
+        hero, weapon = key.split("_", 1)
+        factor = HEROES[hero]["height"] * 0.97 / _video_frame(path, stand_at).size[1]
+        for pose, times in poses.items():
+            for n, seconds in enumerate(times, 1):
+                img = _video_frame(path, seconds)
+                img = img.resize((max(1, round(img.size[0] * factor)), max(1, round(img.size[1] * factor))),
+                                 Image.LANCZOS)
+                alpha = np.asarray(img)[:, :, 3]
+                soles = np.nonzero(alpha[int(alpha.shape[0] * 0.86):].max(axis=0) > 128)[0]
+                anchor = (soles.min() + soles.max()) / 2.0 / alpha.shape[1] if len(soles) else 0.5
+                anchors["%s_%s_%s_%d" % (hero, weapon, pose, n)] = round(float(anchor), 3)
+                save(img, "heroes/%s_pose_%s_%s_%d.png" % (hero, weapon, pose, n))
 
 
 # ---------------------------------------------------------------- shop backdrop

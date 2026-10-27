@@ -7,6 +7,7 @@
  "gunner_climb_1": 0.498,
  "gunner_climb_2": 0.505,
  "gunner_hurt_1": 0.482,
+ "gunner_death_1": 0.458,
  "gunner_run_1": 0.399,
  "gunner_run_2": 0.443,
  "gunner_run_3": 0.407,
@@ -27,5 +28,14 @@
  "swordsman_run_1": 0.525,
  "swordsman_run_2": 0.514,
  "swordsman_run_3": 0.508,
- "swordsman_run_4": 0.494
+ "swordsman_run_4": 0.494,
+ "swordsman_shock_idle_1": 0.462,
+ "swordsman_shock_slash_down_1": 0.461,
+ "swordsman_shock_slash_down_2": 0.279,
+ "swordsman_shock_slash_rising_1": 0.295,
+ "swordsman_shock_slash_rising_2": 0.349,
+ "swordsman_shock_slash_finisher_1": 0.64,
+ "swordsman_shock_slash_finisher_2": 0.189,
+ "swordsman_shock_slash_overhead_1": 0.434,
+ "swordsman_shock_slash_overhead_2": 0.44
 }

@@ -19,8 +19,10 @@ const ART := "res://assets/art/heroes/"
 const ART_SCALE := 0.5
 const RIG_FILE := "res://assets/art/heroes/rig.json"
 const POSE_FILE := "res://assets/art/heroes/poses.json"
-const POSES := ["run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick", "hurt",
+const POSES := ["idle", "run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick", "hurt", "death",
 	"slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
+## Weapons that may have their own drawings of the poses.
+const WEAPON_VARIANTS := ["shock", "heavy", "shotgun", "flamer"]
 const SLASH_POSES := ["slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
 ## Until a pose has its own drawing it borrows a run frame: [pose, frame, tilt].
 ## The run's second frame has a knee raised (a jump), the first a wide stride.
@@ -59,6 +61,8 @@ var _action_length := 0.0
 var _action_time := 0.0
 ## Drawn poses: name -> [textures], and where the feet are in each frame (0..1 across).
 var _pose_art := {}
+## The weapon in the hero's hand, for poses drawn with it.
+var _weapon := ""
 var _pose_anchor := {}
 var _pose_sprite: Sprite2D
 var _clock := 0.0
@@ -111,26 +115,37 @@ func _load_poses() -> void:
 	var anchors: Variant = {}
 	if FileAccess.file_exists(POSE_FILE):
 		anchors = JSON.parse_string(FileAccess.get_file_as_string(POSE_FILE))
-	for pose_name in POSES:
-		var frames: Array[Texture2D] = []
-		for n in range(1, 9):
-			var path := "%s%s_pose_%s_%d.png" % [ART, art_name, pose_name, n]
-			if not ResourceLoader.exists(path):
-				break
-			frames.append(load(path))
-		if not frames.is_empty():
-			_pose_art[pose_name] = frames
-			var feet: Array[float] = []
-			for n in frames.size():
-				var key := "%s_%s_%d" % [art_name, pose_name, n + 1]
-				feet.append(float(anchors.get(key, 0.5)) if anchors is Dictionary else 0.5)
-			_pose_anchor[pose_name] = feet
+	# Plain poses, then poses with a particular weapon in the hand ("shock_slash_down"
+	# is shown instead of "slash_down" while the shock baton is held).
+	for prefix in [""] + WEAPON_VARIANTS:
+		for pose_name in POSES:
+			var key_name: String = prefix + "_" + pose_name if prefix != "" else pose_name
+			var frames: Array[Texture2D] = []
+			for n in range(1, 9):
+				var path := "%s%s_pose_%s_%d.png" % [ART, art_name, key_name, n]
+				if not ResourceLoader.exists(path):
+					break
+				frames.append(load(path))
+			if not frames.is_empty():
+				_pose_art[key_name] = frames
+				var feet: Array[float] = []
+				for n in frames.size():
+					var key := "%s_%s_%d" % [art_name, key_name, n + 1]
+					feet.append(float(anchors.get(key, 0.5)) if anchors is Dictionary else 0.5)
+				_pose_anchor[key_name] = feet
 	_pose_sprite = Sprite2D.new()
 	_pose_sprite.centered = false
 	_pose_sprite.material = Flash.material()
 	_pose_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_pose_sprite.visible = false
 	add_child(_pose_sprite)
+
+
+## The drawing of a pose (its first frame) and where its feet are (0..1 across), or null.
+func pose_texture(pose_name: String) -> Array:
+	if not _pose_art.has(pose_name):
+		return []
+	return [_pose_art[pose_name][0], _pose_anchor[pose_name][0]]
 
 
 ## True if this pose has a drawing (tests and the art pipeline use it).
@@ -190,6 +205,8 @@ func _state(player: Player) -> String:
 ## Updates the pose from what the hero is doing.
 func pose(player: Player, delta: float) -> void:
 	scale.x = ART_SCALE * player.facing
+	var held: Variant = player.combat.get("weapon") if player.combat != null else null
+	_weapon = held if held is String else ""
 	_clock += delta
 	_action_time += delta
 	var current := current_pose(player)
@@ -309,6 +326,9 @@ func pose(player: Player, delta: float) -> void:
 
 ## Shows the drawing for this pose if there is one; false keeps the puppet.
 func _show_drawing(pose_name: String) -> bool:
+	var base := pose_name
+	if _weapon != "" and _pose_art.has(_weapon + "_" + pose_name):
+		pose_name = _weapon + "_" + pose_name
 	var frames: Array = _pose_art.get(pose_name, [])
 	var tilt := 0.0
 	var borrowed := -1
@@ -328,9 +348,9 @@ func _show_drawing(pose_name: String) -> bool:
 	var index := 0
 	if borrowed >= 0:
 		index = mini(borrowed, frames.size() - 1)
-	elif pose_name == "climb":
+	elif base == "climb":
 		index = int(_phase / PI) % frames.size()
-	elif pose_name == "run":
+	elif base == "run":
 		index = int(fposmod(_phase, TAU) / TAU * frames.size()) % frames.size()
 	elif _acting() and frames.size() > 1:
 		# The first frame is the windup, a short third of the action; the rest is the strike.

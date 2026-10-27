@@ -143,6 +143,28 @@ func kill() -> void:
 		health.damage(health.current)
 
 
+## Where the hero fell: the drawing of them lying on the ground, fading away
+## while they wait to come back (only once the pose is drawn).
+func leave_body() -> void:
+	var art := _rig.pose_texture("death")
+	var parent := get_parent()
+	if art.is_empty() or parent == null:
+		return
+	var body := Sprite2D.new()
+	var texture: Texture2D = art[0]
+	body.texture = texture
+	body.centered = false
+	body.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	body.offset = Vector2(-texture.get_width() * float(art[1]), -texture.get_height())
+	body.scale = Vector2(HeroRig.ART_SCALE * facing, HeroRig.ART_SCALE)
+	body.global_position = global_position + Vector2(0, SIZE.y / 2.0)
+	parent.add_child(body)
+	var tween := body.create_tween()
+	tween.tween_interval(1.6)
+	tween.tween_property(body, "modulate:a", 0.0, 1.0)
+	tween.tween_callback(body.queue_free)
+
+
 ## A dead hero is hidden and takes no part in the game until revived.
 func set_active(active: bool) -> void:
 	visible = active

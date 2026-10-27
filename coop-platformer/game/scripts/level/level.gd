@@ -297,6 +297,7 @@ func _check_hero_swap() -> void:
 
 
 func _on_player_died(player: Player) -> void:
+	player.leave_body()
 	player.set_active(false)
 	deaths[player.slot] = deaths.get(player.slot, 0) + 1
 	_respawn_timers[player.slot] = RESPAWN_DELAY
