@@ -132,6 +132,7 @@ ENEMIES = {
     "enemies/grenadier.png": ("enemies/enemy_grenadier_original.png", 264),
     "enemies/trooper.png": ("enemies/enemy_trooper_original.png", 248),
     "enemies/exo_heavy.png": ("enemies/enemy_exo_heavy_original.png", 360),
+    "enemies/boss_commander.png": ("enemies/boss_commander_original.png", 580),
 }
 
 
@@ -748,6 +749,10 @@ BACKGROUNDS = {
     "backgrounds/bg_far_2-3.png": ("backgrounds/bg_far_2-3_original.png", False, 400),
     "backgrounds/bg_mid_2-1.png": ("backgrounds/bg_mid_2-1_original.png", True, 360),
     "backgrounds/bg_mid_2-3.png": ("backgrounds/bg_mid_2-3_original.png", True, 360),
+    "backgrounds/bg_far_3-1.png": ("backgrounds/bg_far_3-1_original.png", False, 400),
+    "backgrounds/bg_mid_3-1.png": ("backgrounds/bg_mid_3-1_original.png", True, 360),
+    "backgrounds/bg_far_3-2.png": ("backgrounds/bg_far_3-2_original.png", False, 400),
+    "backgrounds/bg_mid_3-2.png": ("backgrounds/bg_mid_3-2_original.png", True, 360),
 }
 
 
@@ -766,7 +771,8 @@ def build_backgrounds():
 
 
 # Mid layers whose picture starts with a straight cut: the top edge melts into the fog.
-FADE_TOP = {"backgrounds/bg_mid_2-1.png", "backgrounds/bg_mid_2-2.png", "backgrounds/bg_mid_2-3.png"}
+FADE_TOP = {"backgrounds/bg_mid_2-1.png", "backgrounds/bg_mid_2-2.png", "backgrounds/bg_mid_2-3.png",
+            "backgrounds/bg_mid_3-2.png"}
 
 
 def _fade_top(img, height):
