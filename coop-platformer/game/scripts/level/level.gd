@@ -13,7 +13,8 @@ extends Node2D
 ## the ceiling of its cell); robots of world 2: 'W' welder, 'G' shield guard,
 ## 'R' scout drone and 'n' repair drone (flying), 't' ceiling turret (hangs from
 ## the ceiling), 'K' kamikaze, 'O' loader brute. Other objects stand on the
-## bottom of their cell.
+## bottom of their cell; Lumen security of world 3: 'N' rifleman, 'J' sniper,
+## 'j' grenadier, 'y' trooper, 'l' exo-trooper.
 ## Level mechanics:
 ##   '=' one-way platform (top of the cell)   'x' crumbling block
 ##   'M' moving platform, shuttles to the '*' in the same row
@@ -396,6 +397,11 @@ func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 		"K": enemy = Kamikaze.new()
 		"O": enemy = LoaderBrute.new()
 		"Z": enemy = LoaderBoss.new()
+		"N": enemy = Rifleman.new()
+		"J": enemy = Sniper.new()
+		"j": enemy = Grenadier.new()
+		"y": enemy = Trooper.new()
+		"l": enemy = ExoHeavy.new()
 		_: return null
 	var half_height := enemy.body_size.y / 2.0
 	match letter:
@@ -504,7 +510,7 @@ func _build_level() -> void:
 				"T":
 					if spawn_targets:
 						_add_object(TurretDummy.new(), floor_point - Vector2(0, 25))
-				"w", "f", "g", "h", "c", "a", "W", "G", "R", "n", "t", "K", "O":
+				"w", "f", "g", "h", "c", "a", "W", "G", "R", "n", "t", "K", "O", "N", "J", "j", "y", "l":
 					if spawn_targets:
 						_enemy_spots.append([cell, floor_point])
 						spawn_enemy(cell, floor_point)

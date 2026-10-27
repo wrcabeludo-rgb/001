@@ -27,6 +27,11 @@ func _run_all() -> void:
 	await _test_kamikaze()
 	await _test_repair_drone()
 	await _test_loader_brute()
+	await _test_rifleman_bursts()
+	await _test_sniper_aims_long()
+	await _test_grenadier_grenade()
+	await _test_trooper_lunges()
+	await _test_exo_heavy_sweeps()
 
 
 func _test_walker_stays_on_platform() -> void:
@@ -304,6 +309,72 @@ func _test_loader_brute() -> void:
 		"погрузчик-громила бьёт манипулятором")
 
 
+func _test_rifleman_bursts() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	_enemy(Rifleman.new(), HERO_X + 330.0)
+	var most := 0
+	var warned_first := true
+	for i in 150:
+		await _frames(1)
+		most = maxi(most, _enemy_bullets())
+		if i < 20 and _enemy_bullets() > 0:
+			warned_first = false
+	_check(warned_first and most == 3, "автоматчик целится и стреляет очередью из трёх (%d)" % most)
+
+
+func _test_sniper_aims_long() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	_enemy(Sniper.new(), HERO_X + 340.0)
+	var first := -1
+	for i in 200:
+		await _frames(1)
+		if _enemy_bullets() > 0:
+			first = i
+			break
+	await _frames(40)
+	_check(first >= 120 and _player.health.current <= _player.health.maximum - 3,
+		"снайпер долго целится (кадр %d) и бьёт сильно" % first)
+
+
+func _test_grenadier_grenade() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var thrower := _enemy(Grenadier.new(), HERO_X + 400.0) as Grenadier
+	await _frames(100)
+	var flying := false
+	for child in _room.get_children():
+		flying = flying or child is Grenadier.Grenade
+	await _frames(90)
+	_check(flying and _player.health.current < _player.health.maximum, "гренадёр бросает гранату, она взрывается у героя")
+	thrower.queue_free()
+
+
+func _test_trooper_lunges() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SWORDSMAN, Vector2(HERO_X, FLOOR_Y))
+	var trooper := _enemy(Trooper.new(), HERO_X + 340.0) as Trooper
+	var lunged := false
+	for i in 150:
+		await _frames(1)
+		lunged = lunged or trooper.state == Trooper.State.LUNGE
+	_check(lunged and _player.health.current < _player.health.maximum, "штурмовик подбегает и делает выпад")
+
+
+func _test_exo_heavy_sweeps() -> void:
+	_clear()
+	await _spawn(Heroes.Id.SHOOTER, Vector2(HERO_X, FLOOR_Y))
+	var exo := _enemy(ExoHeavy.new(), HERO_X + 330.0) as ExoHeavy
+	var most := 0
+	var warned := false
+	for i in 200:
+		await _frames(1)
+		warned = warned or exo.is_telegraphing()
+		most = maxi(most, _enemy_bullets())
+	_check(warned and most >= 6, "экзобоец раскручивает пулемёт и бьёт веером (%d пуль)" % most)
+
+
 ## An enemy standing on the floor (top at `floor_top`) at `x`.
 func _enemy(enemy: Enemy, x: float, floor_top := FLOOR_TOP) -> Enemy:
 	return _enemy_at(enemy, Vector2(x, floor_top - enemy.body_size.y / 2.0))
@@ -338,5 +409,5 @@ func _clear() -> void:
 			node.queue_free()
 	_enemies.clear()
 	for child in _room.get_children():
-		if child is Projectile or child is Pickup:
+		if child is Projectile or child is Pickup or child is Grenadier.Grenade:
 			child.queue_free()

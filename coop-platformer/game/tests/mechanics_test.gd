@@ -41,6 +41,7 @@ func _run_all() -> void:
 	await _test_grav_lift()
 	await _test_heart_pulse()
 	await _test_rising_plasma()
+	await _test_searchlight_alarm()
 
 
 func _test_one_way_platform() -> void:
@@ -522,6 +523,31 @@ func _test_rising_plasma() -> void:
 	_check(plasma.surface < 1020.0 and _player.health.current < _player.health.maximum, "поднявшаяся плазма ранит героя")
 	plasma.reset()
 	_check(not plasma.running and plasma.surface == 1200.0, "после гибели команды плазма опускается")
+
+
+func _test_searchlight_alarm() -> void:
+	_clear()
+	var hatch := AlarmHatch.new()
+	hatch.position = Vector2(1300, FLOOR_TOP)
+	_add(hatch)
+	var light := Searchlight.new()
+	light.sweep = 0.0
+	light.setup(Vector2(COL_X, 600), FLOOR_TOP)
+	light.hatch = hatch
+	_add(light)
+	await _spawn(Heroes.Id.SHOOTER, Vector2(COL_X, FLOOR_Y))
+	await _frames(90)
+	var guards := 0
+	for node in get_tree().get_nodes_in_group("enemies"):
+		guards += 1 if node is Rifleman or node is Trooper else 0
+	_check(guards == 2, "прожектор поймал героя — из люка выбегают двое охранников (%d)" % guards)
+	for node in get_tree().get_nodes_in_group("enemies"):
+		node.queue_free()
+	light.receive_hit(Hit.make(1, Vector2.ZERO, light.global_position))
+	light._cooldown = 0.0
+	await _frames(90)
+	var after := get_tree().get_nodes_in_group("enemies").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).size()
+	_check(light.broken and after == 0, "разбитый прожектор больше не поднимает тревогу")
 
 
 func _feet() -> float:
