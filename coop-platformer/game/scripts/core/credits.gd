@@ -12,6 +12,10 @@ const MUSIC := [
 	["2-2 Литейная", "Malicious"],
 	["2-3 Насосная станция", "Industrial Revolution"],
 	["Погоня", "Killers"],
+	["3-1 Подножие Башни", "Movement Proposition"],
+	["3-2 Шахта лифта", "Rocket"],
+	["3-3 Ядро «Сердца»", "Darkling"],
+	["Командир", "Ready Aim Fire"],
 ]
 
 

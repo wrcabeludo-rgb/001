@@ -43,9 +43,11 @@ extends Node2D
 ##   'q' vent of the Heart: sends energy waves along the floor
 ##   'm' the Heart's plasma: a row of 'm' at the bottom of a shaft rises once
 ##       heroes climb
+##   '{' / '}' the finale's switches: put out the Heart / let it burn
 ##   'X' the chase: when a hero passes this column, the giant loader rolls in
 ##       behind the team and chases it up to the next arena gate '['
-## Bosses only appear in arena waves: 'B' the Sludge Master, 'Z' the Lumen loader.
+## Bosses only appear in arena waves: 'B' the Sludge Master, 'Z' the Lumen loader,
+## '&' the commander of the Lumen security.
 
 const TILE := 60
 const COLOR_WALL := Color(0.35, 0.37, 0.42)
@@ -121,6 +123,8 @@ var _sky_layers: Array[CanvasItem] = []
 var _lightning_timer := 6.0
 var _flash := 0.0
 var _boss_bar: BossBar
+## The finale's two switches.
+var _switches: Array[ChoiceSwitch] = []
 var _toast_time := 0.0
 
 
@@ -402,6 +406,7 @@ func spawn_enemy(letter: String, floor_point: Vector2) -> Enemy:
 		"j": enemy = Grenadier.new()
 		"y": enemy = Trooper.new()
 		"l": enemy = ExoHeavy.new()
+		"&": enemy = Commander.new()
 		_: return null
 	var half_height := enemy.body_size.y / 2.0
 	match letter:
@@ -473,6 +478,38 @@ func after_zone_scene() -> String:
 	if index >= SaveGame.ZONES.size() - 1:
 		return "res://scenes/title.tscn"
 	return "res://scenes/shop.tscn"
+
+
+## A hero hit a finale switch. The choice is made when every hero in the game
+## has voted for the same one.
+func _on_choice_voted(switch: ChoiceSwitch, slot: int) -> void:
+	for other in _switches:
+		if other != switch:
+			other.remove_vote(slot)
+	for other_slot in players:
+		if not switch.votes.has(other_slot):
+			show_toast("Нужно выбрать одно и то же — ждём напарника", 3.0)
+			return
+	SaveGame.data["ending"] = switch.choice
+	complete_level()
+
+
+## Shows a comic over the level (the game waits); `done` is called after it.
+func play_comic(panels: Array, done := Callable()) -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	var comic: Control = load("res://scripts/ui/comic_player.gd").new()
+	comic.panels = panels
+	comic.process_mode = Node.PROCESS_MODE_ALWAYS
+	layer.add_child(comic)
+	get_tree().paused = true
+	comic.finished.connect(func() -> void:
+		get_tree().paused = false
+		layer.queue_free()
+		if done.is_valid():
+			done.call())
 
 
 func show_toast(text: String, seconds := 2.0) -> void:
@@ -683,6 +720,13 @@ func _build_mechanics(map: Array) -> void:
 					chute.setup(Vector2(rect.get_center().x, rect.position.y), (timed % 3) * 1.1)
 					timed += 1
 					add_child(chute)
+				"{", "}":
+					var switch := ChoiceSwitch.new()
+					switch.choice = "off" if cell == "{" else "keep"
+					switch.position = bottom
+					add_child(switch)
+					switch.voted.connect(_on_choice_voted)
+					_switches.append(switch)
 				"X":
 					# The chase ends at the nearest arena gate to the right, in any row.
 					var gate: int = line.length()

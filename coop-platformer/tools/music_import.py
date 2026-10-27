@@ -26,6 +26,10 @@ TRACKS = {
     "zone_2_2": ("Malicious", -16.0),
     "zone_2_3": ("Industrial Revolution", -16.0),
     "boss_2": ("Killers", -15.0),
+    "zone_3_1": ("Movement Proposition", -16.0),
+    "zone_3_2": ("Rocket", -16.0),
+    "zone_3_3": ("Darkling", -16.0),
+    "boss_3": ("Ready Aim Fire", -15.0),
 }
 
 

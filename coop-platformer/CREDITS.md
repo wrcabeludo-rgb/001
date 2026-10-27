@@ -21,6 +21,10 @@ Kevin MacLeod, [incompetech.com](https://incompetech.com).
 | 2-2 Литейная | `music/zone_2_2.ogg` | «Malicious» |
 | 2-3 Насосная станция | `music/zone_2_3.ogg` | «Industrial Revolution» |
 | Погоня (босс мира 2) | `music/boss_2.ogg` | «Killers» |
+| 3-1 Подножие Башни | `music/zone_3_1.ogg` | «Movement Proposition» |
+| 3-2 Шахта лифта | `music/zone_3_2.ogg` | «Rocket» |
+| 3-3 Ядро «Сердца» | `music/zone_3_3.ogg` | «Darkling» |
+| Командир (босс мира 3) | `music/boss_3.ogg` | «Ready Aim Fire» |
 
 Трек зоны 2-1 «Сборочный цех» — «Cyber Factory Rush» (WarmingLetter, сделан в Flow Music),
 `music/zone_2_1.ogg`, исходник в `art_source/music/`.

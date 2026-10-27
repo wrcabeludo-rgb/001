@@ -18,6 +18,10 @@ ZONES = {
     1: {"sky": (18, 20, 30), "haze": (60, 40, 80), "glow": (255, 46, 136), "dark": (24, 27, 36)},
     2: {"sky": (26, 16, 14), "haze": (120, 50, 20), "glow": (255, 120, 30), "dark": (30, 22, 20)},
     3: {"sky": (14, 22, 20), "haze": (30, 70, 40), "glow": (140, 255, 80), "dark": (20, 28, 26)},
+    # World 3, the Lumen tower: black glass and magenta.
+    4: {"sky": (14, 12, 22), "haze": (70, 20, 60), "glow": (255, 46, 136), "dark": (20, 18, 28)},
+    5: {"sky": (12, 12, 18), "haze": (50, 20, 50), "glow": (255, 46, 136), "dark": (18, 18, 24)},
+    6: {"sky": (20, 14, 26), "haze": (110, 40, 90), "glow": (255, 160, 220), "dark": (26, 20, 32)},
 }
 
 
@@ -130,7 +134,7 @@ def main():
         rng = random.Random(zone * 17)
         far(zone, rng).save(os.path.join(OUT, "factory_far_%d.png" % zone))
         mid(zone, rng).save(os.path.join(OUT, "factory_mid_%d.png" % zone))
-        print("placeholder backgrounds for zone 2-%d" % zone)
+        print("placeholder backgrounds, set %d" % zone)
 
 
 
@@ -202,6 +206,15 @@ def tiles():
         os.path.join(out, "2-3_ground.png"))
     plates((34, 42, 40), (20, 26, 25), (60, 72, 68), seed=6).save(os.path.join(out, "2-3_wall.png"))
     print("placeholder tiles for world 2")
+    # World 3: dark granite and black glass with magenta seams, grating, white reactor plates.
+    plates((44, 42, 52), (150, 30, 90), (80, 76, 90), seed=7).save(os.path.join(out, "3-1_ground.png"))
+    plates((24, 24, 32), (120, 25, 75), (50, 50, 62), seed=8).save(os.path.join(out, "3-1_wall.png"))
+    plates((46, 46, 54), (24, 24, 30), (80, 80, 90), glow=(120, 30, 80), grate=True, seed=9).save(
+        os.path.join(out, "3-2_ground.png"))
+    plates((36, 36, 42), (22, 22, 26), (64, 64, 72), seed=10).save(os.path.join(out, "3-2_wall.png"))
+    plates((120, 118, 128), (200, 60, 140), (150, 148, 160), seed=11).save(os.path.join(out, "3-3_ground.png"))
+    plates((74, 72, 82), (170, 40, 110), (100, 98, 110), seed=12).save(os.path.join(out, "3-3_wall.png"))
+    print("placeholder tiles for world 3")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,10 @@ const ZONES := [
 	{"id": "2-2", "scene": "res://scenes/foundry_level.tscn", "title": "Мир 2-2 · Литейная"},
 	{"id": "2-3", "scene": "res://scenes/pumping_level.tscn", "title": "Мир 2-3 · Насосная станция",
 		"ending": "res://scenes/world2_ending.tscn"},
+	{"id": "3-1", "scene": "res://scenes/tower_base_level.tscn", "title": "Мир 3-1 · Подножие Башни"},
+	{"id": "3-2", "scene": "res://scenes/tower_shaft_level.tscn", "title": "Мир 3-2 · Шахта лифта"},
+	{"id": "3-3", "scene": "res://scenes/tower_core_level.tscn", "title": "Мир 3-3 · Ядро «Сердца»",
+		"ending": "res://scenes/ending.tscn"},
 ]
 
 var path := "user://save.json"
