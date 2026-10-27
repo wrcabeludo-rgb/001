@@ -20,7 +20,10 @@ const ART_SCALE := 0.5
 const RIG_FILE := "res://assets/art/heroes/rig.json"
 const POSE_FILE := "res://assets/art/heroes/poses.json"
 const POSES := ["idle", "run", "jump", "fall", "dash", "crouch", "wall", "climb", "block", "kick", "hurt", "death",
-	"slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
+	"slash_down", "slash_rising", "slash_finisher", "slash_overhead",
+	"aim_up", "aim_diag_up", "aim_diag_down", "air_aim_diag_down", "air_aim_down"]
+## How long the Gunner keeps aiming up or down after a shot.
+const AIM_TIME := 0.3
 ## Weapons that may have their own drawings of the poses.
 const WEAPON_VARIANTS := ["shock", "heavy", "shotgun", "flamer"]
 const SLASH_POSES := ["slash_down", "slash_rising", "slash_finisher", "slash_overhead"]
@@ -156,6 +159,26 @@ func has_pose_art(pose_name: String) -> bool:
 ## A shot: the body jerks back for a moment.
 func recoil(strength := 1.0) -> void:
 	_recoil = maxf(_recoil, strength)
+
+
+## The Gunner shoots up, down or on a diagonal: the drawing of that aim is
+## shown for a moment (straight ahead the usual pose stays).
+func aim(direction: Vector2, airborne: bool) -> void:
+	var name := ""
+	if direction.y < -0.9:
+		name = "aim_up"
+	elif direction.y < -0.3:
+		name = "aim_diag_up"
+	elif direction.y > 0.9:
+		name = "air_aim_down"
+	elif direction.y > 0.3:
+		name = "air_aim_diag_down" if airborne else "aim_diag_down"
+	if name.begins_with("air_") and not _pose_art.has(name) and _pose_art.has("aim_diag_down"):
+		name = "aim_diag_down"
+	if name != "" and _pose_art.has(name):
+		_start(name, AIM_TIME)
+	elif _action.begins_with("aim") or _action.begins_with("air_aim"):
+		_action = ""
 
 
 ## The Gunner's kick: the front leg snaps forward.

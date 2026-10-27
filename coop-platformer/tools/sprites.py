@@ -307,6 +307,15 @@ POSE_SOURCES = {
     "gunner_hurt": [("gunner_hurt", None, 0.95)],
     # Lying on the ground: about as tall as a third of the standing hero.
     "gunner_death": [("gunner_death", None, 0.36)],
+    # Cut from a sheet of five (tools/sheets.py), all drawn at one scale: a standing
+    # figure there is about 400 pixels tall, so each is sized by its own height.
+    "gunner_aim_up": [("gunner_aim_up", None, 1.44)],
+    "gunner_aim_diag_up": [("gunner_aim_diag_up", None, 1.30)],
+    "gunner_aim_diag_down": [("gunner_aim_diag_down", None, 0.98)],
+    "gunner_air_aim_diag_down": [("gunner_air_aim_diag_down", None, 0.86)],
+    "gunner_air_aim_down": [("gunner_air_aim_down", None, 1.07)],
+    "swordsman_hurt": [("swordsman_hurt", None, 0.84)],
+    "swordsman_death": [("swordsman_death", None, 0.40)],
     "swordsman_crouch": [("swordsman_crouch", (0, 880, 1024, 1536), (0, 0, 1024, 875))],
     "swordsman_block": [("swordsman_block", None)],
     "swordsman_slash_down": [("swordsman_slash_down", None)],
@@ -422,7 +431,7 @@ def build_poses():
                 width = alpha.shape[1]
                 if pose == "wall":
                     anchor = (width - WALL_GAP) / width
-                elif pose in ("run", "jump", "fall", "dash"):
+                elif pose in ("run", "jump", "fall", "dash", "air_aim_diag_down", "air_aim_down"):
                     # Steady between frames: the middle of the body, not a foot.
                     torso = alpha[int(alpha.shape[0] * 0.35):int(alpha.shape[0] * 0.6)]
                     anchor = np.nonzero(torso > 128)[1].mean() / width
@@ -657,6 +666,10 @@ PROPS = {
     "props/checkpoint_tower.png": ("props/prop_checkpoint_tower_original.png", None, 340),
     "props/exit_tower.png": ("props/prop_exit_tower_original.png", None, 420),
     "props/grenade.png": ("props/prop_grenade_original.png", None, 48),
+    # Power-up capsules, cut from the Swordsman's sheet.
+    "props/power_rage.png": ("props/power_rage_original.png", None, 90),
+    "props/power_shield.png": ("props/power_shield_original.png", None, 90),
+    "props/power_haste.png": ("props/power_haste_original.png", None, 90),
 }
 
 # Pieces cut out of a prop by fractions of its height: (source, top, bottom, height x2, upside down).

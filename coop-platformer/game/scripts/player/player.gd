@@ -573,10 +573,12 @@ func _apply_look() -> void:
 	_update_look(false)
 
 
-## The puppet's motion for a shot: the Gunner recoils.
+## The puppet's motion for a shot: the Gunner recoils, aiming where the shot goes.
 func animate_attack(strength := 1.0) -> void:
 	if _rig != null:
 		_rig.recoil(strength)
+		if combat != null and combat.has_method("aim_direction"):
+			_rig.aim(combat.aim_direction(), not is_on_floor())
 
 
 ## The Gunner's kick.

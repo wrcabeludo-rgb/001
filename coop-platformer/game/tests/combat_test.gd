@@ -67,10 +67,24 @@ func _test_aim_up() -> void:
 	await _spawn(Heroes.Id.SHOOTER, Vector2(OPEN_X, FLOOR_Y))
 	_input.set_virtual("up", true)
 	await _press("attack")
+	var up_pose: String = _player._rig.current_pose(_player) if _player._rig != null else "aim_up"
 	_input.set_virtual("up", false)
 	var shot := _newest_projectile()
 	_check(shot != null and shot.velocity.y < 0.0 and absf(shot.velocity.x) < 1.0,
 		"вверх + атака стреляет вертикально вверх")
+	_check(up_pose == "aim_up", "стрелок целится вверх и нарисован с поднятой винтовкой (%s)" % up_pose)
+	# In a jump, down + forward: the drawing aims down on the diagonal.
+	await _frames(20)
+	await _press("jump")
+	await _frames(4)
+	_input.set_virtual("down", true)
+	_input.set_virtual("right", true)
+	await _press("attack")
+	var air_pose: String = _player._rig.current_pose(_player) if _player._rig != null else "air_aim_diag_down"
+	_input.set_virtual("down", false)
+	_input.set_virtual("right", false)
+	_check(air_pose == "air_aim_diag_down", "в прыжке вниз-вперёд — поза с винтовкой вниз по диагонали (%s)" % air_pose)
+	await _frames(40)
 
 
 func _test_kick() -> void:
