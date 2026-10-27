@@ -7,6 +7,144 @@
 
 ---
 
+## 3.0 Листы по 5 штук (быстрый способ)
+
+Вместо отдельных картинок — листы: на одном листе 5 элементов (тайлов — 6), я сам нарежу их для игры.
+Готовые листы — в `art_inbox` с именами ниже. Фоны (3.3), босс (3.5) и комиксы (3.6) — по одной картинке:
+они крупные, на листе потеряют чёткость. Тайлы с листа получатся чуть мягче — если не понравится, их можно
+перерисовать по одному из 3.1. Бесшовность тайлов я доделаю сам.
+
+**`sheet_enemies_3`** — Враги мира 3 (5 шт.): 5 врагов: сверху автоматчик, снайпер, гренадёр; снизу штурмовик, экзобоец. Приложи `art_source/tiles/tile_2-1_wall_original.png` как образец стиля.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, the colossal black-glass corporate tower of the Lumen corporation above a ruined
+megacity. Moody low-key lighting, black glass and polished dark steel, cold white office light,
+magenta (#FF2E88) Lumen neon as the main accent everywhere, red security laser lights, a white-magenta glow
+of the reactor. Strong readable silhouettes, clean edges, no photorealism, no pixel art, no 3D render look,
+no text, no letters, no logos with words, no watermark.
+
+Five soldiers of the same Lumen corporate security squad, each a single full-body figure in strict side view,
+all facing LEFT, all drawn at the same scale. The same armour on all five: sleek black armour plates over a dark
+grey bodysuit, a closed helmet with a glowing red horizontal visor, magenta glowing stripes on the shoulder,
+knee and elbow pads, a utility belt. Bright steel highlights so they read on a very dark background. No faces
+visible, no blood. Each soldier holds exactly one weapon.
+
+Top row, left to right:
+1. Rifleman: aiming a compact black assault rifle with a magenta energy magazine forward to the left, firm stance, one foot forward.
+2. Sniper: kneeling on one knee, aiming a very long black sniper rifle forward to the left, a red targeting laser emitter under the barrel (no beam drawn), a hooded cape over the armour.
+3. Grenadier: stocky, in heavier armour, a bandolier of glowing magenta grenades across the chest, one arm raised behind the head holding a grenade, ready to throw to the left.
+
+Bottom row, left to right:
+4. Trooper: light and fast, running forward to the left, leaning in, a short electric baton with a crackling magenta tip in one hand, a small round arm shield on the other arm.
+5. Exo-trooper: huge, in bulky powered exo-armour, about twice as tall as the others, a heavy rotary machine gun mounted on the right arm pointing to the left, ammo feed to a backpack, magenta power cells on the back, heavy stance.
+
+A game sprite sheet of exactly 5 separate items, laid out in two rows: three items in the top row and two items in the bottom row.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. All items in the same style, the same flat even lighting.
+Pure white background, no shadows, no glow halo spreading onto the background, no grid lines, no frames,
+no labels, no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 5 фигур, все смотрят влево, у каждого одно оружие, экзобоец самый большой, ни одной надписи.
+
+**`sheet_props_3a`** — Механизмы мира 3, лист 1 (5 шт.): прожектор, люк тревоги, рубильник, контрольная точка, выход-лифт. Приложи `art_source/tiles/tile_2-1_wall_original.png` как образец стиля.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, the colossal black-glass corporate tower of the Lumen corporation above a ruined
+megacity. Moody low-key lighting, black glass and polished dark steel, cold white office light,
+magenta (#FF2E88) Lumen neon as the main accent everywhere, red security laser lights, a white-magenta glow
+of the reactor. Strong readable silhouettes, clean edges, no photorealism, no pixel art, no 3D render look,
+no text, no letters, no logos with words, no watermark.
+
+Five separate objects for a corporate tower level, each in strict side view, no characters, no floor under them.
+
+Top row, left to right:
+1. Searchlight: a wall-mounted security searchlight, a round lamp head on a jointed steel arm, a red housing ring, a thick glass lens, cables. No light beam drawn.
+2. Alarm hatch: a heavy armoured wall hatch of a security room, a rectangular closed steel door with a red alarm lamp above it and hazard chevrons, taller than wide.
+3. Knife switch: a massive old-fashioned industrial knife switch on a black steel pedestal, a big handle with a magenta glowing grip, thick cables going down, a warning lamp on top, taller than wide.
+
+Bottom row, left to right:
+4. Checkpoint beacon: a slim black post with a round glass lamp glowing mint-green on top, a small console with a hand scanner, a magenta stripe, taller than wide.
+5. Elevator exit: polished black steel double doors slightly open with mint-green light pouring out, a frame with magenta neon edges, a green lamp above, taller than wide.
+
+A game sprite sheet of exactly 5 separate items, laid out in two rows: three items in the top row and two items in the bottom row.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. All items in the same style, the same flat even lighting.
+Pure white background, no shadows, no glow halo spreading onto the background, no grid lines, no frames,
+no labels, no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 5 предметов, у прожектора нет луча, на дверях и пульте нет букв.
+
+**`sheet_props_3b`** — Механизмы мира 3, лист 2 (5 шт.): мостик, стеклянный пол, излучатели барьера, сердце-жизнь, граната. Приложи `art_source/tiles/tile_2-1_wall_original.png` как образец стиля.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, the colossal black-glass corporate tower of the Lumen corporation above a ruined
+megacity. Moody low-key lighting, black glass and polished dark steel, cold white office light,
+magenta (#FF2E88) Lumen neon as the main accent everywhere, red security laser lights, a white-magenta glow
+of the reactor. Strong readable silhouettes, clean edges, no photorealism, no pixel art, no 3D render look,
+no text, no letters, no logos with words, no watermark.
+
+Five separate objects for a corporate tower level, no characters, no floor under them.
+
+Top row, across the whole width:
+1. Catwalk strip: a long thin horizontal strip of a sleek corporate catwalk seen strictly from the front, a dark steel beam with a black glass top edge and a thin magenta neon line along it, small bolts, no railings.
+
+Second row, across the whole width:
+2. Glass floor strip: a long horizontal panel of thick tempered glass floor in a thin dark steel frame seen strictly from the front, dark tinted glass with faint magenta reflections, small rivets in the frame.
+
+Bottom row, left to right:
+3. Barrier emitters: two identical tall emitter posts of an energy barrier side by side with space between them, black steel pylons with magenta glowing coils and a lens at the top and bottom. No energy field drawn between them.
+4. Extra life: a glowing magenta-pink neon heart made of bent glass tube inside a scratched round steel locket frame with four rivets, a soft warm light inside the heart.
+5. Grenade: one small round security grenade, black steel with a glowing magenta band and a tiny red light, seen from the side.
+
+A game sprite sheet of exactly 5 separate items, laid out in three rows: a long strip across the top row, a long strip across the second row, and three items in the bottom row.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. All items in the same style, the same flat even lighting.
+Pure white background, no shadows, no glow halo spreading onto the background, no grid lines, no frames,
+no labels, no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 5 предметов, обе полосы длинные и прямые, поле барьера не нарисовано, на сердце нет цифр.
+
+**`sheet_tiles_3`** — Тайлы мира 3 (6 шт.): пол и стена каждой из трёх зон. Приложи `art_source/tiles/tile_2-1_wall_original.png` как образец стиля.
+
+```
+Style: dark painterly 2D game art for a side-scrolling platformer, hand-painted digital illustration,
+post-apocalyptic cyberpunk, the colossal black-glass corporate tower of the Lumen corporation above a ruined
+megacity. Moody low-key lighting, black glass and polished dark steel, cold white office light,
+magenta (#FF2E88) Lumen neon as the main accent everywhere, red security laser lights, a white-magenta glow
+of the reactor. Strong readable silhouettes, clean edges, no photorealism, no pixel art, no 3D render look,
+no text, no letters, no logos with words, no watermark.
+
+Six square texture swatches for the floors and walls of a corporate tower level. Each swatch is a square
+completely filled edge to edge with its texture, seen flat from the front, no perspective, even lighting,
+no objects standing out, no characters. Darker and less contrasty than characters, so heroes stay readable on top.
+
+Top row, left to right:
+1. Lobby floor: polished dark granite floor tiles with thin magenta neon seams between the slabs, faint reflections, a little ash and dust, scuffs.
+2. Shaft floor: heavy dark steel grating with yellow-and-black hazard edges, cables underneath, a faint magenta glow from below.
+3. Reactor floor: smooth white-grey ceramic armour plates with glowing magenta energy lines between them, slightly cracked.
+
+Bottom row, left to right:
+4. Lobby wall: large black glass panels in dark steel frames, thin vertical magenta light strips, vent grilles, rivets, faint reflections.
+5. Shaft wall: concrete and steel ribs, thick cable bundles running vertically, guide rails, small red maintenance lamps, soot.
+6. Reactor wall: thick white-grey armoured panels with deep grooves glowing magenta and white, conduits, warning chevrons, heat stains.
+
+A game sprite sheet of exactly 6 separate items, laid out in two rows of three equal squares.
+Each item stands alone with wide empty white space around it; items never touch or overlap each other,
+nothing is cropped by the image edge. All items in the same style, the same flat even lighting.
+Pure white background, no shadows, no glow halo spreading onto the background, no grid lines, no frames,
+no labels, no numbers, no text. Landscape 3:2.
+```
+
+Проверка: ровно 6 квадратов одного размера, между ними белые промежутки, внутри квадратов нет предметов и людей.
+
+---
+
 ## 3.1 Тайлы зон
 
 Приложи к каждому `art_source/tiles/tile_2-1_wall_original.png` — как образец **стиля и яркости**.
