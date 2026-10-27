@@ -1,12 +1,12 @@
 extends "res://scripts/ui/comic_player.gd"
 ## The ending chosen at the Heart (SaveGame.data["ending"]: "off" or "keep"),
-## then the end of the game.
+## then the results of the run and the credits.
 
 const ART := "res://assets/art/comics/%s.png"
 
 
 func _init() -> void:
-	next_scene = "res://scenes/title.tscn"
+	next_scene = "res://scenes/final_credits.tscn"
 	if SaveGame.data.get("ending", "off") == "keep":
 		panels = [
 			{"image": _art("ending_keep"), "caption": "Город сияет. А в трущобах снова поднимаются тени.", "zoom": "out"},
@@ -15,7 +15,6 @@ func _init() -> void:
 		panels = [
 			{"image": _art("ending_off"), "caption": "Неон погас. Впервые за двадцать лет над городом зажглись звёзды.", "zoom": "out"},
 		]
-	panels.append({"image": null, "caption": "Конец. Спасибо, что прошли «Неон и пепел»!"})
 
 
 static func _art(name: String) -> Texture2D:

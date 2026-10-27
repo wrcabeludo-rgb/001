@@ -158,6 +158,8 @@ func _ready() -> void:
 	if ash:
 		_build_ash()
 	_build_level()
+	if zone_id != "":
+		SaveGame.data["secret_totals"][zone_id] = secrets_total
 	_build_hud()
 	if use_coop_camera:
 		camera = CoopCamera.new()
@@ -326,6 +328,7 @@ func _on_player_died(player: Player) -> void:
 	player.set_active(false)
 	deaths[player.slot] = deaths.get(player.slot, 0) + 1
 	if uses_lives():
+		SaveGame.add_death()
 		SaveGame.set_lives(player.hero, SaveGame.lives(player.hero) - 1)
 		SaveGame.save()
 		if SaveGame.lives(player.hero) <= 0:
@@ -569,6 +572,7 @@ func _on_choice_voted(switch: ChoiceSwitch, slot: int) -> void:
 			show_toast("Нужно выбрать одно и то же — ждём напарника", 3.0)
 			return
 	SaveGame.data["ending"] = switch.choice
+	SaveGame.data["completed"] = true
 	complete_level()
 
 

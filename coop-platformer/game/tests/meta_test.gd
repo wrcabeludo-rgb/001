@@ -19,6 +19,7 @@ func _run_all() -> void:
 	await _test_hero_select_alone()
 	await _test_hero_select_two_players()
 	await _test_lives_and_continues()
+	await _test_final_credits()
 
 
 func _test_save_round_trip() -> void:
@@ -335,6 +336,7 @@ func _test_lives_and_continues() -> void:
 	await _frames(2)
 	_check(SaveGame.lives(Heroes.Id.SWORDSMAN) == 2 and not level.is_out(1) and level.respawn_time_left(1) > 0.0,
 		"смерть отнимает жизнь, герой вернётся")
+	_check(int(SaveGame.data["stats"]["deaths"]) == 1, "падение героя попадает в итоги игры")
 	sword.revive(Vector2(OPEN_X + 200.0, FLOOR_Y))
 	SaveGame.set_lives(Heroes.Id.SWORDSMAN, 1)
 	sword.kill()
@@ -383,3 +385,27 @@ func _test_lives_and_continues() -> void:
 	level.remove_player(1)
 	level.zone_id = ""
 	await _frames(2)
+
+
+func _test_final_credits() -> void:
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)
+	SaveGame.complete_zone("1-1", 600.0)
+	SaveGame.complete_zone("1-2", 125.0)
+	SaveGame.data["secret_totals"] = {"1-1": 2, "1-2": 2}
+	SaveGame.find_secret("1-1#0")
+	SaveGame.find_life("1-2#0")
+	SaveGame.data["ending"] = "keep"
+	var lines := "\n".join(load("res://scripts/ui/final_credits.gd").results_lines())
+	_check("«Город сияет»" in lines and "0:12:05" in lines and "Тайники: 1 из 4" in lines
+		and "Найдено жизней: 1 из 6" in lines, "итоги после концовки: время, тайники, жизни\n" + lines)
+	var screen: Control = load("res://scenes/final_credits.tscn").instantiate()
+	add_child(screen)
+	await _frames(3)
+	_check(Sound.music_name == "ending", "титры идут под свою музыку")
+	screen.queue_free()
+	# A save that beat the last zone before the "finished" flag existed.
+	SaveGame.data["best_times"]["3-3"] = 900.0
+	SaveGame.save()
+	SaveGame.load_data()
+	_check(SaveGame.data["completed"], "старое сохранение с пройденной 3-3 считается пройденной игрой")
+	SaveGame.new_game(GameSettings.Difficulty.NORMAL)

@@ -9,6 +9,8 @@ const VERSION := 1
 const START_LIVES := 3
 const MAX_LIVES := 5
 const START_CONTINUES := 3
+## Extra lives hidden in each world.
+const LIVES_PER_WORLD := 2
 
 ## Zones in order: scene, title; "ending" — the comic shown after the last
 ## zone of a world (instead of the trader).
@@ -52,6 +54,12 @@ func defaults() -> Dictionary:
 		"continues": START_CONTINUES,
 		## Extra-life pickup id -> true (taken; back again after a continue).
 		"lives_found": {},
+		## The whole game was played to an ending.
+		"completed": false,
+		## For the results after the ending: seconds played (finished zones), heroes fallen.
+		"stats": {"time": 0.0, "deaths": 0},
+		## Secrets in each zone played (zone id -> count), to show "found N of M".
+		"secret_totals": {},
 		"heroes": {
 			str(Heroes.Id.SHOOTER): {"scrap": 0, "items": [], "weapon": "rifle", "lives": START_LIVES},
 			str(Heroes.Id.SWORDSMAN): {"scrap": 0, "items": [], "weapon": "blade", "lives": START_LIVES},
@@ -77,6 +85,9 @@ func load_data() -> void:
 			data["unlocked"] = maxi(int(data["unlocked"]), mini(i + 2, ZONES.size()))
 			if int(data["next_zone"]) <= i:
 				data["next_zone"] = mini(i + 1, ZONES.size() - 1)
+	# A save from before the finished flag that already beat the last zone.
+	if data["best_times"].has(ZONES[-1]["id"]):
+		data["completed"] = true
 
 
 func save() -> void:
@@ -152,6 +163,7 @@ func complete_zone(zone_id: String, seconds: float) -> void:
 		return
 	data["unlocked"] = clampi(maxi(int(data["unlocked"]), index + 2), 1, ZONES.size())
 	data["next_zone"] = mini(index + 1, ZONES.size() - 1)
+	data["stats"]["time"] = float(data["stats"]["time"]) + seconds
 	var best: float = data["best_times"].get(zone_id, INF)
 	data["best_times"][zone_id] = minf(best, seconds)
 	save()
@@ -201,6 +213,24 @@ func use_continue(zone_id: String) -> String:
 	data["next_zone"] = start
 	save()
 	return ZONES[start]["scene"]
+
+
+func add_death() -> void:
+	data["stats"]["deaths"] = int(data["stats"]["deaths"]) + 1
+
+
+func secrets_total() -> int:
+	var total := 0
+	for zone in data["secret_totals"]:
+		total += int(data["secret_totals"][zone])
+	return total
+
+
+func lives_total() -> int:
+	var worlds := {}
+	for zone in ZONES:
+		worlds[zone["id"].get_slice("-", 0)] = true
+	return worlds.size() * LIVES_PER_WORLD
 
 
 func find_secret(secret_id: String) -> void:

@@ -30,6 +30,7 @@ TRACKS = {
     "zone_3_2": ("Rocket", -16.0),
     "zone_3_3": ("Darkling", -16.0),
     "boss_3": ("Ready Aim Fire", -15.0),
+    "ending": ("Lightless Dawn", -17.0),
 }
 
 

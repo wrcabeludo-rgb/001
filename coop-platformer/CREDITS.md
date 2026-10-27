@@ -25,6 +25,7 @@ Kevin MacLeod, [incompetech.com](https://incompetech.com).
 | 3-2 Шахта лифта | `music/zone_3_2.ogg` | «Rocket» |
 | 3-3 Ядро «Сердца» | `music/zone_3_3.ogg` | «Darkling» |
 | Командир (босс мира 3) | `music/boss_3.ogg` | «Ready Aim Fire» |
+| Титры (финал) | `music/ending.ogg` | «Lightless Dawn» |
 
 Трек зоны 2-1 «Сборочный цех» — «Cyber Factory Rush» (WarmingLetter, сделан в Flow Music),
 `music/zone_2_1.ogg`, исходник в `art_source/music/`.

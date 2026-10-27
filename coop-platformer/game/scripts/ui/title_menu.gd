@@ -74,13 +74,18 @@ func _ready() -> void:
 func show_main() -> void:
 	var progress := SaveGame.has_progress()
 	var entries: Array = []
-	if progress:
+	var finished: bool = progress and SaveGame.data.get("completed", false)
+	if finished:
+		# After the ending there is nothing to continue: any zone can be replayed.
+		entries.append({"text": "Выбор зоны", "action": show_zones,
+			"hint": "Игра пройдена ✓ · можно переиграть любую зону или выбрать другую концовку"})
+	elif progress:
 		var next: Dictionary = SaveGame.ZONES[int(SaveGame.data["next_zone"])]
 		entries.append({"text": "Продолжить", "action": func() -> void: _choose_heroes(next["scene"]),
 			"hint": "%s · сложность: %s" % [next["title"], GameSettings.NAMES[GameSettings.difficulty]]})
 	entries.append({"text": "Новая игра", "action": show_difficulty,
 		"hint": "Прогресс и покупки будут сброшены" if progress else ""})
-	if progress:
+	if progress and not finished:
 		entries.append({"text": "Выбор зоны", "action": show_zones})
 		entries.append({"text": "Магазин", "action": func() -> void: _open(SHOP_SCENE),
 			"hint": "Потратить лом на оружие и улучшения"})

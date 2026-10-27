@@ -44,7 +44,7 @@ jobs:
           godot --headless --path game res://scenes/coop_level.tscn --quit-after 300 2>&1 | tee -a run.log
           godot --headless --path game res://scenes/mechanics_level.tscn --quit-after 300 2>&1 | tee -a run.log
           godot --headless --path game res://scenes/intro_comic.tscn --quit-after 300 2>&1 | tee -a run.log
-          for scene in slums_level metro_level drain_level assembly_level foundry_level pumping_level tower_base_level tower_shaft_level tower_core_level shop world1_ending world2_ending ending hero_select gamepad_check; do
+          for scene in slums_level metro_level drain_level assembly_level foundry_level pumping_level tower_base_level tower_shaft_level tower_core_level shop world1_ending world2_ending ending final_credits hero_select gamepad_check; do
             godot --headless --path game res://scenes/$scene.tscn --quit-after 300 2>&1 | tee -a run.log
           done
           if grep -E "SCRIPT ERROR|ERROR:" run.log; then
