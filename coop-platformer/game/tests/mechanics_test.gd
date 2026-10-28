@@ -521,6 +521,12 @@ func _test_rising_plasma() -> void:
 	_player.global_position.y = FLOOR_Y
 	await _frames(60)
 	_check(plasma.surface < 1020.0 and _player.health.current < _player.health.maximum, "поднявшаяся плазма ранит героя")
+	# A hero coming back next to a partner whose last ground the plasma covered
+	# appears where the partner is now, not in the plasma.
+	_player.last_safe_position = Vector2(1500.0, plasma.surface + 200.0)
+	_player.global_position = Vector2(1500.0, plasma.surface - 400.0)
+	var spot := (_room as Level).beside(_player)
+	_check(spot == _player.global_position, "возвращение к напарнику не ставит героя в плазму (%s)" % spot)
 	plasma.reset()
 	_check(not plasma.running and plasma.surface == 1200.0, "после гибели команды плазма опускается")
 

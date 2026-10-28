@@ -198,18 +198,18 @@ func world_start(zone_id: String) -> int:
 	return 0
 
 
-## Spends a continue after a game over in `zone_id`: lives are full again, the
-## world's extra lives can be found again, and the world starts over from its
-## first zone. Returns that zone's scene.
-func use_continue(zone_id: String) -> String:
+## Spends a continue after a game over in `zone_id`: lives are full again and
+## the zone is played again (or, with `whole_world`, the world from its first
+## zone); the extra lives there can be found again. Returns the scene to open.
+func use_continue(zone_id: String, whole_world := false) -> String:
 	data["continues"] = maxi(continues() - 1, 0)
 	for id in data["heroes"]:
 		data["heroes"][id]["lives"] = START_LIVES
-	var world := zone_id.get_slice("-", 0) + "-"
+	var replayed := zone_id.get_slice("-", 0) + "-" if whole_world else zone_id + "#"
 	for life_id in data["lives_found"].keys():
-		if life_id.begins_with(world):
+		if life_id.begins_with(replayed):
 			data["lives_found"].erase(life_id)
-	var start := world_start(zone_id)
+	var start := world_start(zone_id) if whole_world else maxi(zone_index(zone_id), 0)
 	data["next_zone"] = start
 	save()
 	return ZONES[start]["scene"]

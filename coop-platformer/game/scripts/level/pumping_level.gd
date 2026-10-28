@@ -79,7 +79,6 @@ func _init() -> void:
 	ground_texture = Factory.tile("2-3_ground")
 	platform_texture = Factory.PLATFORM
 	prop_skin = "factory"
-	other_scene = "res://scenes/test_room.tscn"
 
 
 func get_map() -> Array:

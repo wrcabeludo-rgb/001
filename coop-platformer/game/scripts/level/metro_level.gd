@@ -71,7 +71,6 @@ func _init() -> void:
 	backgrounds = [[BG_FAR, 0.1, Color(0.42, 0.42, 0.46)], [BG_MID, 0.3, Color(0.55, 0.55, 0.6)]]
 	wall_texture = load("res://assets/art/tiles/1-2_wall.png")
 	ground_texture = load("res://assets/art/tiles/1-2_ground.png")
-	other_scene = "res://scenes/test_room.tscn"
 
 
 func get_map() -> Array:

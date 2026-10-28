@@ -9,7 +9,6 @@ const TITLE_FONT := preload("res://assets/fonts/RussoOne-Regular.ttf")
 
 const COMIC_SCENE := "res://scenes/intro_comic.tscn"
 const SHOP_SCENE := "res://scenes/shop.tscn"
-const TEST_SCENE := "res://scenes/test_room.tscn"
 const HERO_SELECT_SCENE := "res://scenes/hero_select.tscn"
 
 var _menu: MenuList
@@ -90,8 +89,6 @@ func show_main() -> void:
 		entries.append({"text": "Магазин", "action": func() -> void: _open(SHOP_SCENE),
 			"hint": "Потратить лом на оружие и улучшения"})
 	entries.append({"text": "Настройки", "action": show_settings})
-	entries.append({"text": "Тестовые уровни", "action": func() -> void: _open(TEST_SCENE),
-		"hint": "Тестовая комната, «Полигон» и «Мастерская» (F2 — следующая)"})
 	entries.append({"text": "Авторы", "action": show_credits, "hint": "Музыка, звуки, шрифты"})
 	entries.append({"text": "Выход", "action": func() -> void: get_tree().quit()})
 	_on_back = Callable()

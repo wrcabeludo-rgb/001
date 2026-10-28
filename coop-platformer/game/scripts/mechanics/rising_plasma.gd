@@ -32,7 +32,14 @@ func setup(p_left: float, p_right: float, p_start_y: float) -> void:
 
 func _ready() -> void:
 	add_to_group("resettable")
+	add_to_group("plasma")
 	z_index = 4
+
+
+## True if `point` is under the plasma, or so close above it that a hero put
+## there would be in it at once.
+func covers(point: Vector2, margin := 120.0) -> bool:
+	return point.x >= left and point.x <= right and point.y > surface - margin
 
 
 ## After a team wipe: back below the checkpoint (or the start), waiting again.

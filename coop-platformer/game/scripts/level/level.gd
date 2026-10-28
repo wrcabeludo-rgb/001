@@ -275,10 +275,19 @@ func _input(event: InputEvent) -> void:
 func _entry_point(slot: int) -> Vector2:
 	var partner := _alive_partner(slot)
 	if partner != null:
-		return partner.last_safe_position
+		return beside(partner)
 	if active_checkpoint != null:
 		return active_checkpoint.respawn_point(slot)
 	return _spawn_points.get(slot, _spawn_points.get(0, Vector2(TILE * 2, TILE * 2)))
+
+
+## Where a hero comes back next to `partner`: the last ground the partner stood
+## on, unless the rising plasma has covered it since — then where the partner is now.
+func beside(partner: Player) -> Vector2:
+	for node in get_tree().get_nodes_in_group("plasma"):
+		if is_ancestor_of(node) and node.covers(partner.last_safe_position):
+			return partner.global_position
+	return partner.last_safe_position
 
 
 func _alive_partner(slot: int) -> Player:
@@ -370,7 +379,7 @@ func give_life(hero: Player) -> bool:
 			var partner: Player = players[slot]
 			SaveGame.set_lives(partner.hero, 1)
 			SaveGame.save()
-			partner.revive(hero.last_safe_position)
+			partner.revive(beside(hero))
 			show_toast("P%d вернулся в игру!" % (slot + 1), 3.0)
 			return true
 	if not uses_lives():
@@ -404,7 +413,7 @@ func _update_respawns(delta: float) -> void:
 		var partner := _alive_partner(slot)
 		if partner != null:
 			_respawn_timers.erase(slot)
-			players[slot].revive(partner.last_safe_position)
+			players[slot].revive(beside(partner))
 
 
 func _entry_point_without_partner(slot: int) -> Vector2:
@@ -561,14 +570,14 @@ func after_zone_scene() -> String:
 	return "res://scenes/shop.tscn"
 
 
-## A hero hit a finale switch. The choice is made when every hero in the game
-## has voted for the same one.
+## A hero hit a finale switch. The choice is made when every hero still on
+## their feet has voted for the same one (a fallen partner does not hold it back).
 func _on_choice_voted(switch: ChoiceSwitch, slot: int) -> void:
 	for other in _switches:
 		if other != switch:
 			other.remove_vote(slot)
 	for other_slot in players:
-		if not switch.votes.has(other_slot):
+		if players[other_slot].is_alive() and not switch.votes.has(other_slot):
 			show_toast("Нужно выбрать одно и то же — ждём напарника", 3.0)
 			return
 	SaveGame.data["ending"] = switch.choice

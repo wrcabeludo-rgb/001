@@ -23,6 +23,7 @@ func _run_all() -> void:
 	await _test_commander()
 	await _test_choice_together()
 	await _test_choice_alone()
+	await _test_choice_partner_down()
 
 
 func _boss() -> Commander:
@@ -137,6 +138,31 @@ func _test_choice_alone() -> void:
 	await _press("skill")
 	await _frames(20)
 	_check(_level.completed and SaveGame.data["ending"] == "keep", "один герой бьёт «Оставить» — концовка «Оставить»")
+
+
+## A fallen partner does not hold the choice back: the hero still standing decides.
+func _test_choice_partner_down() -> void:
+	var level := preload("res://scenes/tower_core_level.tscn").instantiate() as Level
+	level.spawn_targets = false
+	_room.queue_free()
+	_room = level
+	add_child(level)
+	_level = level
+	SaveGame.data["completed"] = false
+	await _spawn(Heroes.Id.SHOOTER, Vector2(OFF_X - 70.0, STAND_Y))
+	var partner := _spawn_extra(Heroes.Id.SWORDSMAN, Vector2(OFF_X - 200.0, STAND_Y))
+	_level.players[0] = _player
+	_level.players[1] = partner
+	_level.snap_camera()
+	await _frames(5)
+	partner.kill()
+	await _frames(2)
+	await _press("skill")
+	await _frames(20)
+	_check(_level.completed and SaveGame.data["ending"] == "off" and SaveGame.data["completed"],
+		"напарник погиб — выбор у «Сердца» делает тот, кто стоит на ногах")
+	partner.queue_free()
+	_level.players.erase(1)
 
 
 func _wait_for(condition: Callable, max_frames: int) -> void:

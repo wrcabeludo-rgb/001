@@ -86,7 +86,6 @@ func _init() -> void:
 	lightning = true
 	wall_texture = load("res://assets/art/tiles/1-1_wall.png")
 	ground_texture = load("res://assets/art/tiles/1-1_ground.png")
-	other_scene = "res://scenes/test_room.tscn"
 
 
 func get_map() -> Array:

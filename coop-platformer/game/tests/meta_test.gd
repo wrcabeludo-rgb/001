@@ -368,10 +368,16 @@ func _test_lives_and_continues() -> void:
 	if over != null:
 		over.free()
 	get_tree().paused = false
+	SaveGame.find_life("2-1#0")
 	var scene := SaveGame.use_continue("2-2")
-	_check(scene == SaveGame.ZONES[3]["scene"] and SaveGame.continues() == 2 and int(SaveGame.data["next_zone"]) == 3
-		and SaveGame.lives(Heroes.Id.SHOOTER) == 3 and not SaveGame.life_found("2-2#0"),
-		"continue: мир заново с первой зоны, жизни полные, жизни мира снова можно найти")
+	_check(scene == SaveGame.ZONES[4]["scene"] and SaveGame.continues() == 2 and int(SaveGame.data["next_zone"]) == 4
+		and SaveGame.lives(Heroes.Id.SHOOTER) == 3 and not SaveGame.life_found("2-2#0") and SaveGame.life_found("2-1#0"),
+		"continue: зона заново, жизни полные, жизни этой зоны снова можно найти")
+	SaveGame.find_life("2-2#0")
+	scene = SaveGame.use_continue("2-2", true)
+	_check(scene == SaveGame.ZONES[3]["scene"] and SaveGame.continues() == 1 and int(SaveGame.data["next_zone"]) == 3
+		and not SaveGame.life_found("2-1#0") and not SaveGame.life_found("2-2#0"),
+		"continue: можно начать и весь мир с первой зоны")
 	SaveGame.complete_zone("2-1", 100.0)
 	SaveGame.data["continues"] = 0
 	var last := GameOver.new()

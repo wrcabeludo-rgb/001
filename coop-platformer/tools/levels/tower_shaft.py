@@ -50,7 +50,8 @@ put(103, 19, "j"); put(95, 30, "y"); put(89, 5, "N")
 put(98, 6, "R"); put(92, 36, "R")
 landing(84, [(30, "C"), (32, "+")])
 # C. A gravity lift up the middle; snipers on side ledges, turrets under them
-fill(62, 83, 21, 21, "u")
+# Beside the catwalk (not under it): a hero floats up past its edge and steps onto it.
+fill(59, 83, 15, 15, "u")
 fill(61, 61, 17, 25, "=")
 for r, side in ((78, 1), (72, 0), (66, 1)):
     if side:

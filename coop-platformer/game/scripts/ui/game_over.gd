@@ -1,8 +1,9 @@
 class_name GameOver
 extends CanvasLayer
-## Every hero ran out of lives. With a continue left the world starts over
-## from its first zone (lives full again); without one the whole game starts
-## over. Leaving for the title spends the continue too, so it cannot be dodged.
+## Every hero ran out of lives. With a continue left the zone is played again
+## (or the whole world from its first zone), lives full; without one the whole
+## game starts over. Leaving for the title spends the continue too (the zone
+## then starts over from "Продолжить"), so it cannot be dodged.
 
 var _level: Level
 var _menu: MenuList
@@ -26,10 +27,13 @@ func _ready() -> void:
 	var entries: Array = []
 	if left > 0:
 		_label("Continue осталось: %d" % left, 330, 40, Color.WHITE)
-		entries.append({"text": "Continue — мир %s заново" % world, "action": _continue,
-			"hint": "Жизни снова 3 у каждого, мир начинается с первой зоны"})
+		entries.append({"text": "Continue — зона %s заново" % zone_id, "action": _continue.bind(false),
+			"hint": "Жизни снова 3 у каждого, зона начинается сначала"})
+		if SaveGame.world_start(zone_id) != SaveGame.zone_index(zone_id):
+			entries.append({"text": "Continue — мир %s с начала" % world, "action": _continue.bind(true),
+				"hint": "Жизни снова 3 у каждого, мир начинается с первой зоны"})
 		entries.append({"text": "Выйти в меню", "action": _continue_later,
-			"hint": "Continue всё равно тратится: «Продолжить» начнёт мир %s заново" % world})
+			"hint": "Continue всё равно тратится: «Продолжить» начнёт зону %s заново" % zone_id})
 	else:
 		_label("Continue кончились — игра начинается сначала", 330, 40, Color.WHITE)
 		var difficulty := GameSettings.difficulty
@@ -59,8 +63,8 @@ func _label(text: String, y: float, font_size: int, color: Color) -> Label:
 	return label
 
 
-func _continue() -> void:
-	_go(SaveGame.use_continue(_level.zone_id))
+func _continue(whole_world: bool) -> void:
+	_go(SaveGame.use_continue(_level.zone_id, whole_world))
 
 
 func _continue_later() -> void:
